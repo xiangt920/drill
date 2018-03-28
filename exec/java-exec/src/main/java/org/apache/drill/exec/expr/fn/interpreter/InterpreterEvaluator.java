@@ -19,6 +19,7 @@ package org.apache.drill.exec.expr.fn.interpreter;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Iterator;
 
 import javax.annotation.Nullable;
@@ -97,6 +98,40 @@ public class InterpreterEvaluator {
 
   }
 
+  private static void initOutField(DrillSimpleFunc interpreter, UdfUtilities udfUtilities) {
+    Field outField = getOutField(interpreter);
+    if (outField != null && outField.getType().getSimpleName().startsWith("Repeated")) {
+      try {
+        outField.setAccessible(true);
+        final MinorType minorType = ((TypeProtos.MajorType)outField.getType()
+          .getDeclaredField("TYPE").get(outField.getType()))
+          .getMinorType();
+        ValueHolder holder = udfUtilities.getArrayValueHolder(new BiFunction<BufferManager, BufferAllocator, ValueHolder>() {
+
+          @Override
+          public ValueHolder apply(BufferManager manager, BufferAllocator allocator) {
+            ArrayMinorType eleType = getElementType(minorType);
+            return eleType.newValueHolder(manager, allocator, new ArrayList<>());
+          }
+        });
+        outField.set(interpreter, holder);
+      } catch (IllegalAccessException | NoSuchFieldException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  private static Field getOutField(DrillSimpleFunc interpreter) {
+    Field[] fields = interpreter.getClass().getDeclaredFields();
+    for (Field f : fields) {
+      if ( f.getAnnotation(Output.class) != null ) {
+        return f;
+      }
+    }
+    return null;
+  }
+
+
   public static ValueHolder evaluateFunction(DrillSimpleFunc interpreter, ValueHolder[] args, String funcName) throws Exception {
     Preconditions.checkArgument(interpreter != null, "interpreter could not be null when use interpreted model to evaluate function " + funcName);
 
@@ -117,8 +152,10 @@ public class InterpreterEvaluator {
         } else if ( f.getAnnotation(Output.class) != null ) {
           f.setAccessible(true);
           outField = f;
-          // create an instance of the holder for the output to be stored in
-          f.set(interpreter, f.getType().newInstance());
+          if(f.get(interpreter) == null) {
+            // create an instance of the holder for the output to be stored in
+            f.set(interpreter, f.getType().newInstance());
+          }
         }
       }
     } catch (IllegalAccessException e) {
@@ -333,6 +370,7 @@ public class InterpreterEvaluator {
       try {
         DrillSimpleFunc interpreter =  ((DrillFuncHolderExpr) holderExpr).getInterpreter();
 
+        initOutField(interpreter, udfUtilities);
         ValueHolder out = evaluateFunction(interpreter, args, holderExpr.getName());
 
         if (TypeHelper.getValueHolderType(out).getMode() == TypeProtos.DataMode.OPTIONAL &&

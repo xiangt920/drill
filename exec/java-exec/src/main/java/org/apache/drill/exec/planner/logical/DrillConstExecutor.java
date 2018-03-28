@@ -122,6 +122,13 @@ public class DrillConstExecutor implements RexExecutor {
     this.plannerSettings = plannerSettings;
   }
 
+  private boolean skipReduceForRepeated(LogicalExpression expr) {
+    if (expr.getMajorType().getMode() == TypeProtos.DataMode.REPEATED) {
+      return true;
+    }
+    return expr instanceof ArrayValueConstructorExpression;
+  }
+
   @Override
   public void reduce(final RexBuilder rexBuilder, List<RexNode> constExps, final List<RexNode> reducedValues) {
     for (final RexNode newCall : constExps) {
@@ -139,7 +146,7 @@ public class DrillConstExecutor implements RexExecutor {
       }
 
       if (NON_REDUCIBLE_TYPES.contains(materializedExpr.getMajorType().getMinorType())
-        || materializedExpr instanceof ArrayValueConstructorExpression) {
+        || skipReduceForRepeated(materializedExpr)) {
         logger.debug("Constant expression not folded due to return type {}, complete expression: {}",
             materializedExpr.getMajorType(),
             ExpressionStringBuilder.toString(materializedExpr));

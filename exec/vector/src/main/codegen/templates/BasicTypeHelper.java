@@ -544,6 +544,8 @@ public class BasicTypeHelper {
         return ((${minor.class}Holder) holder).TYPE;
       } else if (holder instanceof Nullable${minor.class}Holder) {
       return ((Nullable${minor.class}Holder) holder).TYPE;
+      } else if (holder instanceof Repeated${minor.class}Holder) {
+      return ((Repeated${minor.class}Holder) holder).TYPE;
       }
     </#list>
     </#list>

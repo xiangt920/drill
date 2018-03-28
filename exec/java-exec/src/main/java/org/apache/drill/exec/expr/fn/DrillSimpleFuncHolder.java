@@ -19,11 +19,18 @@ package org.apache.drill.exec.expr.fn;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.Preconditions;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JOp;
+import com.sun.codemodel.JType;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.common.expression.FieldReference;
+import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.TypeProtos.DataMode;
 import org.apache.drill.common.types.TypeProtos.MajorType;
+import org.apache.drill.common.types.Types;
+import org.apache.drill.exec.expr.BasicTypeHelper;
 import org.apache.drill.exec.expr.ClassGenerator;
 import org.apache.drill.exec.expr.ClassGenerator.BlockType;
 import org.apache.drill.exec.expr.ClassGenerator.HoldingContainer;
@@ -36,6 +43,9 @@ import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
+import org.apache.drill.exec.ops.ArrayMinorType;
+import org.apache.drill.exec.ops.FragmentContext;
+import org.apache.drill.exec.record.MaterializedField;
 
 public class DrillSimpleFuncHolder extends DrillFuncHolder {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DrillSimpleFuncHolder.class);
@@ -133,12 +143,28 @@ public class DrillSimpleFuncHolder extends DrillFuncHolder {
     if (out == null) {
       out = g.declare(returnValueType);
     }
+    JVar ctxField = null;
+    if (out.isRepeated()) {
+      JType ctxType = g.getModel()._ref(FragmentContext.class);
+      // FragmentContext field
+      ctxField = g.declareClassField("context", ctxType);
+      g.getSetupBlock().assign(
+        ctxField,
+        g.getMappingSet()
+          .getOutgoing()
+          .invoke("getContext"));
+    }
 
     // add the subblock after the out declaration.
     g.getEvalBlock().add(topSub);
 
 
     JVar internalOutput = sub.decl(JMod.FINAL, g.getHolderType(returnValueType), getReturnValue().getName(), JExpr._new(g.getHolderType(returnValueType)));
+
+    if (out.isRepeated()) {
+      Preconditions.checkNotNull(ctxField);
+      generateVector(g, sub, internalOutput, ctxField, out.getMinorType());
+    }
     addProtectedBlock(g, sub, body, inputVariables, workspaceJVars, false);
     if (sub != topSub) {
       sub.assign(internalOutput.ref("isSet"),JExpr.lit(1));// Assign null if NULL_IF_NULL mode
@@ -147,9 +173,62 @@ public class DrillSimpleFuncHolder extends DrillFuncHolder {
     if (sub != topSub) {
       sub.assign(internalOutput.ref("isSet"),JExpr.lit(1));// Assign null if NULL_IF_NULL mode
     }
-
+    if (out.isRepeated()) {
+      // assign buf of the value vector to context.bufferManager
+      // for freeing memory
+      sub.invoke(
+        ctxField,
+        "manageBuffer")
+        .arg(internalOutput.ref("vector").invoke("getBuffer"));
+    }
     g.getEvalBlock().directStatement(String.format("//---- end of eval portion of %s function. ----//", getRegisteredNames()[0]));
 
     return out;
+  }
+
+  private void generateVector(
+    ClassGenerator<?> g, JBlock block,
+    JVar holder, JVar ctxField,
+    TypeProtos.MinorType minorType) {
+
+    // MaterializedField type
+    JType mfType = g.getModel()._ref(MaterializedField.class);
+
+    // MaterializedField var
+    JVar mField = block.decl(mfType, g.getNextVar("mField"));
+
+
+    // ArrayMinorType type
+    JType amtType = g.getModel()._ref(ArrayMinorType.class);
+    JClass amtClass = g.getModel().ref(ArrayMinorType.class);
+
+    // ArrayMinorType var
+    JVar amType = g.declareClassField("amType", amtType);
+    block.assign(
+      amType,
+      amtClass.staticInvoke("getElementType")
+        .arg(holder.ref("TYPE").invoke("getMinorType")));
+
+    block.assign(mField,
+      g.getModel().ref(MaterializedField.class)
+        .staticInvoke("create").arg("_array")
+        .arg(
+          g.getModel()
+            .ref(Types.class)
+            .staticInvoke("required")
+            .arg(holder.ref("TYPE").invoke("getMinorType"))));
+
+    Class<?> _class = BasicTypeHelper.getValueVectorClass(minorType, TypeProtos.DataMode.REQUIRED);
+    // value vector type
+    JType vvType = g.getModel()._ref(_class);
+
+    JFieldRef vectorVar = holder.ref("vector");
+    block.assign(vectorVar,
+      JExpr.cast(
+        vvType,
+        amType.invoke("getVector")
+          .arg(JExpr.lit(2))
+          .arg(mField)
+          .arg(ctxField.invoke("getAllocator"))));
   }
 }

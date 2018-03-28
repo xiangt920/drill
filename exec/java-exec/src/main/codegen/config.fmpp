@@ -44,6 +44,7 @@ data: {
     sumzero:                  tdd(../data/SumZero.tdd),
     numericTypes:             tdd(../data/NumericTypes.tdd),
     casthigh:                 tdd(../data/CastHigh.tdd),
+    castrepeated:             tdd(../data/CastRepeated.tdd),
     countAggrTypes:           tdd(../data/CountAggrTypes.tdd)
 }
 freemarkerLinks: {

@@ -88,7 +88,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedVarCharHolder holder = new RepeatedVarCharHolder();
       holder.vector = new VarCharVector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.VARCHAR)), allocator);
-      int size = args.size();
+      int size = args.isEmpty()?1:args.size();
       holder.vector.allocateNew(size*Types.MAX_VARCHAR_LENGTH, size);
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
@@ -152,7 +152,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedIntHolder holder = new RepeatedIntHolder();
       holder.vector = new IntVector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.INT)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
@@ -219,7 +219,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedBigIntHolder holder = new RepeatedBigIntHolder();
       holder.vector = new BigIntVector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.BIGINT)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
@@ -286,7 +286,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedFloat4Holder holder = new RepeatedFloat4Holder();
       holder.vector = new Float4Vector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.FLOAT4)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
@@ -351,7 +351,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedFloat8Holder holder = new RepeatedFloat8Holder();
       holder.vector = new Float8Vector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.FLOAT8)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
@@ -415,7 +415,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedDecimal9Holder holder = new RepeatedDecimal9Holder();
       holder.vector = new Decimal9Vector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.DECIMAL9)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
@@ -474,7 +474,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedDecimal18Holder holder = new RepeatedDecimal18Holder();
       holder.vector = new Decimal18Vector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.DECIMAL18)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
@@ -532,7 +532,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedDecimal28SparseHolder holder = new RepeatedDecimal28SparseHolder();
       holder.vector = new Decimal28SparseVector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.DECIMAL28SPARSE)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
@@ -595,7 +595,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedDecimal38SparseHolder holder = new RepeatedDecimal38SparseHolder();
       holder.vector = new Decimal38SparseVector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.DECIMAL38SPARSE)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
@@ -658,7 +658,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedIntervalYearHolder holder = new RepeatedIntervalYearHolder();
       holder.vector = new IntervalYearVector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.INTERVALYEAR)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
@@ -719,7 +719,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedIntervalDayHolder holder = new RepeatedIntervalDayHolder();
       holder.vector = new IntervalDayVector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.INTERVALDAY)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
@@ -783,7 +783,7 @@ public enum ArrayMinorType {
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
       RepeatedBitHolder holder = new RepeatedBitHolder();
       holder.vector = new BitVector(MaterializedField.create("_array", Types.required(TypeProtos.MinorType.BIT)), allocator);
-      holder.vector.allocateNew(args.size());
+      holder.vector.allocateNew(args.isEmpty()?1:args.size());
       addValues(holder, args);
       manager.manageBuffer(holder.vector.getBuffer());
       return holder;
