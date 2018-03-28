@@ -16,12 +16,12 @@
 
 {
   types: [
-    {name: "TinyInt", minor: "TINYINT", native: "byte", writer: "tinyInt()"},
-    {name: "SmallInt", minor: "SMALLINT", native: "short", writer: "smallInt()"},
-    {name: "Int", minor: "INT", native: "int", writer: "integer()"},
-    {name: "BigInt", minor: "BIGINT", native: "long", writer: "bigInt()"},
-    {name: "Float4", minor: "FLOAT4", native: "float", writer: "float4()"},
-    {name: "Float8", minor: "FLOAT8", native: "double", writer: "float8()"},
-    {name: "Bit", minor: "BIT", native: "int", writer: "bit()"},
+    {name: "TinyInt", minor: "TINYINT", native: "byte"},
+    {name: "SmallInt", minor: "SMALLINT", native: "short"},
+    {name: "Int", minor: "INT", native: "int"},
+    {name: "BigInt", minor: "BIGINT", native: "long"},
+    {name: "Float4", minor: "FLOAT4", native: "float"},
+    {name: "Float8", minor: "FLOAT8", native: "double"},
+    {name: "Bit", minor: "BIT", native: "int"},
   ]
 } 
