@@ -21,6 +21,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import com.carrotsearch.hppc.procedures.ObjectProcedure;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.drill.common.AutoCloseables;
 import org.apache.drill.common.config.DrillConfig;
@@ -297,6 +298,12 @@ public class QueryContext implements AutoCloseable, OptimizerRulesContext, Schem
       holdersByType.put(type, valueHolder);
     }
     return valueHolder;
+  }
+
+  @Override
+  public ValueHolder getArrayValueHolder(
+    BiFunction<BufferManager, BufferAllocator, ValueHolder> holderInitializer) {
+    return holderInitializer.apply(bufferManager, allocator);
   }
 
   @Override

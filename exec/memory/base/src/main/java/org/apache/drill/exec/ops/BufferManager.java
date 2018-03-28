@@ -62,5 +62,11 @@ public interface BufferManager extends AutoCloseable {
    */
   public DrillBuf getManagedBuffer(int size);
 
+  /**
+   * Put a buffer into the Manager.
+   * @param buf the buffer will be put
+   */
+  public void manageBuffer(DrillBuf buf);
+
   public void close();
 }

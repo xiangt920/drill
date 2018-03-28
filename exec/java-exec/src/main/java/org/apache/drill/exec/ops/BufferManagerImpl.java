@@ -64,4 +64,8 @@ public class BufferManagerImpl implements BufferManager {
     managedBuffers.put(newBuf.memoryAddress(), newBuf);
     return newBuf;
   }
+
+  public void manageBuffer(DrillBuf buf) {
+    managedBuffers.put(buf.memoryAddress(), buf);
+  }
 }

@@ -81,6 +81,17 @@ public class FunctionCallFactory {
     return new CastExpression(expr, type, ep);
   }
 
+  /**
+   * Create a array value constructor.
+   * @param type target type of array elements
+   * @param ep input expression position
+   * @param args input elements
+   * @return the {@link ArrayValueConstructorExpression}
+   */
+  public static LogicalExpression createArrayConstructor(MajorType type, ExpressionPosition ep, List<LogicalExpression> args) {
+    return new ArrayValueConstructorExpression(type, ep, args);
+  }
+
   public static LogicalExpression createConvert(String function, String conversionType, LogicalExpression expr, ExpressionPosition ep) {
     return new ConvertExpression(function, conversionType, expr, ep);
   }

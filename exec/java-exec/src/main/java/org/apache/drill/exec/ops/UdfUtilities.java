@@ -17,9 +17,11 @@
  ******************************************************************************/
 package org.apache.drill.exec.ops;
 
+import com.carrotsearch.hppc.procedures.ObjectProcedure;
 import com.google.common.base.Function;
 import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.exec.expr.holders.ValueHolder;
+import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.store.PartitionExplorer;
 
 import com.google.common.collect.ImmutableMap;
@@ -95,4 +97,11 @@ public interface UdfUtilities {
    * @return - a wrapper object for an constant value.
    */
   ValueHolder getConstantValueHolder(String value, MinorType type, Function<DrillBuf, ValueHolder> holderInitializer);
+
+  /**
+   * Works with array value and its wrapper.
+   * @return - a wrapper object for an array value
+   */
+  ValueHolder getArrayValueHolder(BiFunction<BufferManager, BufferAllocator, ValueHolder> holderInitializer);
+
 }

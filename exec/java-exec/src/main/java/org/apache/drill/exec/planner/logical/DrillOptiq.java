@@ -196,6 +196,9 @@ public class DrillOptiq {
               .setIfCondition(new IfCondition(caseArgs.get(i + 1), caseArgs.get(i))).build();
           }
           return elseExpression;
+        case ARRAY_VALUE_CONSTRUCTOR:
+          return getArrValueConstructorFromOptiq(call);
+
         }
 
         if (call.getOperator() == SqlStdOperatorTable.ITEM) {
@@ -347,6 +350,76 @@ public class DrillOptiq {
         default: castType = Types.required(MinorType.valueOf(call.getType().getSqlTypeName().getName()));
       }
       return FunctionCallFactory.createCast(castType, ExpressionPosition.UNKNOWN, arg);
+    }
+
+    private LogicalExpression getArrValueConstructorFromOptiq(RexCall call) {
+      List<LogicalExpression> arrayArgs = Lists.newArrayList();
+      for(RexNode r : call.getOperands()){
+        arrayArgs.add(r.accept(this));
+      }
+      String elementTypeName = call.getType().getComponentType().getSqlTypeName().getName();
+      MajorType elementType = null;
+      switch (elementTypeName) {
+        case "VARCHAR":
+        case "CHAR":
+          elementType = Types.repeated(MinorType.VARCHAR).toBuilder().setWidth(call.getType().getPrecision()).build();
+          break;
+        case "INTEGER": elementType = Types.repeated(MinorType.INT); break;
+        case "FLOAT": elementType = Types.repeated(MinorType.FLOAT4); break;
+        case "DOUBLE": elementType = Types.repeated(MinorType.FLOAT8); break;
+        case "DECIMAL":
+          if (context.getPlannerSettings().getOptions().
+            getOption(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY).bool_val == false ) {
+            throw UserException
+              .unsupportedError()
+              .message(ExecErrorConstants.DECIMAL_DISABLE_ERR_MSG)
+              .build(logger);
+          }
+
+          int precision = call.getType().getPrecision();
+          int scale = call.getType().getScale();
+
+          if (precision <= 9) {
+            elementType = TypeProtos.MajorType.newBuilder()
+              .setMinorType(MinorType.DECIMAL9)
+              .setMode(TypeProtos.DataMode.REPEATED)
+              .setPrecision(precision)
+              .setScale(scale)
+              .build();
+          } else if (precision <= 18) {
+            elementType = TypeProtos.MajorType.newBuilder()
+              .setMinorType(MinorType.DECIMAL18)
+              .setMode(TypeProtos.DataMode.REPEATED)
+              .setPrecision(precision)
+              .setScale(scale)
+              .build();
+          } else if (precision <= 28) {
+            // Inject a cast to SPARSE before casting to the dense type.
+            elementType = TypeProtos.MajorType.newBuilder()
+              .setMinorType(MinorType.DECIMAL28SPARSE)
+              .setMode(TypeProtos.DataMode.REPEATED)
+              .setPrecision(precision)
+              .setScale(scale)
+              .build();
+          } else if (precision <= 38) {
+            elementType = TypeProtos.MajorType.newBuilder()
+              .setMinorType(MinorType.DECIMAL38SPARSE)
+              .setMode(TypeProtos.DataMode.REPEATED)
+              .setPrecision(precision)
+              .setScale(scale)
+              .build();
+          } else {
+            throw new UnsupportedOperationException("Only Decimal types with precision range 0 - 38 is supported");
+          }
+          break;
+
+        case "INTERVAL_YEAR_MONTH": elementType = Types.repeated(MinorType.INTERVALYEAR); break;
+        case "INTERVAL_DAY_TIME": elementType = Types.repeated(MinorType.INTERVALDAY); break;
+        case "BOOLEAN": elementType = Types.repeated(MinorType.BIT); break;
+        case "BINARY": elementType = Types.repeated(MinorType.VARBINARY).toBuilder().setWidth(call.getType().getPrecision()).build(); break;
+        default: elementType = Types.repeated(MinorType.LATE);
+      }
+      return FunctionCallFactory.createArrayConstructor(elementType, ExpressionPosition.UNKNOWN, arrayArgs);
     }
 
     private LogicalExpression getDrillFunctionFromOptiqCall(RexCall call) {

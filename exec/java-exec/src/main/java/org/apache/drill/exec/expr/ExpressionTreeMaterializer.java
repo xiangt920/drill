@@ -31,6 +31,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
+import org.apache.drill.common.expression.ArrayValueConstructorExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -939,6 +940,20 @@ public class ExpressionTreeMaterializer {
         errorCollector.addGeneralError(pos, String.format("Casting rules are unknown for type %s.", from));
         return false;
       }
+    }
+
+    @Override
+    public LogicalExpression visitArrayValueConstructor(ArrayValueConstructorExpression e, FunctionLookupContext value) throws RuntimeException {
+      List<LogicalExpression> input = e.immutableArgs();
+      for (int i = 0; i < input.size(); i++) {
+        LogicalExpression le = input.get(i).accept(this, value);
+        if (le instanceof ValueVectorReadExpression) {
+          ValueVectorReadExpression vvr = (ValueVectorReadExpression) le;
+          MinorType t = vvr.getMajorType().getMinorType();
+          e.resetArg(t, vvr, i);
+        }
+      }
+      return e;
     }
   }
 }

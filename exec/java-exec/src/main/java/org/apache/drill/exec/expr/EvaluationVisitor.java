@@ -24,6 +24,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JFieldRef;
+import org.apache.drill.common.expression.ArrayValueConstructorExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -54,6 +57,7 @@ import org.apache.drill.common.expression.ValueExpressions.QuotedString;
 import org.apache.drill.common.expression.ValueExpressions.TimeExpression;
 import org.apache.drill.common.expression.ValueExpressions.TimeStampExpression;
 import org.apache.drill.common.expression.visitors.AbstractExprVisitor;
+import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.common.types.Types;
@@ -63,7 +67,10 @@ import org.apache.drill.exec.compile.sig.MappingSet;
 import org.apache.drill.exec.expr.ClassGenerator.BlockType;
 import org.apache.drill.exec.expr.ClassGenerator.HoldingContainer;
 import org.apache.drill.exec.expr.fn.AbstractFuncHolder;
+import org.apache.drill.exec.memory.BufferAllocator;
+import org.apache.drill.exec.ops.ArrayMinorType;
 import org.apache.drill.exec.physical.impl.filter.ReturnValueExpression;
+import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.vector.ValueHolderHelper;
 import org.apache.drill.exec.vector.complex.reader.FieldReader;
 
@@ -1062,6 +1069,102 @@ public class EvaluationVisitor {
         put(e, hc, generator.getMappingSet());
       }
       return hc;
+    }
+
+    @Override
+    public HoldingContainer visitArrayValueConstructor(ArrayValueConstructorExpression e, ClassGenerator<?> generator) throws RuntimeException {
+      HoldingContainer out = generator.declare(e.getMajorType());
+      JCodeModel model = generator.getModel();
+      Class<?> _class = BasicTypeHelper.getValueVectorClass(e.getMajorType().getMinorType(), TypeProtos.DataMode.REQUIRED);
+      // value vector type
+      JType vvType = model._ref(_class);
+      // MaterializedField type
+      JType mfType = model._ref(MaterializedField.class);
+      // BufAllocator type
+      JType baType = model._ref(BufferAllocator.class);
+      // MinorType type
+      JType mtType = model._ref(MinorType.class);
+      JClass mtClass = model.ref(MinorType.class);
+      // ArrayMinorType type
+      JType amtType = model._ref(ArrayMinorType.class);
+      JClass amtClass = model.ref(ArrayMinorType.class);
+
+
+      JVar vv1 = generator.declareClassField("vv", vvType);
+
+      JBlock setup = generator.getSetupBlock();
+      JBlock eval = generator.getEvalBlock();
+
+      // MaterializedField var
+      JVar mField = setup.decl(mfType, generator.getNextVar("mField"));
+
+      // allocator var
+      JVar allocator = setup.decl(baType, generator.getNextVar("allocator"));
+
+
+      // MinorType var
+      JVar mType = generator.declareClassField("mType", mtType);
+      setup.assign(mType, mtClass.staticRef(e.getMajorType().getMinorType().name()));
+
+      // ArrayMinorType var
+      JVar amType = generator.declareClassField("amType", amtType);
+      setup.assign(amType, amtClass.staticInvoke("getElementType").arg(mType));
+
+      setup.assign(mField,
+        model.ref(MaterializedField.class)
+          .staticInvoke("create").arg("_array")
+          .arg(model.ref(Types.class).staticInvoke("required").arg(mType)));
+      // get allocator from context
+      setup.assign(allocator,
+        generator.getMappingSet().getOutgoing()
+          .invoke("getContext")
+          .invoke("getAllocator"));
+
+
+      // new value vector instance
+      setup.assign(
+        vv1,
+        JExpr.cast(
+          vvType,
+          JExpr.invoke(amType, "getVector")
+            .arg(JExpr.lit(e.valueSize()))
+            .arg(mField)
+            .arg(allocator)
+        )
+      );
+
+      // assign buf of the value vector to context.bufferManager
+      // for freeing memory
+      setup.invoke(
+        generator.getMappingSet().getOutgoing().invoke("getContext"),
+        "manageBuffer")
+        .arg(vv1.invoke("getBuffer"));
+
+
+      ArrayMinorType.getElementType(e.getMajorType().getMinorType()).copyValueFromExp(
+        model,
+        generator.getMappingSet().getIncoming(),
+        generator,
+        eval,
+        vv1,
+        amType,
+        e.iterator());
+      if (e.getMajorType().getMinorType() == MinorType.LIST) {
+        eval.assign(out.f("reader"), vv1.invoke("getReader"));
+        eval.assign(out.f("isSet"), JExpr.lit(1));
+
+      } else {
+        JFieldRef vectorVar = out.f("vector");
+        eval.assign(vectorVar, vv1);
+        eval.assign(out.f("end"), JExpr.lit(e.valueSize()));
+      }
+//      generator.getEvalBlock().invoke(vv1, "close");
+
+
+//      JBlock evalActual = generator.getBlock("doEval").block();
+//      evalActual.invoke(vv1, "close");
+      return out;
+
     }
 
     @Override

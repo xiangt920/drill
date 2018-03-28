@@ -19,12 +19,15 @@ package org.apache.drill.exec.expr.fn.interpreter;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Iterator;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 
+import com.carrotsearch.hppc.procedures.ObjectProcedure;
 import com.google.common.base.Function;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
+import org.apache.drill.common.expression.ArrayValueConstructorExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.ConvertExpression;
 import org.apache.drill.common.expression.FunctionCall;
@@ -49,6 +52,10 @@ import org.apache.drill.exec.expr.fn.DrillSimpleFuncHolder;
 import org.apache.drill.exec.expr.holders.BitHolder;
 import org.apache.drill.exec.expr.holders.NullableBitHolder;
 import org.apache.drill.exec.expr.holders.ValueHolder;
+import org.apache.drill.exec.memory.BufferAllocator;
+import org.apache.drill.exec.ops.ArrayMinorType;
+import org.apache.drill.exec.ops.BiFunction;
+import org.apache.drill.exec.ops.BufferManager;
 import org.apache.drill.exec.ops.UdfUtilities;
 import org.apache.drill.exec.record.RecordBatch;
 import org.apache.drill.exec.record.VectorAccessible;
@@ -58,6 +65,8 @@ import org.apache.drill.exec.vector.ValueVector;
 import com.google.common.base.Preconditions;
 
 import io.netty.buffer.DrillBuf;
+
+import static org.apache.drill.exec.ops.ArrayMinorType.getElementType;
 
 public class InterpreterEvaluator {
 
@@ -402,6 +411,18 @@ public class InterpreterEvaluator {
         @Override
         public ValueHolder apply(DrillBuf buffer) {
           return ValueHolderHelper.getVarCharHolder(buffer, e.value);
+        }
+      });
+    }
+
+    @Override
+    public ValueHolder visitArrayValueConstructor(final ArrayValueConstructorExpression e, Integer value) throws RuntimeException {
+      MinorType minorType = e.getMajorType().getMinorType();
+      final ArrayMinorType elementType = getElementType(minorType);
+      return udfUtilities.getArrayValueHolder(new BiFunction<BufferManager, BufferAllocator, ValueHolder>() {
+        @Override
+        public ValueHolder apply(BufferManager manager, BufferAllocator input) {
+          return elementType.newValueHolder(manager, input, e.immutableArgs());
         }
       });
     }

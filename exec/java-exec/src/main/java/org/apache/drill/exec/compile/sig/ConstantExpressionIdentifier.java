@@ -19,9 +19,11 @@ package org.apache.drill.exec.compile.sig;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.drill.common.expression.ArrayValueConstructorExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -204,6 +206,17 @@ public class ConstantExpressionIdentifier implements ExprVisitor<Boolean, Identi
   public Boolean visitCastExpression(CastExpression e, IdentityHashMap<LogicalExpression, Object> value)
       throws RuntimeException {
     return e.getInput().accept(this, value);
+  }
+
+  @Override
+  public Boolean visitArrayValueConstructor(ArrayValueConstructorExpression e, IdentityHashMap<LogicalExpression, Object> value) throws RuntimeException {
+    Iterator<LogicalExpression> it = e.iterator();
+    while (it.hasNext()) {
+      if (!it.next().accept(this, value)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @Override

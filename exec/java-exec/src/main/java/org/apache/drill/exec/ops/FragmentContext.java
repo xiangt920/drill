@@ -162,6 +162,14 @@ public interface FragmentContext extends UdfUtilities, AutoCloseable {
 
   DrillBuf getManagedBuffer(int size);
 
+  /**
+   * Manage a DrillBuf allocated by UDFs, which is not an injectable
+   * but is allocated by the fragment allocator directly.
+   *
+   * @param buf - a buffer allocated by UDF, and would be managed by Drill
+   */
+  void manageBuffer(DrillBuf buf);
+
   @Override
   void close();
 

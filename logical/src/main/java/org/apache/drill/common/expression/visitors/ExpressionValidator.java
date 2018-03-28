@@ -17,6 +17,7 @@
  */
 package org.apache.drill.common.expression.visitors;
 
+import org.apache.drill.common.expression.ArrayValueConstructorExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -46,6 +47,8 @@ import org.apache.drill.common.expression.ValueExpressions.TimeStampExpression;
 import org.apache.drill.common.types.TypeProtos.DataMode;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
+
+import java.util.Iterator;
 
 public class ExpressionValidator implements ExprVisitor<Void, ErrorCollector, RuntimeException> {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ExpressionValidator.class);
@@ -213,6 +216,19 @@ public class ExpressionValidator implements ExprVisitor<Void, ErrorCollector, Ru
   @Override
   public Void visitCastExpression(CastExpression e, ErrorCollector value) throws RuntimeException {
     return e.getInput().accept(this, value);
+  }
+
+  @Override
+  public Void visitArrayValueConstructor(ArrayValueConstructorExpression e, ErrorCollector value) throws RuntimeException {
+    Iterator<LogicalExpression> it = e.iterator();
+    Void v = null;
+    while (it.hasNext()) {
+      v = it.next().accept(this, value);
+      if (v == null) {
+        return null;
+      }
+    }
+    return v;
   }
 
   @Override

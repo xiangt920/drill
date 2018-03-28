@@ -26,6 +26,8 @@ import org.apache.drill.exec.expr.CodeGenerator;
 import org.apache.drill.exec.expr.fn.FunctionImplementationRegistry;
 
 import io.netty.buffer.DrillBuf;
+import org.apache.drill.exec.expr.holders.ValueHolder;
+import org.apache.drill.exec.memory.BufferAllocator;
 
 /**
  * Common implementation for both the test and production versions
@@ -83,4 +85,15 @@ public abstract class BaseFragmentContext implements FragmentContext {
     return getBufferManager().getManagedBuffer(size);
   }
 
+  @Override
+  public ValueHolder getArrayValueHolder(
+    BiFunction<BufferManager, BufferAllocator, ValueHolder> holderInitializer) {
+
+    return holderInitializer.apply(getBufferManager(), getAllocator());
+  }
+
+  @Override
+  public void manageBuffer(DrillBuf buf) {
+    getBufferManager().manageBuffer(buf);
+  }
 }

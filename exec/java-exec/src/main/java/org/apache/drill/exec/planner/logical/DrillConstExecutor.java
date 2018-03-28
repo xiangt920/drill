@@ -26,6 +26,7 @@ import org.apache.calcite.util.TimeString;
 import org.apache.calcite.util.TimestampString;
 import org.apache.calcite.rel.RelNode;
 import org.apache.drill.common.exceptions.UserException;
+import org.apache.drill.common.expression.ArrayValueConstructorExpression;
 import org.apache.drill.common.expression.ErrorCollectorImpl;
 import org.apache.drill.common.expression.ExpressionStringBuilder;
 import org.apache.drill.common.expression.LogicalExpression;
@@ -137,7 +138,8 @@ public class DrillConstExecutor implements RexExecutor {
           .build(logger);
       }
 
-      if (NON_REDUCIBLE_TYPES.contains(materializedExpr.getMajorType().getMinorType())) {
+      if (NON_REDUCIBLE_TYPES.contains(materializedExpr.getMajorType().getMinorType())
+        || materializedExpr instanceof ArrayValueConstructorExpression) {
         logger.debug("Constant expression not folded due to return type {}, complete expression: {}",
             materializedExpr.getMajorType(),
             ExpressionStringBuilder.toString(materializedExpr));

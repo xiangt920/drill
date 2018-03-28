@@ -17,6 +17,7 @@
  */
 package org.apache.drill.common.expression.visitors;
 
+import org.apache.drill.common.expression.ArrayValueConstructorExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -45,6 +46,8 @@ import org.apache.drill.common.expression.ValueExpressions.LongExpression;
 import org.apache.drill.common.expression.ValueExpressions.QuotedString;
 import org.apache.drill.common.expression.ValueExpressions.TimeExpression;
 import org.apache.drill.common.expression.ValueExpressions.TimeStampExpression;
+
+import java.util.Iterator;
 
 final class ConstantChecker implements ExprVisitor<Boolean, ErrorCollector, RuntimeException> {
 
@@ -191,6 +194,17 @@ final class ConstantChecker implements ExprVisitor<Boolean, ErrorCollector, Runt
   @Override
   public Boolean visitCastExpression(CastExpression e, ErrorCollector value) throws RuntimeException {
     return e.getInput().accept(this, value);
+  }
+
+  @Override
+  public Boolean visitArrayValueConstructor(ArrayValueConstructorExpression e, ErrorCollector value) throws RuntimeException {
+    Iterator<LogicalExpression> it = e.iterator();
+    while (it.hasNext()) {
+      if (!it.next().accept(this, value)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @Override

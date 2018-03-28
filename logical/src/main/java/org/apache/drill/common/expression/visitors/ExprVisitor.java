@@ -17,6 +17,7 @@
  */
 package org.apache.drill.common.expression.visitors;
 
+import org.apache.drill.common.expression.ArrayValueConstructorExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -71,4 +72,5 @@ public interface ExprVisitor<T, VAL, EXCEP extends Exception> {
   public T visitCastExpression(CastExpression e, VAL value) throws EXCEP;
   public T visitConvertExpression(ConvertExpression e, VAL value) throws EXCEP;
   public T visitParameter(ParameterExpression e, VAL value) throws EXCEP;
+  public T visitArrayValueConstructor(ArrayValueConstructorExpression e, VAL value) throws EXCEP;
 }
