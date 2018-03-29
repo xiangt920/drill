@@ -59,7 +59,9 @@ public abstract class BaseJsonProcessor implements JsonProcessor {
   public static ObjectMapper getDefaultMapper() {
     return new ObjectMapper().configure(
         JsonParser.Feature.ALLOW_COMMENTS, true).configure(
-        JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, true);
+        JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, true).configure(
+        JsonParser.Feature.ALLOW_NON_NUMERIC_NUMBERS, true).configure(
+        JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS, true);
   }
 
   public boolean ignoreJSONParseError() {

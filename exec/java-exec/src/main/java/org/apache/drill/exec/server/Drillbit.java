@@ -192,6 +192,7 @@ public class Drillbit implements AutoCloseable {
     registrationHandle = coord.register(md);
     webServer.start();
 
+    InternalProxy.init(this, manager);
     // Must start the RM after the above since it needs to read system options.
 
     drillbitContext.startRM();
