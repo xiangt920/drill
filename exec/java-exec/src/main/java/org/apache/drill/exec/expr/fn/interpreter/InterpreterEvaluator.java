@@ -18,6 +18,7 @@
 package org.apache.drill.exec.expr.fn.interpreter;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -67,6 +68,7 @@ import com.google.common.base.Preconditions;
 
 import io.netty.buffer.DrillBuf;
 
+import static org.apache.drill.exec.ops.ArrayMinorType.ARRAY_ELEMENTS_CLASS;
 import static org.apache.drill.exec.ops.ArrayMinorType.getElementType;
 
 public class InterpreterEvaluator {
@@ -111,11 +113,38 @@ public class InterpreterEvaluator {
           @Override
           public ValueHolder apply(BufferManager manager, BufferAllocator allocator) {
             ArrayMinorType eleType = getElementType(minorType);
-            return eleType.newValueHolder(manager, allocator, new ArrayList<>());
+            return eleType.newValueHolder(null, allocator, new ArrayList<>());
           }
         });
         outField.set(interpreter, holder);
       } catch (IllegalAccessException | NoSuchFieldException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  private static void releaseOutField(DrillSimpleFunc interpreter, UdfUtilities udfUtilities) {
+    Field outField = getOutField(interpreter);
+    if (outField != null && ARRAY_ELEMENTS_CLASS.contains(outField.getType())) {
+      try {
+        outField.setAccessible(true);
+
+        ValueHolder holder = (ValueHolder) outField.get(interpreter);
+        Field vectorField = holder.getClass().getDeclaredField("vector");
+        vectorField.setAccessible(true);
+        ValueVector vector = (ValueVector) vectorField.get(holder);
+        Method getBufMethod = vector.getClass().getMethod("getBuffer");
+        getBufMethod.setAccessible(true);
+        final DrillBuf buf = (DrillBuf) getBufMethod.invoke(vector);
+        udfUtilities.getArrayValueHolder(new BiFunction<BufferManager, BufferAllocator, ValueHolder>() {
+          @Override
+          public ValueHolder apply(BufferManager manager, BufferAllocator allocator) {
+            manager.manageBuffer(buf);
+            return null;
+          }
+        });
+
+      } catch (IllegalAccessException | NoSuchFieldException | NoSuchMethodException | InvocationTargetException e) {
         throw new RuntimeException(e);
       }
     }
