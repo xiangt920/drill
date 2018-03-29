@@ -20,23 +20,29 @@ package org.apache.drill.exec.expr.fn;
 import java.util.Arrays;
 import java.util.List;
 
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JFieldRef;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.expression.ExpressionPosition;
 import org.apache.drill.common.expression.FunctionHolderExpression;
 import org.apache.drill.common.expression.LogicalExpression;
+import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.compile.bytecode.ScalarReplacementTypes;
 import org.apache.drill.exec.compile.sig.SignatureHolder;
+import org.apache.drill.exec.expr.BasicTypeHelper;
 import org.apache.drill.exec.expr.ClassGenerator;
 import org.apache.drill.exec.expr.ClassGenerator.BlockType;
 import org.apache.drill.exec.expr.ClassGenerator.HoldingContainer;
 import org.apache.drill.exec.expr.DrillFuncHolderExpr;
 import org.apache.drill.exec.expr.TypeHelper;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate.NullHandling;
+import org.apache.drill.exec.ops.ArrayMinorType;
 import org.apache.drill.exec.ops.UdfUtilities;
+import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.vector.complex.reader.FieldReader;
 
 import com.google.common.base.Preconditions;
@@ -281,6 +287,52 @@ public abstract class DrillFuncHolder extends AbstractFuncHolder {
 
   public ValueReference[] getParameters() {
     return attributes.getParameters();
+  }
+
+  protected void generateVector(
+    ClassGenerator<?> g, JBlock block,
+    JVar holder, JVar ctxField,
+    TypeProtos.MinorType minorType) {
+
+    // MaterializedField type
+    JType mfType = g.getModel()._ref(MaterializedField.class);
+
+    // MaterializedField var
+    JVar mField = block.decl(mfType, g.getNextVar("mField"));
+
+
+    // ArrayMinorType type
+    JType amtType = g.getModel()._ref(ArrayMinorType.class);
+    JClass amtClass = g.getModel().ref(ArrayMinorType.class);
+
+    // ArrayMinorType var
+    JVar amType = g.declareClassField("amType", amtType);
+    block.assign(
+      amType,
+      amtClass.staticInvoke("getElementType")
+        .arg(holder.ref("TYPE").invoke("getMinorType")));
+
+    block.assign(mField,
+      g.getModel().ref(MaterializedField.class)
+        .staticInvoke("create").arg("_array")
+        .arg(
+          g.getModel()
+            .ref(Types.class)
+            .staticInvoke("required")
+            .arg(holder.ref("TYPE").invoke("getMinorType"))));
+
+    Class<?> _class = BasicTypeHelper.getValueVectorClass(minorType, TypeProtos.DataMode.REQUIRED);
+    // value vector type
+    JType vvType = g.getModel()._ref(_class);
+
+    JFieldRef vectorVar = holder.ref("vector");
+    block.assign(vectorVar,
+      JExpr.cast(
+        vvType,
+        amType.invoke("getVector")
+          .arg(JExpr.lit(2))
+          .arg(mField)
+          .arg(ctxField.invoke("getAllocator"))));
   }
 
   public boolean checkPrecisionRange() {

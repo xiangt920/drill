@@ -19,6 +19,7 @@ package org.apache.drill.exec.expr.fn;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+import com.sun.codemodel.JType;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.common.expression.FieldReference;
 import org.apache.drill.common.types.TypeProtos.DataMode;
@@ -28,6 +29,7 @@ import org.apache.drill.exec.expr.ClassGenerator;
 import org.apache.drill.exec.expr.ClassGenerator.BlockType;
 import org.apache.drill.exec.expr.ClassGenerator.HoldingContainer;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate.NullHandling;
+import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.record.TypedFieldId;
 
 import com.google.common.base.Preconditions;
@@ -130,8 +132,23 @@ class DrillAggFuncHolder extends DrillFuncHolder {
                                     JVar[] workspaceJVars, FieldReference fieldReference) {
     HoldingContainer out = classGenerator.declare(getReturnType(), false);
     JBlock sub = new JBlock();
+    JVar ctxField = null;
+    if (out.isRepeated()) {
+      JType ctxType = classGenerator.getModel()._ref(FragmentContext.class);
+      // FragmentContext field
+      ctxField = classGenerator.declareClassField("context", ctxType);
+      classGenerator.getSetupBlock().assign(
+        ctxField,
+        classGenerator.getMappingSet()
+          .getOutgoing()
+          .invoke("getContext"));
+    }
     classGenerator.getEvalBlock().add(sub);
     JVar internalOutput = sub.decl(JMod.FINAL, classGenerator.getHolderType(getReturnType()), getReturnValue().getName(), JExpr._new(classGenerator.getHolderType(getReturnType())));
+    if (out.isRepeated()) {
+      Preconditions.checkNotNull(ctxField);
+      generateVector(classGenerator, sub, internalOutput, ctxField, out.getMinorType());
+    }
     addProtectedBlock(classGenerator, sub, output(), null, workspaceJVars, false);
     sub.assign(out.getHolder(), internalOutput);
     //hash aggregate uses workspace vectors. Initialization is done in "setup" and does not require "reset" block.
@@ -140,6 +157,14 @@ class DrillAggFuncHolder extends DrillFuncHolder {
     }
     generateBody(classGenerator, BlockType.CLEANUP, cleanup(), null, workspaceJVars, false);
 
+    if (out.isRepeated()) {
+      // assign buf of the value vector to context.bufferManager
+      // for freeing memory
+      sub.invoke(
+        ctxField,
+        "manageBuffer")
+        .arg(internalOutput.ref("vector").invoke("getBuffer"));
+    }
     return out;
   }
 
