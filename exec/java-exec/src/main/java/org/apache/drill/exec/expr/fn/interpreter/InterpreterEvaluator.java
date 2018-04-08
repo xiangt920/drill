@@ -401,6 +401,7 @@ public class InterpreterEvaluator {
 
         initOutField(interpreter, udfUtilities);
         ValueHolder out = evaluateFunction(interpreter, args, holderExpr.getName());
+        releaseOutField(interpreter, udfUtilities);
 
         if (TypeHelper.getValueHolderType(out).getMode() == TypeProtos.DataMode.OPTIONAL &&
             holderExpr.getMajorType().getMode() == TypeProtos.DataMode.REQUIRED) {
