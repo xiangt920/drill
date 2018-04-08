@@ -20,11 +20,11 @@ package org.apache.drill.exec.ops;
 
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableSet;
-import com.sun.codemodel.JArray;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import org.apache.drill.common.expression.LogicalExpression;
@@ -32,8 +32,6 @@ import org.apache.drill.common.expression.ValueExpressions;
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.expr.ClassGenerator;
-import org.apache.drill.exec.expr.DirectExpression;
-import org.apache.drill.exec.expr.ValueVectorReadExpression;
 import org.apache.drill.exec.expr.holders.Decimal28SparseHolder;
 import org.apache.drill.exec.expr.holders.Decimal38SparseHolder;
 import org.apache.drill.exec.expr.holders.RepeatedBigIntHolder;
@@ -135,16 +133,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType type = model._ref(String.class);
-      JVar var = b.decl(
-        type,
-        v);
-      var.init(
-        JExpr.lit(e.accept(INSTANCE, null).toString()));
-      return var;
-    }
   },
 
   /**
@@ -204,16 +192,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType intType = model._ref(Integer.class);
-      JVar var = b.decl(
-        intType,
-        v);
-      var.init(
-        JExpr.lit(((Number) e.accept(INSTANCE, null)).intValue()));
-      return var;
-    }
   },
 
   /**
@@ -273,16 +251,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType intType = model._ref(Long.class);
-      JVar var = b.decl(
-        intType,
-        v);
-      var.init(
-        JExpr.lit(((Number) e.accept(INSTANCE, null)).longValue()));
-      return var;
-    }
   },
 
   /**
@@ -340,16 +308,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType type = model._ref(Float.class);
-      JVar var = b.decl(
-        type,
-        v);
-      var.init(
-        JExpr.lit(((Number) e.accept(INSTANCE, null)).floatValue()));
-      return var;
-    }
   },
 
   /**
@@ -406,16 +364,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType type = model._ref(Double.class);
-      JVar var = b.decl(
-        type,
-        v);
-      var.init(
-        JExpr.lit(((Number) e.accept(INSTANCE, null)).doubleValue()));
-      return var;
-    }
   },
 
   /**
@@ -467,16 +415,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType type = model._ref(Integer.class);
-      JVar var = b.decl(
-        type,
-        v);
-      var.init(
-        JExpr.lit((Integer) e.accept(INSTANCE, null)));
-      return var;
-    }
   },
 
   /**
@@ -528,16 +466,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType type = model._ref(Long.class);
-      JVar var = b.decl(
-        type,
-        v);
-      var.init(
-        JExpr.lit((Long) e.accept(INSTANCE, null)));
-      return var;
-    }
   },
 
   /**
@@ -592,16 +520,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType type = model._ref(String.class);
-      JVar var = b.decl(
-        type,
-        v);
-      var.init(
-        JExpr.lit((String) e.accept(INSTANCE, null)));
-      return var;
-    }
   },
 
   /**
@@ -657,16 +575,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType type = model._ref(String.class);
-      JVar var = b.decl(
-        type,
-        v);
-      var.init(
-        JExpr.lit((String) e.accept(INSTANCE, null)));
-      return var;
-    }
   },
 
   /**
@@ -720,16 +628,6 @@ public enum ArrayMinorType {
 
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType type = model._ref(Integer.class);
-      JVar var = b.decl(
-        type,
-        v);
-      var.init(
-        JExpr.lit((Integer) e.accept(INSTANCE, null)));
-      return var;
-    }
   },
 
   /**
@@ -783,19 +681,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      int[] vals = (int[]) e.accept(INSTANCE, null);
-      JType type = model._ref(Integer.class).array();
-      JArray arr = JExpr.newArray(model.INT, 2);
-      arr.add(JExpr.lit(vals[0]));
-      arr.add(JExpr.lit(vals[1]));
-      JVar var = b.decl(
-        type,
-        v);
-      var.init(arr);
-      return var;
-    }
   },
 
   /**
@@ -847,16 +732,6 @@ public enum ArrayMinorType {
       return v;
     }
 
-    @Override
-    protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-      JType type = model._ref(Boolean.class);
-      JVar var = b.decl(
-        type,
-        v);
-      var.init(
-        JExpr.lit((Boolean) e.accept(INSTANCE, null)));
-      return var;
-    }
   }, BINARY {
     @Override
     public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
@@ -929,10 +804,6 @@ public enum ArrayMinorType {
     return null;
   }
 
-  protected JVar assignJValue(JCodeModel model, JBlock b, LogicalExpression e, String v) {
-    return null;
-  }
-
   /**
    * Get ArrayMinorType from {@link TypeProtos.MinorType}
    * @param minorType minor type of the elements.
@@ -976,36 +847,29 @@ public enum ArrayMinorType {
    * @param it the array elements' expression
    */
   public void copyValueFromExp(JCodeModel model,
-                               DirectExpression incoming,
                                ClassGenerator generator,
                                JBlock eval,
                                JVar vv1,
                                JVar amType,
-                               Iterator<LogicalExpression> it) {
+                               Iterator<ClassGenerator.HoldingContainer> it) {
     int index = 0;
     JType objType = model._ref(Object.class);
     JType baseType = model._ref(BaseValueVector.class);
     JVar obj = eval.decl(objType, generator.getNextVar("obj"));
     JVar baseV = eval.decl(baseType, generator.getNextVar("baseV"), vv1);
     while (it.hasNext()) {
-      LogicalExpression next = it.next();
-      if(next instanceof ValueVectorReadExpression) {
-        ValueVectorReadExpression vvr = (ValueVectorReadExpression) next;
-        JVar vv = generator.declareVectorValueSetupAndMember(incoming, vvr.getFieldId());
-
-        JConditional _if = eval._if(vv.invoke("getAccessor").invoke("isNull").arg(generator.getMappingSet().getValueReadIndex()));
-        JBlock _then = _if._then();
-
-        _then.assign(obj, JExpr._null());
-
-        JBlock _else = _if._else();
-
-        _else.assign(obj, vv.invoke("getAccessor").invoke("get").arg(generator.getMappingSet().getValueReadIndex()));
-
+      ClassGenerator.HoldingContainer next = it.next();
+      if (next.isConstant()) {
+        eval.assign(obj, next.getValue());
+      } else if (next.isOptional()) {
+        JFieldRef isSet = next.getIsSet();
+        JConditional _if = eval._if(isSet.eq(JExpr.lit(1)));
+        _if._then().assign(obj, next.getHolder().ref("value"));
+        _if._else().assign(obj, JExpr._null());
+      } else if(next.isRepeated()) {
+        throw new IllegalArgumentException("Unsupported repeated mode in array, type: " + next.getMinorType());
       } else {
-        JVar val = assignJValue(model, eval, next, generator.getNextVar());
-        eval.assign(obj, val);
-
+        eval.assign(obj, next.getHolder().ref("value"));
       }
       eval.invoke(amType, "addValueSafe").arg(obj).arg(baseV).arg(JExpr.lit(index));
       index++;

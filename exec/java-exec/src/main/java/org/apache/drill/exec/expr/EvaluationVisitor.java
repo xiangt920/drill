@@ -17,6 +17,7 @@
  */
 package org.apache.drill.exec.expr;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -1140,15 +1141,17 @@ public class EvaluationVisitor {
         "manageBuffer")
         .arg(vv1.invoke("getBuffer"));
 
-
+      List<HoldingContainer> args = new ArrayList<>();
+      for (LogicalExpression arg : e.immutableArgs()) {
+        args.add(arg.accept(this, generator));
+      }
       ArrayMinorType.getElementType(e.getMajorType().getMinorType()).copyValueFromExp(
         model,
-        generator.getMappingSet().getIncoming(),
         generator,
         eval,
         vv1,
         amType,
-        e.iterator());
+        args.iterator());
       if (e.getMajorType().getMinorType() == MinorType.LIST) {
         eval.assign(out.f("reader"), vv1.invoke("getReader"));
         eval.assign(out.f("isSet"), JExpr.lit(1));
@@ -1158,11 +1161,6 @@ public class EvaluationVisitor {
         eval.assign(vectorVar, vv1);
         eval.assign(out.f("end"), JExpr.lit(e.valueSize()));
       }
-//      generator.getEvalBlock().invoke(vv1, "close");
-
-
-//      JBlock evalActual = generator.getBlock("doEval").block();
-//      evalActual.invoke(vv1, "close");
       return out;
 
     }

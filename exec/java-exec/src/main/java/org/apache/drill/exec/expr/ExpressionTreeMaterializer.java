@@ -947,11 +947,8 @@ public class ExpressionTreeMaterializer {
       List<LogicalExpression> input = e.immutableArgs();
       for (int i = 0; i < input.size(); i++) {
         LogicalExpression le = input.get(i).accept(this, value);
-        if (le instanceof ValueVectorReadExpression) {
-          ValueVectorReadExpression vvr = (ValueVectorReadExpression) le;
-          MinorType t = vvr.getMajorType().getMinorType();
-          e.resetArg(t, vvr, i);
-        }
+        MinorType t = le.getMajorType().getMinorType();
+        e.resetArg(t, le, i);
       }
       return e;
     }
