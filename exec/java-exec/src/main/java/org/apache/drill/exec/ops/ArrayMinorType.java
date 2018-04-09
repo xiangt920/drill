@@ -20,6 +20,7 @@ package org.apache.drill.exec.ops;
 
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableSet;
+import com.sun.codemodel.JAssignmentTarget;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
@@ -32,8 +33,19 @@ import org.apache.drill.common.expression.ValueExpressions;
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.expr.ClassGenerator;
+import org.apache.drill.exec.expr.holders.Decimal18Holder;
 import org.apache.drill.exec.expr.holders.Decimal28SparseHolder;
 import org.apache.drill.exec.expr.holders.Decimal38SparseHolder;
+import org.apache.drill.exec.expr.holders.Decimal9Holder;
+import org.apache.drill.exec.expr.holders.IntervalDayHolder;
+import org.apache.drill.exec.expr.holders.IntervalYearHolder;
+import org.apache.drill.exec.expr.holders.NullableDecimal18Holder;
+import org.apache.drill.exec.expr.holders.NullableDecimal28SparseHolder;
+import org.apache.drill.exec.expr.holders.NullableDecimal38SparseHolder;
+import org.apache.drill.exec.expr.holders.NullableDecimal9Holder;
+import org.apache.drill.exec.expr.holders.NullableIntervalDayHolder;
+import org.apache.drill.exec.expr.holders.NullableIntervalYearHolder;
+import org.apache.drill.exec.expr.holders.NullableVarCharHolder;
 import org.apache.drill.exec.expr.holders.RepeatedBigIntHolder;
 import org.apache.drill.exec.expr.holders.RepeatedBitHolder;
 import org.apache.drill.exec.expr.holders.RepeatedDecimal18Holder;
@@ -47,9 +59,11 @@ import org.apache.drill.exec.expr.holders.RepeatedIntervalDayHolder;
 import org.apache.drill.exec.expr.holders.RepeatedIntervalYearHolder;
 import org.apache.drill.exec.expr.holders.RepeatedSmallIntHolder;
 import org.apache.drill.exec.expr.holders.RepeatedTinyIntHolder;
+import org.apache.drill.exec.expr.holders.RepeatedVar16CharHolder;
 import org.apache.drill.exec.expr.holders.RepeatedVarBinaryHolder;
 import org.apache.drill.exec.expr.holders.RepeatedVarCharHolder;
 import org.apache.drill.exec.expr.holders.ValueHolder;
+import org.apache.drill.exec.expr.holders.VarCharHolder;
 import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.vector.BaseValueVector;
@@ -96,6 +110,7 @@ public enum ArrayMinorType {
       addValues(holder, args);
       if (manager != null) {
         manager.manageBuffer(holder.vector.getBuffer());
+        manager.manageBuffer(holder.vector.getOffsetVector().getBuffer());
       }
       return holder;
     }
@@ -118,6 +133,15 @@ public enum ArrayMinorType {
 
         h.getMutator().setSafe(index, (e.accept(INSTANCE, null)).toString().getBytes(Charsets.UTF_8));
 
+      } else if (val instanceof VarCharHolder) {
+        h.getMutator().setSafe(index, (VarCharHolder) val);
+      } else if (val instanceof NullableVarCharHolder) {
+        NullableVarCharHolder valHolder = (NullableVarCharHolder) val;
+        if (valHolder.isSet == 0) {
+          h.getMutator().setSafe(index, "".getBytes(Charsets.UTF_8));
+        } else {
+          h.getMutator().setSafe(index, (NullableVarCharHolder) val);
+        }
       } else if(val instanceof String) {
         h.getMutator().setSafe(index, ((String) val).getBytes(Charsets.UTF_8));
       } else {
@@ -396,11 +420,17 @@ public enum ArrayMinorType {
 
     @Override
     public BaseValueVector addValueSafe(Object e, BaseValueVector vector, int index) {
+      Decimal9Vector h = ((Decimal9Vector) vector);
       if (e instanceof ValueExpressions.Decimal9Expression) {
-        Decimal9Vector h = ((Decimal9Vector) vector);
         h.getMutator().setSafe(index, (Integer) ((ValueExpressions.Decimal9Expression) e).accept(INSTANCE, null));
+      } else if (e instanceof Decimal9Holder) {
+        h.getMutator().setSafe(index, (Decimal9Holder) e);
+      } else if (e instanceof NullableDecimal9Holder) {
+        NullableDecimal9Holder valHolder = (NullableDecimal9Holder) e;
+        if (valHolder.isSet != 0) {
+          h.getMutator().setSafe(index, (NullableDecimal9Holder) e);
+        }
       } else if(e instanceof Integer) {
-        Decimal9Vector  h = (Decimal9Vector ) vector;
         h.getMutator().setSafe(index, (Integer) e);
       } else {
         throw new IllegalArgumentException("Unsupported type for decimal type while the value is:" + e.getClass().getName());
@@ -447,11 +477,17 @@ public enum ArrayMinorType {
 
     @Override
     public BaseValueVector addValueSafe(Object e, BaseValueVector vector, int index) {
+      Decimal18Vector v = ((Decimal18Vector) vector);
       if (e instanceof ValueExpressions.Decimal18Expression) {
-        Decimal18Vector v = ((Decimal18Vector) vector);
-        v.getMutator().setSafe(index, ((ValueExpressions.Decimal18Expression) e).getLongFromDecimal());
+        v.getMutator().setSafe(index, (Long) ((ValueExpressions.Decimal18Expression) e).accept(INSTANCE, null));
+      } else if (e instanceof Decimal18Holder) {
+        v.getMutator().setSafe(index, (Decimal18Holder) e);
+      } else if (e instanceof NullableDecimal18Holder) {
+        NullableDecimal18Holder valHolder = (NullableDecimal18Holder) e;
+        if (valHolder.isSet != 0) {
+          v.getMutator().setSafe(index, (NullableDecimal18Holder) e);
+        }
       } else if(e instanceof Long) {
-        Decimal18Vector  v = (Decimal18Vector ) vector;
         v.getMutator().setSafe(index, (Long) e);
       } else {
         throw new IllegalArgumentException("Unsupported type for decimal type while the value is:" + e.getClass().getName());
@@ -497,14 +533,20 @@ public enum ArrayMinorType {
 
     @Override
     public BaseValueVector addValueSafe(Object e, BaseValueVector vector, int index) {
+      Decimal28SparseVector v = ((Decimal28SparseVector) vector);
       if (e instanceof ValueExpressions.Decimal28Expression) {
-        Decimal28SparseVector v = ((Decimal28SparseVector) vector);
         Decimal28SparseHolder valHolder = ValueHolderHelper.getDecimal28Holder(
           v.getAllocator().getEmpty(),
           (String) ((ValueExpressions.Decimal28Expression) e).accept(INSTANCE, null));
         v.getMutator().setSafe(index, valHolder);
+      } else if (e instanceof Decimal28SparseHolder) {
+        v.getMutator().setSafe(index, (Decimal28SparseHolder) e);
+      } else if (e instanceof NullableDecimal28SparseHolder) {
+        NullableDecimal28SparseHolder valHolder = (NullableDecimal28SparseHolder) e;
+        if (valHolder.isSet != 0) {
+          v.getMutator().setSafe(index, (NullableDecimal28SparseHolder) e);
+        }
       } else if(e instanceof String) {
-        Decimal28SparseVector  v = (Decimal28SparseVector ) vector;
         Decimal28SparseHolder valHolder = ValueHolderHelper.getDecimal28Holder(v.getAllocator().getEmpty(), (String) e);
         v.getMutator().setSafe(index, valHolder);
       } else {
@@ -552,14 +594,20 @@ public enum ArrayMinorType {
 
     @Override
     public BaseValueVector addValueSafe(Object e, BaseValueVector vector, int index) {
+      Decimal38SparseVector v = ((Decimal38SparseVector) vector);
       if (e instanceof ValueExpressions.Decimal38Expression) {
-        Decimal38SparseVector v = ((Decimal38SparseVector) vector);
         Decimal38SparseHolder valHolder = ValueHolderHelper.getDecimal38Holder(
           v.getAllocator().getEmpty(),
           (String) ((ValueExpressions.Decimal38Expression) e).accept(INSTANCE, null));
         v.getMutator().setSafe(index, valHolder);
+      } else if (e instanceof Decimal38SparseHolder) {
+        v.getMutator().setSafe(index, (Decimal38SparseHolder) e);
+      } else if (e instanceof NullableDecimal38SparseHolder) {
+        NullableDecimal38SparseHolder valHolder = (NullableDecimal38SparseHolder) e;
+        if (valHolder.isSet != 0) {
+          v.getMutator().setSafe(index, (NullableDecimal38SparseHolder) e);
+        }
       } else if(e instanceof String) {
-        Decimal38SparseVector  v = (Decimal38SparseVector ) vector;
         Decimal38SparseHolder valHolder = ValueHolderHelper.getDecimal38Holder(v.getAllocator().getEmpty(), (String) e);
         v.getMutator().setSafe(index, valHolder);
       } else {
@@ -607,12 +655,18 @@ public enum ArrayMinorType {
 
     @Override
     public BaseValueVector addValueSafe(Object e, BaseValueVector vector, int index) {
+      IntervalYearVector v = (IntervalYearVector) vector;
       if (e instanceof ValueExpressions.IntervalYearExpression) {
-        IntervalYearVector v = (IntervalYearVector) vector;
         int val = (Integer) ((ValueExpressions.IntervalYearExpression) e).accept(INSTANCE, null);
         v.getMutator().setSafe(index, val);
+      } else if (e instanceof IntervalYearHolder) {
+        v.getMutator().setSafe(index, (IntervalYearHolder) e);
+      } else if (e instanceof NullableIntervalYearHolder) {
+        NullableIntervalYearHolder valHolder = (NullableIntervalYearHolder) e;
+        if (valHolder.isSet != 0) {
+          v.getMutator().setSafe(index, (NullableIntervalYearHolder) e);
+        }
       } else if(e instanceof Integer) {
-        IntervalYearVector  v = (IntervalYearVector ) vector;
         v.getMutator().setSafe(index, (Integer) e);
       } else {
         throw new IllegalArgumentException("Unsupported type for interval type while the value is:" + e.getClass().getName());
@@ -660,12 +714,18 @@ public enum ArrayMinorType {
 
     @Override
     public BaseValueVector addValueSafe(Object e, BaseValueVector vector, int index) {
+      IntervalDayVector v = ((IntervalDayVector) vector);
       if (e instanceof ValueExpressions.IntervalDayExpression) {
-        IntervalDayVector v = ((IntervalDayVector) vector);
         int[] val = (int[]) ((ValueExpressions.IntervalDayExpression) e).accept(INSTANCE, null);
         v.getMutator().setSafe(index, val[0], val[1]);
+      } else if (e instanceof IntervalDayHolder) {
+        v.getMutator().setSafe(index, (IntervalDayHolder) e);
+      } else if (e instanceof NullableIntervalDayHolder) {
+        NullableIntervalDayHolder valHolder = (NullableIntervalDayHolder) e;
+        if (valHolder.isSet != 0) {
+          v.getMutator().setSafe(index, (NullableIntervalDayHolder) e);
+        }
       } else if(e instanceof int[]) {
-        IntervalDayVector  v = (IntervalDayVector ) vector;
         int[] val = (int[]) e;
         v.getMutator().setSafe(index, val[0], val[1]);
       } else {
@@ -804,6 +864,29 @@ public enum ArrayMinorType {
     return null;
   }
 
+  protected JAssignmentTarget assignJValue(JVar holder, TypeProtos.MinorType type) {
+    switch (type) {
+      case VARCHAR:
+      case VAR16CHAR:
+      case VARBINARY:
+      case DECIMAL9:
+      case DECIMAL18:
+      case DECIMAL28SPARSE:
+      case DECIMAL38SPARSE:
+      case INTERVALDAY:
+        return holder;
+      case BIT:
+      case INT:
+      case FLOAT4:
+      case FLOAT8:
+      case BIGINT:
+      case INTERVALYEAR:
+        return holder.ref("value");
+      default:
+        throw new IllegalArgumentException("Unsupported minor type of array: "+type.name());
+    }
+  }
+
   /**
    * Get ArrayMinorType from {@link TypeProtos.MinorType}
    * @param minorType minor type of the elements.
@@ -859,17 +942,18 @@ public enum ArrayMinorType {
     JVar baseV = eval.decl(baseType, generator.getNextVar("baseV"), vv1);
     while (it.hasNext()) {
       ClassGenerator.HoldingContainer next = it.next();
+      TypeProtos.MinorType mt = next.getMinorType();
       if (next.isConstant()) {
         eval.assign(obj, next.getValue());
       } else if (next.isOptional()) {
         JFieldRef isSet = next.getIsSet();
         JConditional _if = eval._if(isSet.eq(JExpr.lit(1)));
-        _if._then().assign(obj, next.getHolder().ref("value"));
+        _if._then().assign(obj, assignJValue(next.getHolder(), mt));
         _if._else().assign(obj, JExpr._null());
       } else if(next.isRepeated()) {
         throw new IllegalArgumentException("Unsupported repeated mode in array, type: " + next.getMinorType());
       } else {
-        eval.assign(obj, next.getHolder().ref("value"));
+        eval.assign(obj, assignJValue(next.getHolder(), mt));
       }
       eval.invoke(amType, "addValueSafe").arg(obj).arg(baseV).arg(JExpr.lit(index));
       index++;
@@ -895,5 +979,11 @@ public enum ArrayMinorType {
     .add(RepeatedTinyIntHolder.class)
     .add(RepeatedVarBinaryHolder.class)
     .add(RepeatedVarCharHolder.class)
+    .build();
+
+  public static final Set<Class<?>> VAR_ELEMENTS_CLASS = new ImmutableSet.Builder<Class<?>>()
+    .add(RepeatedVarBinaryHolder.class)
+    .add(RepeatedVarCharHolder.class)
+    .add(RepeatedVar16CharHolder.class)
     .build();
 }

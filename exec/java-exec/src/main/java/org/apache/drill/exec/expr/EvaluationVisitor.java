@@ -1140,12 +1140,19 @@ public class EvaluationVisitor {
         generator.getMappingSet().getOutgoing().invoke("getContext"),
         "manageBuffer")
         .arg(vv1.invoke("getBuffer"));
+      ArrayMinorType arrayMinorType = ArrayMinorType.getElementType(e.getMajorType().getMinorType());
+      if (arrayMinorType == ArrayMinorType.VARCHAR) {
+        setup.invoke(
+          generator.getMappingSet().getOutgoing().invoke("getContext"),
+          "manageBuffer")
+          .arg(vv1.invoke("getOffsetVector").invoke("getBuffer"));
+      }
 
       List<HoldingContainer> args = new ArrayList<>();
       for (LogicalExpression arg : e.immutableArgs()) {
         args.add(arg.accept(this, generator));
       }
-      ArrayMinorType.getElementType(e.getMajorType().getMinorType()).copyValueFromExp(
+      arrayMinorType.copyValueFromExp(
         model,
         generator,
         eval,

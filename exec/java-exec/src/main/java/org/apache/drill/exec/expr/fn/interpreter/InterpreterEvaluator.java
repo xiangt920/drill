@@ -69,6 +69,7 @@ import com.google.common.base.Preconditions;
 import io.netty.buffer.DrillBuf;
 
 import static org.apache.drill.exec.ops.ArrayMinorType.ARRAY_ELEMENTS_CLASS;
+import static org.apache.drill.exec.ops.ArrayMinorType.VAR_ELEMENTS_CLASS;
 import static org.apache.drill.exec.ops.ArrayMinorType.getElementType;
 
 public class InterpreterEvaluator {
@@ -136,10 +137,21 @@ public class InterpreterEvaluator {
         Method getBufMethod = vector.getClass().getMethod("getBuffer");
         getBufMethod.setAccessible(true);
         final DrillBuf buf = (DrillBuf) getBufMethod.invoke(vector);
+        DrillBuf tmpBuf = null;
+        if (VAR_ELEMENTS_CLASS.contains(outField.getType())) {
+          ValueVector offsetVector = (ValueVector) vectorField.getType()
+            .getDeclaredMethod("getOffsetVector")
+            .invoke(vector);
+          tmpBuf = (DrillBuf) getBufMethod.invoke(offsetVector);
+        }
+        final DrillBuf offsetBuf = tmpBuf;
         udfUtilities.getArrayValueHolder(new BiFunction<BufferManager, BufferAllocator, ValueHolder>() {
           @Override
           public ValueHolder apply(BufferManager manager, BufferAllocator allocator) {
             manager.manageBuffer(buf);
+            if (offsetBuf != null) {
+              manager.manageBuffer(offsetBuf);
+            }
             return null;
           }
         });
