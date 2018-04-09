@@ -20,9 +20,13 @@ package org.apache.drill.exec.server;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.DefaultChannelPromise;
 import io.netty.util.concurrent.EventExecutor;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.proto.UserBitShared;
+import org.apache.drill.exec.proto.UserProtos;
+import org.apache.drill.exec.rpc.Response;
+import org.apache.drill.exec.rpc.ResponseSender;
 import org.apache.drill.exec.rpc.user.UserSession;
 import org.apache.drill.exec.server.rest.InternalSessionResources;
 import org.apache.drill.exec.server.rest.InternalUserConnection;
@@ -36,12 +40,17 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.security.Principal;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
 /**
  *
  */
 
+@SuppressWarnings({"RedundantThrows", "Convert2Lambda", "unused"})
 public class InternalProxy {
 
   private final static InternalProxy INSTANCE = new InternalProxy();
@@ -57,16 +66,102 @@ public class InternalProxy {
     }
   }
 
-  public QueryWrapper.QueryResult executeQuery(QueryWrapper query) throws Exception {
-    WebUserConnection connection = null;
+  private UserSession getSession() throws IOException {
     mayInit();
-    connection = getConnection();
+    return localSession.get();
+  }
+
+  public QueryWrapper.QueryResult executeQuery(QueryWrapper query) throws Exception {
+    WebUserConnection connection = getConnection();
     QueryWrapper.QueryResult result = query.run(manager, connection);
     connection.cleanupSession();
     return result;
   }
 
-  public void releaseConnection() throws IOException {
+  private List<String> getTables(String schema, String table) throws Exception{
+    UserSession session = getSession();
+    String catalog = "DRILL";
+
+    final UserProtos.GetTablesReq.Builder reqBuilder = UserProtos.GetTablesReq.newBuilder();
+    if (StringUtils.isNotBlank(catalog)) {
+      reqBuilder.setCatalogNameFilter(UserProtos.LikeFilter.newBuilder()
+        .setPattern(catalog)
+        .setEscape("\\")
+        .build());
+    }
+
+    if (StringUtils.isNotBlank(schema)) {
+      reqBuilder.setSchemaNameFilter(UserProtos.LikeFilter.newBuilder()
+        .setPattern(schema)
+        .setEscape("\\")
+        .build());
+    }
+
+    if (StringUtils.isNotBlank(table)) {
+      reqBuilder.setTableNameFilter(UserProtos.LikeFilter.newBuilder()
+        .setPattern(table)
+        .setEscape("\\")
+        .build());
+    }
+    final CountDownLatch latch = new CountDownLatch(1);
+
+    final List<String> tables = new ArrayList<>();
+    manager.getUserWorker().submitTablesMetadataWork(session, reqBuilder.build(), new ResponseSender() {
+      @Override
+      public void send(Response r) {
+        UserProtos.GetTablesResp resp = (UserProtos.GetTablesResp) r.pBody;
+        for (UserProtos.TableMetadata metadata : resp.getTablesList()) {
+          tables.add(metadata.getTableName());
+        }
+        latch.countDown();
+      }
+    });
+
+    latch.await();
+    return tables;
+  }
+
+  private Map<String, String> getAllColumns(String schema, String table) throws Exception{
+    UserSession session = getSession();
+    String catalog = "DRILL";
+
+    final UserProtos.GetColumnsReq.Builder reqBuilder = UserProtos.GetColumnsReq.newBuilder();
+    if (StringUtils.isNotBlank(catalog)) {
+      reqBuilder.setCatalogNameFilter(UserProtos.LikeFilter.newBuilder()
+        .setPattern(catalog)
+        .setEscape("\\")
+        .build());
+    }
+
+    if (StringUtils.isNotBlank(schema)) {
+      reqBuilder.setSchemaNameFilter(UserProtos.LikeFilter.newBuilder()
+        .setPattern(schema)
+        .setEscape("\\")
+        .build());
+    }
+
+    if (StringUtils.isNotBlank(table)) {
+      reqBuilder.setTableNameFilter(UserProtos.LikeFilter.newBuilder()
+        .setPattern(table)
+        .setEscape("\\")
+        .build());
+    }
+    final CountDownLatch latch = new CountDownLatch(1);
+    final Map<String, String> columns = new HashMap<>();
+    manager.getUserWorker().submitColumnsMetadataWork(session, reqBuilder.build(), new ResponseSender() {
+      @Override
+      public void send(Response r) {
+        UserProtos.GetColumnsResp resp = (UserProtos.GetColumnsResp) r.pBody;
+        resp.getColumnsList().forEach(meta->columns.put(meta.getColumnName(), meta.getDataType()));
+        latch.countDown();
+      }
+    });
+
+    latch.await();
+    return columns;
+  }
+
+  private void releaseConnection() throws IOException {
     if (localSession.get() != null) {
       localSession.get().close();
       localSession.remove();
@@ -80,17 +175,15 @@ public class InternalProxy {
     INSTANCE.executor = manager.getContext().getBitLoopGroup().next();
   }
 
-  private WebUserConnection getConnection() {
+  private WebUserConnection getConnection() throws IOException {
     // Create an allocator here for each request
     final BufferAllocator sessionAllocator = manager.getContext().getAllocator()
       .newChildAllocator("IntervalProxy:UserSession",
         manager.getContext().getConfig().getLong(ExecConstants.HTTP_SESSION_MEMORY_RESERVATION),
         manager.getContext().getConfig().getLong(ExecConstants.HTTP_SESSION_MEMORY_MAXIMUM));
 
-    final Principal sessionUserPrincipal = userPrincipal;
-
     // Create new UserSession
-    final UserSession drillUserSession = localSession.get();
+    final UserSession drillUserSession = getSession();
 
     // Try to get the remote Address but set it to null in case of failure.
     SocketAddress remoteAddress = null;
@@ -125,6 +218,19 @@ public class InternalProxy {
 
   public static QueryWrapper.QueryResult execute(QueryWrapper query) throws Exception {
     return INSTANCE.executeQuery(query);
+  }
+
+  public static String getTable(String schema, String table) throws Exception {
+    List<String> tables = INSTANCE.getTables(schema, table);
+    if (tables == null || tables.isEmpty()) {
+      return null;
+    } else {
+      return tables.get(0);
+    }
+  }
+
+  public static Map<String, String> getColumns(String schema, String table) throws Exception {
+    return INSTANCE.getAllColumns(schema, table);
   }
 
   public static void recycle() throws IOException {
