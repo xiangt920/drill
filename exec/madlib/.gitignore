@@ -1,0 +1,4 @@
+cpp/madlib_src/
+cmake-build-*/
+madlib-build/
+*.so

@@ -15,41 +15,38 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
-    <artifactId>drill-root</artifactId>
-    <groupId>org.apache.drill</groupId>
+    <artifactId>exec-parent</artifactId>
+    <groupId>org.apache.drill.exec</groupId>
     <version>1.14.0-SNAPSHOT</version>
   </parent>
+  <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.apache.drill.exec</groupId>
-  <artifactId>exec-parent</artifactId>
+  <artifactId>madlib-drill</artifactId>
+  <name>MADlib for Drill Parent</name>
+  <description>MADlib for Drill Parent</description>
   <packaging>pom</packaging>
-  <name>exec/Parent Pom</name>
-
-
-  <profiles>
-    <profile>
-      <id>build-jdbc-all</id>
-      <activation>
-        <property>
-          <name>!skipJdbcAll</name>
-        </property>
-      </activation>
-      <modules>
-        <module>jdbc-all</module>
-      </modules>
-    </profile>
-  </profiles>
-
 
   <modules>
-    <module>memory</module>
-    <module>rpc</module>
-    <module>vector</module>
-    <module>java-exec</module>
-    <module>jdbc</module>
-    <module>madlib</module>
+    <module>jni</module>
   </modules>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.rat</groupId>
+        <artifactId>apache-rat-plugin</artifactId>
+        <version>0.12</version>
+        <configuration>
+          <excludes>
+            <exclude>cpp/**</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
 </project>

@@ -152,7 +152,9 @@ public class InternalProxy {
       @Override
       public void send(Response r) {
         UserProtos.GetColumnsResp resp = (UserProtos.GetColumnsResp) r.pBody;
-        resp.getColumnsList().forEach(meta->columns.put(meta.getColumnName(), meta.getDataType()));
+        for (UserProtos.ColumnMetadata meta : resp.getColumnsList()) {
+          columns.put(meta.getColumnName(), meta.getDataType());
+        }
         latch.countDown();
       }
     });
