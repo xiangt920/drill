@@ -169,6 +169,10 @@
           <groupId>commons-validator</groupId>
           <artifactId>commons-validator</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.apache.drill.exec</groupId>
+          <artifactId>madlib-drill-jni</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -499,7 +503,7 @@
                   This is likely due to you adding new dependencies to a java-exec and not updating the excludes in this module. This is important as it minimizes the size of the dependency of Drill application users.
 
                   </message>
-                  <maxsize>35000000</maxsize>
+                  <maxsize>40000000</maxsize>
                   <minsize>15000000</minsize>
                   <files>
                    <file>${project.build.directory}/drill-jdbc-all-${project.version}.jar</file>
