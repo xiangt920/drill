@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <parent>
+    <artifactId>madlib-drill</artifactId>
+    <groupId>org.apache.drill.exec</groupId>
+    <version>1.14.0-SNAPSHOT</version>
+  </parent>
+  <modelVersion>4.0.0</modelVersion>
+
+  <artifactId>madlib-drill-jni</artifactId>
+  <name>MADlib JNI functions</name>
+  <description>JNI for C++ functions of MADlib for Apache Drill</description>
+  <properties>
+    <madlib.source.path>${project.basedir}/../cpp/</madlib.source.path>
+    <madlib.build.path>${project.basedir}/madlib-build</madlib.build.path>
+    <cmake.root.dir>/usr/local</cmake.root.dir>
+    <cmake.download>false</cmake.download>
+    <cmake.compile.thread.count>8</cmake.compile.thread.count>
+    <madlib.lib.path>${project.basedir}/src/main/resources</madlib.lib.path>
+    <!--
+    The classifier of the current platform. One of
+    [windows-x86_32, windows-x86_64, linux-x86_32, linux-x86_64, linux-arm_32, mac-x86_64].
+    -->
+    <cmake.build.target>madlib_drill_library</cmake.build.target>
+    <cmake.build.type>-DCMAKE_BUILD_TYPE=Release</cmake.build.type>
+
+  </properties>
+  <profiles>
+    <profile>
+      <id>linux-x86_32</id>
+      <properties>
+        <cmake.classifier>linux-x86_32</cmake.classifier>
+      </properties>
+    </profile>
+    <profile>
+      <id>linux-x86_64</id>
+      <properties>
+        <cmake.classifier>linux-x86_64</cmake.classifier>
+      </properties>
+    </profile>
+    <profile>
+      <id>mac</id>
+      <properties>
+        <cmake.classifier>mac-x86_64</cmake.classifier>
+      </properties>
+    </profile>
+    <profile>
+      <id>build-madlib</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>com.googlecode.cmake-maven-project</groupId>
+            <artifactId>cmake-maven-plugin</artifactId>
+            <version>3.7.2-b1</version>
+            <executions>
+              <execution>
+                <id>cmake-generate</id>
+                <goals>
+                  <goal>generate</goal>
+                </goals>
+                <phase>generate-sources</phase>
+                <configuration>
+                  <sourcePath>${madlib.source.path}</sourcePath>
+                  <targetPath>${madlib.build.path}</targetPath>
+                  <generator>Unix Makefiles</generator>
+                  <classifier>${cmake.classifier}</classifier>
+                  <options>
+                    <option>${cmake.build.type}</option>
+                    <option>-DDRILL_MADLIB_LIB_PATH=${madlib.lib.path}</option>
+                    <!--<option>-DEIGEN_TAR_SOURCE=${project.basedir}/third-party/Eigen-3.2.tar.gz</option>-->
+                    <!--<option>-DPYXB_TAR_SOURCE=${project.basedir}/third-party/PyXB-1.2.6.tar.gz</option>-->
+                  </options>
+                  <downloadBinaries>${cmake.download}</downloadBinaries>
+                  <cmakeRootDir>${cmake.root.dir}</cmakeRootDir>
+                </configuration>
+              </execution>
+              <execution>
+                <id>cmake-compile</id>
+                <goals>
+                  <goal>compile</goal>
+                </goals>
+                <phase>generate-resources</phase>
+                <configuration>
+                  <target>${cmake.build.target}</target>
+                  <projectDirectory>${madlib.build.path}</projectDirectory>
+                  <classifier>${cmake.classifier}</classifier>
+                  <downloadBinaries>${cmake.download}</downloadBinaries>
+                  <cmakeRootDir>${cmake.root.dir}</cmakeRootDir>
+                  <options>
+                    <option>--</option>
+                    <option>-j${cmake.compile.thread.count}</option>
+                  </options>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>1.9.1</version>
+            <executions>
+              <execution>
+                <id>add-madlib-source</id>
+                <phase>generate-sources</phase>
+                <goals>
+                  <goal>add-source</goal>
+                </goals>
+                <configuration>
+                  <sources>
+                    <source>${project.basedir}/src/madlib/java</source>
+                  </sources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-clean-plugin</artifactId>
+        <version>3.0.0</version>
+        <configuration>
+          <filesets>
+            <fileset>
+              <directory>src/main/resources</directory>
+              <includes>
+                <include>libmadlib.so</include>
+              </includes>
+            </fileset>
+            <!--<fileset>-->
+            <!--<directory>madlib-build</directory>-->
+            <!--</fileset>-->
+          </filesets>
+          <failOnError>false</failOnError>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>clean</goal>
+            </goals>
+            <phase>process-sources</phase>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.rat</groupId>
+        <artifactId>apache-rat-plugin</artifactId>
+        <version>0.12</version>
+        <configuration>
+          <excludes>
+            <exclude>madlib-build/**</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+    </plugins>
+
+
+  </build>
+
+
+</project>

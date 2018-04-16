@@ -189,6 +189,16 @@
   <profiles>
 
     <profile>
+      <id>build-madlib</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.drill.exec</groupId>
+          <artifactId>madlib-drill-functions</artifactId>
+          <version>${project.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
       <id>build-jdbc-all</id>
       <activation>
         <property>

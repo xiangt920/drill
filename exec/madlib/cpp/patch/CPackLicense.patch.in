@@ -1,0 +1,25 @@
+From 4fc577ef889620584fb1ed5c78cc7d56c215320f Mon Sep 17 00:00:00 2001
+From: "xiangt920" <linx8464@gmail.com>
+Date: Wed, 11 Apr 2018 11:18:05 +0800
+Subject: [PATCH] CPackLicense
+
+---
+ deploy/PackageMaker/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/deploy/PackageMaker/CMakeLists.txt b/deploy/PackageMaker/CMakeLists.txt
+index 81a6dcc8..47d83375 100644
+--- a/deploy/PackageMaker/CMakeLists.txt
++++ b/deploy/PackageMaker/CMakeLists.txt
+@@ -11,7 +11,7 @@
+ set(CPACK_RESOURCE_FILE_README
+     "${CPACK_PACKAGE_DESCRIPTION_FILE}" PARENT_SCOPE)
+ set(CPACK_RESOURCE_FILE_LICENSE
+-    "${CMAKE_SOURCE_DIR}/licenses/MADlib.txt" PARENT_SCOPE)
++  "${CMAKE_CURRENT_SOURCE_DIR}/../../licenses/MADlib.txt" PARENT_SCOPE)
+ set(CPACK_RESOURCE_FILE_WELCOME
+     "${CMAKE_CURRENT_SOURCE_DIR}/Welcome.html" PARENT_SCOPE)
+ set(CPACK_OSX_PACKAGE_VERSION "10.5" PARENT_SCOPE)
+-- 
+2.14.3 (Apple Git-98)
+

@@ -814,7 +814,6 @@ public enum ArrayMinorType {
    * @param allocator an allocator to allocate buffer for the value holder
    * @param args initial values of the value holder
    * @return - the value holder
-   * 
    */
   public ValueHolder newValueHolder(BufferManager manager, BufferAllocator allocator, List<LogicalExpression> args) {
     return null;

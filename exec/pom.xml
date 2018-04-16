@@ -50,5 +50,6 @@
     <module>vector</module>
     <module>java-exec</module>
     <module>jdbc</module>
+    <module>madlib</module>
   </modules>
 </project>

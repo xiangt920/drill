@@ -1,0 +1,28 @@
+From 58e756642b2898599ab5ed15857b799a834f8096 Mon Sep 17 00:00:00 2001
+From: "xiangt920" <linx8464@gmail.com>
+Date: Mon, 19 Mar 2018 18:13:36 +0800
+Subject: [PATCH 09/10] Change ArrayType
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/dbal/dbal_proto.hpp                            |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/dbal/dbal_proto.hpp b/src/dbal/dbal_proto.hpp
+index 72ae7133..ba7ece57 100644
+--- a/src/dbal/dbal_proto.hpp
++++ b/src/dbal/dbal_proto.hpp
+@@ -26,7 +26,7 @@ namespace dbal {
+ 
+ enum TypeClass {
+     SimpleType,
+-    ArrayType,
++    ArrayType_,
+     CompositeType
+ };
+ 
+-- 
+2.14.3 (Apple Git-98)
+

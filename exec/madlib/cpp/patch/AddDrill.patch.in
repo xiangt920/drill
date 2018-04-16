@@ -1,0 +1,83 @@
+From f0da3e59c34ce1adc31a66279adc6a708c6dee21 Mon Sep 17 00:00:00 2001
+From: "xiangt920" <linx8464@gmail.com>
+Date: Fri, 2 Mar 2018 15:53:48 +0800
+Subject: [PATCH 01/10] Add Drill
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ CMakeLists.txt                                     |   2 +-
+ deploy/CMakeLists.txt                              |   2 +-
+ src/CMakeLists.txt                                 |  12 +-
+ src/ports/CMakeLists.txt                           |  12 +-
+ 4 files changed, 19 insertions(+), 8 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index cc6bf72f..85e301d6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -11,7 +11,6 @@ set(CMAKE_GENERATOR_CXX sunCC g++)
+ 
+ # -- CMake setup ---------------------------------------------------------------
+ 
+-project(MADlib)
+ 
+ # FindPostgreSQL.cmake needs at least 2.8.3. We are on the safe side and require
+ # the minimum version tested, which is 2.8.4.
+diff --git a/deploy/CMakeLists.txt b/deploy/CMakeLists.txt
+index 32023bd0..09335223 100644
+--- a/deploy/CMakeLists.txt
++++ b/deploy/CMakeLists.txt
+@@ -7,7 +7,7 @@
+ 
+ if(APPLE)
+     list(APPEND CPACK_GENERATOR
+-        PackageMaker
++        TGZ
+     )
+ elseif(UNIX)
+     list(APPEND CPACK_GENERATOR
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index e2ce3524..e4f06776 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -253,9 +253,15 @@ macro(add_madlib_connector_library IN_TARGET_NAME IN_LIB_DIR IN_LIB_LOADER)
+     )
+ 
+     if(APPLE)
+-        set_target_properties(${IN_TARGET_NAME} PROPERTIES
+-            LINK_FLAGS
+-            "-Wl,-unexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/../../../unexported_symbols_list.txt -bundle_loader \"${IN_LIB_LOADER}\"")
++        if(${IN_LIB_LOADER})
++            set_target_properties(${IN_TARGET_NAME} PROPERTIES
++                LINK_FLAGS
++                "-Wl,-unexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/../../madlib_src/madlib/src/unexported_symbols_list.txt -bundle_loader \"${IN_LIB_LOADER}\"")
++        else()
++            set_target_properties(${IN_TARGET_NAME} PROPERTIES
++              LINK_FLAGS
++              "-Wl,-unexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/../../madlib_src/madlib/src/unexported_symbols_list.txt")
++        endif(${IN_LIB_LOADER})
+     endif(APPLE)
+ 
+     if((NOT APPLE))
+diff --git a/src/ports/CMakeLists.txt b/src/ports/CMakeLists.txt
+index 82b76996..1e148907 100644
+--- a/src/ports/CMakeLists.txt
++++ b/src/ports/CMakeLists.txt
+@@ -1,3 +1,9 @@
+-add_subdirectory(postgres)
+-add_subdirectory(greenplum)
+-add_subdirectory(hawq)
++
++if (USE_DRILL)
++    add_subdirectory(../../../../drill drill)
++else()
++
++    add_subdirectory(postgres)
++    add_subdirectory(greenplum)
++    add_subdirectory(hawq)
++endif ()
+-- 
+2.14.3 (Apple Git-98)
+
