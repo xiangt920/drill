@@ -22,7 +22,7 @@ import java.util.GregorianCalendar;
 import java.util.LinkedList;
 import java.util.List;
 
-import com.google.common.base.Preconditions;
+import org.apache.calcite.rel.type.RelDataType;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.expression.ExpressionPosition;
 import org.apache.drill.common.expression.FieldReference;
@@ -42,6 +42,7 @@ import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.planner.StarColumnHelper;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexCorrelVariable;
 import org.apache.calcite.rex.RexDynamicParam;
@@ -57,9 +58,11 @@ import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.util.NlsString;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.apache.drill.exec.planner.physical.PlannerSettings;
 import org.apache.drill.exec.work.ExecErrorConstants;
+
+import static org.apache.drill.exec.planner.physical.PlannerSettings.ENABLE_DECIMAL_DATA_TYPE;
 
 /**
  * Utilities for Drill's planner.
@@ -92,17 +95,32 @@ public class DrillOptiq {
     final RexToDrill visitor = new RexToDrill(context, inputs);
     return expr.accept(visitor);
   }
+  public static LogicalExpression toDrill(DrillParseContext context, RelDataType type,
+                                          RexBuilder builder, RexNode expr) {
+    final RexToDrill visitor = new RexToDrill(context, type, builder);
+    return expr.accept(visitor);
+  }
 
-  private static class RexToDrill extends RexVisitorImpl<LogicalExpression> {
+  public static class RexToDrill extends RexVisitorImpl<LogicalExpression> {
     private final List<RelNode> inputs;
     private final DrillParseContext context;
     private final List<RelDataTypeField> fieldList;
+    private final RelDataType rowType;
+    private final RexBuilder builder;
 
     RexToDrill(DrillParseContext context, List<RelNode> inputs) {
       super(true);
       this.context = context;
       this.inputs = inputs;
       this.fieldList = Lists.newArrayList();
+      if (inputs.size() > 0 && inputs.get(0)!=null) {
+        this.rowType = inputs.get(0).getRowType();
+        this.builder = inputs.get(0).getCluster().getRexBuilder();
+      }
+      else {
+        this.rowType = null;
+        this.builder = null;
+      }
       /*
          Fields are enumerated by their presence order in input. Details {@link org.apache.calcite.rex.RexInputRef}.
          Thus we can merge field list from several inputs by adding them into the list in order of appearance.
@@ -122,12 +140,31 @@ public class DrillOptiq {
         }
       }
     }
+    public RexToDrill(DrillParseContext context, RelNode input) {
+      this(context, Lists.newArrayList(input));
+    }
+
+    public RexToDrill(DrillParseContext context, RelDataType rowType, RexBuilder builder) {
+      super(true);
+      this.context = context;
+      this.rowType = rowType;
+      this.builder = builder;
+      this.inputs = Lists.newArrayList();
+      this.fieldList = rowType.getFieldList();
+    }
+
+    protected RelDataType getRowType() {
+      return rowType;
+    }
+
+    protected RexBuilder getRexBuilder() {
+      return builder;
+    }
 
     @Override
     public LogicalExpression visitInputRef(RexInputRef inputRef) {
       final int index = inputRef.getIndex();
       final RelDataTypeField field = fieldList.get(index);
-      Preconditions.checkNotNull(field, "Unable to find field using input reference");
       return FieldReference.getWithQuotedRef(field.getName());
     }
 
@@ -159,7 +196,6 @@ public class DrillOptiq {
         }
         throw new AssertionError("todo: implement syntax " + syntax + "(" + call + ")");
       case PREFIX:
-        logger.debug("Prefix");
         LogicalExpression arg = call.getOperands().get(0).accept(this);
         switch(call.getKind()){
           case NOT:
@@ -172,7 +208,6 @@ public class DrillOptiq {
         }
         throw new AssertionError("todo: implement syntax " + syntax + "(" + call + ")");
       case SPECIAL:
-        logger.debug("Special");
         switch(call.getKind()){
         case CAST:
           return getDrillCastFunctionFromOptiq(call);
@@ -299,10 +334,15 @@ public class DrillOptiq {
       case "CHAR":
         castType = Types.required(MinorType.VARCHAR).toBuilder().setPrecision(call.getType().getPrecision()).build();
         break;
-
-      case "INTEGER": castType = Types.required(MinorType.INT); break;
-      case "FLOAT": castType = Types.required(MinorType.FLOAT4); break;
-      case "DOUBLE": castType = Types.required(MinorType.FLOAT8); break;
+      case "INTEGER":
+        castType = Types.required(MinorType.INT);
+        break;
+      case "FLOAT":
+        castType = Types.required(MinorType.FLOAT4);
+        break;
+      case "DOUBLE":
+        castType = Types.required(MinorType.FLOAT8);
+        break;
       case "DECIMAL":
         if (!context.getPlannerSettings().getOptions().getOption(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY).bool_val) {
           throw UserException
@@ -314,23 +354,20 @@ public class DrillOptiq {
         int precision = call.getType().getPrecision();
         int scale = call.getType().getScale();
 
-        if (precision <= 9) {
-          castType = TypeProtos.MajorType.newBuilder().setMinorType(MinorType.DECIMAL9).setPrecision(precision).setScale(scale).build();
-        } else if (precision <= 18) {
-          castType = TypeProtos.MajorType.newBuilder().setMinorType(MinorType.DECIMAL18).setPrecision(precision).setScale(scale).build();
-        } else if (precision <= 28) {
-          // Inject a cast to SPARSE before casting to the dense type.
-          castType = TypeProtos.MajorType.newBuilder().setMinorType(MinorType.DECIMAL28SPARSE).setPrecision(precision).setScale(scale).build();
-        } else if (precision <= 38) {
-          castType = TypeProtos.MajorType.newBuilder().setMinorType(MinorType.DECIMAL38SPARSE).setPrecision(precision).setScale(scale).build();
-        } else {
-          throw new UnsupportedOperationException("Only Decimal types with precision range 0 - 38 is supported");
-        }
+        castType =
+            TypeProtos.MajorType
+                .newBuilder()
+                .setMinorType(MinorType.VARDECIMAL)
+                .setPrecision(precision)
+                .setScale(scale)
+                .build();
         break;
 
         case "INTERVAL_YEAR":
         case "INTERVAL_YEAR_MONTH":
-        case "INTERVAL_MONTH": castType = Types.required(MinorType.INTERVALYEAR); break;
+        case "INTERVAL_MONTH":
+          castType = Types.required(MinorType.INTERVALYEAR);
+          break;
         case "INTERVAL_DAY":
         case "INTERVAL_DAY_HOUR":
         case "INTERVAL_DAY_MINUTE":
@@ -340,11 +377,19 @@ public class DrillOptiq {
         case "INTERVAL_HOUR_SECOND":
         case "INTERVAL_MINUTE":
         case "INTERVAL_MINUTE_SECOND":
-        case "INTERVAL_SECOND": castType = Types.required(MinorType.INTERVALDAY); break;
-        case "BOOLEAN": castType = Types.required(MinorType.BIT); break;
-        case "BINARY": castType = Types.required(MinorType.VARBINARY); break;
-        case "ANY": return arg; // Type will be same as argument.
-        default: castType = Types.required(MinorType.valueOf(call.getType().getSqlTypeName().getName()));
+        case "INTERVAL_SECOND":
+          castType = Types.required(MinorType.INTERVALDAY);
+          break;
+        case "BOOLEAN":
+          castType = Types.required(MinorType.BIT);
+          break;
+        case "BINARY":
+          castType = Types.required(MinorType.VARBINARY);
+          break;
+        case "ANY":
+          return arg; // Type will be same as argument.
+        default:
+          castType = Types.required(MinorType.valueOf(call.getType().getSqlTypeName().getName()));
       }
       return FunctionCallFactory.createCast(castType, ExpressionPosition.UNKNOWN, arg);
     }
@@ -543,24 +588,23 @@ public class DrillOptiq {
         return ValueExpressions.getInt(a);
 
       case DECIMAL:
-        /* TODO: Enable using Decimal literals once we have more functions implemented for Decimal
-         * For now continue using Double instead of decimals
-
-        int precision = ((BigDecimal) literal.getValue()).precision();
-        if (precision <= 9) {
-            return ValueExpressions.getDecimal9((BigDecimal)literal.getValue());
-        } else if (precision <= 18) {
-            return ValueExpressions.getDecimal18((BigDecimal)literal.getValue());
-        } else if (precision <= 28) {
-            return ValueExpressions.getDecimal28((BigDecimal)literal.getValue());
-        } else if (precision <= 38) {
-            return ValueExpressions.getDecimal38((BigDecimal)literal.getValue());
-        } */
-        if (isLiteralNull(literal)) {
-          return createNullExpr(MinorType.FLOAT8);
+        if (context.getPlannerSettings().getOptions()
+            .getBoolean(ENABLE_DECIMAL_DATA_TYPE.getOptionName())) {
+          if (isLiteralNull(literal)) {
+            return new TypedNullConstant(
+                Types.withScaleAndPrecision(
+                    MinorType.VARDECIMAL,
+                    TypeProtos.DataMode.OPTIONAL,
+                    literal.getType().getScale(),
+                    literal.getType().getPrecision()));
+          }
+          return ValueExpressions.getVarDecimal((BigDecimal) literal.getValue(),
+              literal.getType().getPrecision(),
+              literal.getType().getScale());
         }
         double dbl = ((BigDecimal) literal.getValue()).doubleValue();
-        logger.warn("Converting exact decimal into approximate decimal.  Should be fixed once decimal is implemented.");
+        logger.warn("Converting exact decimal into approximate decimal.\n" +
+            "Please enable decimal data types using `planner.enable_decimal_data_type`.");
         return ValueExpressions.getFloat8(dbl);
       case VARCHAR:
         if (isLiteralNull(literal)) {

@@ -14,12 +14,12 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
-
+ */
 package org.apache.drill.exec.vector;
 
 
-import com.google.common.base.Preconditions;
+import org.apache.drill.exec.vector.complex.impl.UntypedReaderImpl;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 import io.netty.buffer.DrillBuf;
 import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.proto.UserBitShared.SerializedField;
@@ -51,7 +51,9 @@ public final class UntypedNullVector extends BaseDataValueVector implements Fixe
   }
 
   @Override
-  public FieldReader getReader() { throw new UnsupportedOperationException(); }
+  public FieldReader getReader() {
+    return new UntypedReaderImpl();
+  }
 
   @Override
   public int getBufferSizeFor(final int valueCount) { return 0; }
@@ -89,6 +91,11 @@ public final class UntypedNullVector extends BaseDataValueVector implements Fixe
   @Override
   public DrillBuf reallocRaw(int newAllocationSize) {
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public int getValueWidth() {
+    return VALUE_WIDTH;
   }
 
   @Override
@@ -146,14 +153,13 @@ public final class UntypedNullVector extends BaseDataValueVector implements Fixe
 
     @Override
     public void splitAndTransfer(int startIndex, int length) {
-      checkBounds(startIndex);
-      checkBounds(startIndex + length - 1);
+      Preconditions.checkPositionIndexes(startIndex, startIndex + length, valueCount);
       splitAndTransferTo(startIndex, length, to);
     }
 
     @Override
     public void copyValueSafe(int fromIndex, int toIndex) {
-      checkBounds(fromIndex);
+      Preconditions.checkElementIndex(fromIndex, valueCount);
       to.copyFromSafe(fromIndex, toIndex, UntypedNullVector.this);
     }
   }
@@ -162,12 +168,6 @@ public final class UntypedNullVector extends BaseDataValueVector implements Fixe
 
   public void copyFromSafe(int fromIndex, int thisIndex, UntypedNullVector from) { }
 
-  private void checkBounds(int index) {
-    if (index < 0 || index >= valueCount) {
-      throw new IndexOutOfBoundsException(String.format(
-          "index: %d, expected: range(0, %d-1))", index, valueCount));
-    }
-  }
   @Override
   public void copyEntry(int toIndex, ValueVector from, int fromIndex) {
     ((UntypedNullVector) from).data.getBytes(fromIndex * 4, data, toIndex * 4, 4);
@@ -181,23 +181,23 @@ public final class UntypedNullVector extends BaseDataValueVector implements Fixe
 
     @Override
     public boolean isNull(int index){
-      checkBounds(index);
+      Preconditions.checkElementIndex(index, valueCount);
       return true;
     }
 
     public int isSet(int index) {
-      checkBounds(index);
+      Preconditions.checkElementIndex(index, valueCount);
       return 0;
     }
 
     @Override
     public Object getObject(int index) {
-      checkBounds(index);
+      Preconditions.checkElementIndex(index, valueCount);
       return null;
     }
 
     public void get(int index, UntypedNullHolder holder) {
-      checkBounds(index);
+      Preconditions.checkElementIndex(index, valueCount);
     }
   }
 

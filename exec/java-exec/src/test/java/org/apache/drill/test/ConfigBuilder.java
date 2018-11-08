@@ -14,7 +14,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ */
 package org.apache.drill.test;
 
 import java.util.Collection;
@@ -130,14 +130,19 @@ public class ConfigBuilder {
       configProps = createDefaultProperties();
     }
 
-    configProps.put(key, value.toString());
+    if (value instanceof Collection) {
+      configProps.put(key, value);
+    } else {
+      configProps.put(key, value.toString());
+    }
+
     return this;
   }
 
   private static Properties createDefaultProperties()
   {
     Properties properties = new Properties();
-    properties.put(ExecConstants.CAST_TO_NULLABLE_NUMERIC, "false");
+    properties.put(ExecConstants.CAST_EMPTY_STRING_TO_NULL, "false");
     properties.put(ExecConstants.USE_DYNAMIC_UDFS_KEY, "false");
     properties.put(ExecConstants.SYS_STORE_PROVIDER_LOCAL_ENABLE_WRITE, "false");
 

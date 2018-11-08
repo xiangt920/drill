@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * <p/>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.store.parquet.stat;
 
-import com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.Types;
@@ -59,7 +59,7 @@ public class ParquetFooterStatCollector implements ColumnStatCollector {
     // Reasons to pass implicit columns and their values:
     // 1. Differentiate implicit columns from regular non-exist columns. Implicit columns do not
     //    exist in parquet metadata. Without such knowledge, implicit columns is treated as non-exist
-    //    column.  A condition on non-exist column would lead to canDrop = true, which is not the
+    //    column.  A condition on non-exist column would lead to matches = ALL, which is not the
     //    right behavior for condition on implicit columns.
 
     // 2. Pass in the implicit column name with corresponding values, and wrap them in Statistics with

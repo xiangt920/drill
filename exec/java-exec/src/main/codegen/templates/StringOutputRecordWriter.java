@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import org.apache.drill.exec.store.AbstractRecordWriter;
 
 import java.lang.Override;
@@ -27,7 +26,7 @@ import java.lang.UnsupportedOperationException;
 
 package org.apache.drill.exec.store;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.apache.drill.exec.expr.TypeHelper;
 import org.apache.drill.exec.expr.holders.*;
 import org.apache.drill.exec.memory.BufferAllocator;
@@ -141,12 +140,12 @@ public abstract class StringOutputRecordWriter extends AbstractRecordWriter {
         minor.class == "Decimal28Dense" ||
         minor.class == "Decimal38Dense" ||
         minor.class == "Decimal28Sparse" ||
-        minor.class == "Decimal38Sparse">
-
+        minor.class == "Decimal38Sparse" ||
+        minor.class == "VarChar" ||
+        minor.class == "Var16Char" ||
+        minor.class == "VarBinary" ||
+        minor.class == "VarDecimal">
     // TODO: error check
-    addField(fieldId, reader.readObject().toString());
-
-  <#elseif minor.class == "VarChar" || minor.class == "Var16Char" || minor.class == "VarBinary">
     addField(fieldId, reader.readObject().toString());
   <#else>
     throw new UnsupportedOperationException(String.format("Unsupported field type: %s"),

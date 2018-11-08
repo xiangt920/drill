@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,6 +17,25 @@
  */
 package org.apache.drill.exec.sql;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.drill.categories.SqlTest;
+import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.exec.record.RecordBatchLoader;
+import org.apache.drill.exec.record.VectorWrapper;
+import org.apache.drill.exec.rpc.user.QueryDataBatch;
+import org.apache.drill.exec.store.dfs.FileSystemConfig;
+import org.apache.drill.exec.vector.NullableVarCharVector;
+import org.apache.drill.test.BaseTestQuery;
+import org.apache.drill.test.TestBuilder;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
+
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
 import static com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT;
 import static org.apache.drill.exec.store.ischema.InfoSchemaConstants.CATS_COL_CATALOG_CONNECT;
 import static org.apache.drill.exec.store.ischema.InfoSchemaConstants.CATS_COL_CATALOG_DESCRIPTION;
@@ -25,31 +44,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableList;
-import org.apache.drill.test.BaseTestQuery;
-import org.apache.drill.categories.SqlTest;
-import org.apache.drill.test.TestBuilder;
-import org.apache.drill.common.expression.SchemaPath;
-import org.apache.drill.exec.record.RecordBatchLoader;
-import org.apache.drill.exec.record.VectorWrapper;
-import org.apache.drill.exec.rpc.user.QueryDataBatch;
-import org.apache.drill.exec.store.dfs.FileSystemConfig;
-import org.apache.drill.exec.vector.NullableVarCharVector;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-
-import java.nio.file.Paths;
-import java.util.List;
-import java.util.Map;
-
 /**
  * Contains tests for
  * -- InformationSchema
  * -- Queries on InformationSchema such as SHOW TABLES, SHOW SCHEMAS or DESCRIBE table
  * -- USE schema
- * -- SHOW FILES
  */
 @Category(SqlTest.class)
 public class TestInfoSchema extends BaseTestQuery {
@@ -69,6 +68,7 @@ public class TestInfoSchema extends BaseTestQuery {
     test("select * from INFORMATION_SCHEMA.VIEWS");
     test("select * from INFORMATION_SCHEMA.`TABLES`");
     test("select * from INFORMATION_SCHEMA.COLUMNS");
+    test("select * from INFORMATION_SCHEMA.`FILES`");
   }
 
   @Test
@@ -83,14 +83,13 @@ public class TestInfoSchema extends BaseTestQuery {
 
   @Test
   public void showTablesFromDb() throws Exception{
-    final List<String[]> expected =
-        ImmutableList.of(
-            new String[] { "INFORMATION_SCHEMA", "VIEWS" },
-            new String[] { "INFORMATION_SCHEMA", "COLUMNS" },
-            new String[] { "INFORMATION_SCHEMA", "TABLES" },
-            new String[] { "INFORMATION_SCHEMA", "CATALOGS" },
-            new String[] { "INFORMATION_SCHEMA", "SCHEMATA" }
-        );
+    final List<String[]> expected = Arrays.asList(
+        new String[]{"information_schema", "VIEWS"},
+        new String[]{"information_schema", "COLUMNS"},
+        new String[]{"information_schema", "TABLES"},
+        new String[]{"information_schema", "CATALOGS"},
+        new String[]{"information_schema", "SCHEMATA"},
+        new String[]{"information_schema", "FILES"});
 
     final TestBuilder t1 = testBuilder()
         .sqlQuery("SHOW TABLES FROM INFORMATION_SCHEMA")
@@ -117,7 +116,7 @@ public class TestInfoSchema extends BaseTestQuery {
         .sqlQuery("SHOW TABLES FROM INFORMATION_SCHEMA WHERE TABLE_NAME='VIEWS'")
         .unOrdered()
         .baselineColumns("TABLE_SCHEMA", "TABLE_NAME")
-        .baselineValues("INFORMATION_SCHEMA", "VIEWS")
+        .baselineValues("information_schema", "VIEWS")
         .go();
   }
 
@@ -128,38 +127,26 @@ public class TestInfoSchema extends BaseTestQuery {
         .unOrdered()
         .optionSettingQueriesForTestQuery("USE INFORMATION_SCHEMA")
         .baselineColumns("TABLE_SCHEMA", "TABLE_NAME")
-        .baselineValues("INFORMATION_SCHEMA", "SCHEMATA")
+        .baselineValues("information_schema", "SCHEMATA")
         .go();
   }
 
   @Test
   public void showDatabases() throws Exception{
-    final List<String[]> expected =
-        ImmutableList.of(
-            new String[] { "dfs.default" },
-            new String[] { "dfs.root" },
-            new String[] { "dfs.tmp" },
-            new String[] { "cp.default" },
-            new String[] { "sys" },
-            new String[] { "INFORMATION_SCHEMA" }
-        );
+    List<String> expected = Arrays.asList("dfs.default", "dfs.root", "dfs.tmp", "cp.default", "sys", "information_schema");
 
-    final TestBuilder t1 = testBuilder()
+    TestBuilder t1 = testBuilder()
         .sqlQuery("SHOW DATABASES")
         .unOrdered()
         .baselineColumns("SCHEMA_NAME");
-    for(String[] expectedRow : expected) {
-      t1.baselineValues(expectedRow);
-    }
+    expected.forEach(t1::baselineValues);
     t1.go();
 
-    final TestBuilder t2 = testBuilder()
+    TestBuilder t2 = testBuilder()
         .sqlQuery("SHOW SCHEMAS")
         .unOrdered()
         .baselineColumns("SCHEMA_NAME");
-    for(String[] expectedRow : expected) {
-      t2.baselineValues(expectedRow);
-    }
+    expected.forEach(t2::baselineValues);
     t2.go();
   }
 
@@ -364,18 +351,6 @@ public class TestInfoSchema extends BaseTestQuery {
   }
 
   @Test
-  public void showFiles() throws Exception {
-    test("show files from dfs.`%s`", TEST_SUB_DIR);
-    test("show files from `dfs.default`.`%s`", TEST_SUB_DIR);
-  }
-
-  @Test
-  public void showFilesWithDefaultSchema() throws Exception{
-    test("USE dfs.`default`");
-    test("SHOW FILES FROM `%s`", TEST_SUB_DIR);
-  }
-
-  @Test
   public void describeSchemaSyntax() throws Exception {
     test("describe schema dfs");
     test("describe schema dfs.`default`");
@@ -383,9 +358,15 @@ public class TestInfoSchema extends BaseTestQuery {
   }
 
   @Test
+  public void describePartialSchema() throws Exception {
+    test("use dfs");
+    test("describe schema tmp");
+  }
+
+  @Test
   public void describeSchemaOutput() throws Exception {
     final List<QueryDataBatch> result = testSqlWithResults("describe schema dfs.tmp");
-    assertTrue(result.size() == 1);
+    assertEquals(1, result.size());
     final QueryDataBatch batch = result.get(0);
     final RecordBatchLoader loader = new RecordBatchLoader(getDrillbitContext().getAllocator());
     loader.load(batch.getHeader().getDef(), batch.getData());
@@ -414,7 +395,7 @@ public class TestInfoSchema extends BaseTestQuery {
     assertEquals("file", configMap.get("type"));
 
     final FileSystemConfig testConfig = (FileSystemConfig) bits[0].getContext().getStorage().getPlugin("dfs").getConfig();
-    final String tmpSchemaLocation = testConfig.workspaces.get("tmp").getLocation();
+    final String tmpSchemaLocation = testConfig.getWorkspaces().get("tmp").getLocation();
     assertEquals(tmpSchemaLocation, configMap.get("location"));
 
     batch.release();

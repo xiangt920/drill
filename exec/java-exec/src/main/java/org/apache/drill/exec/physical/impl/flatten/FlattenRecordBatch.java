@@ -52,13 +52,15 @@ import org.apache.drill.exec.record.TransferPair;
 import org.apache.drill.exec.record.TypedFieldId;
 import org.apache.drill.exec.record.VectorContainer;
 import org.apache.drill.exec.record.VectorWrapper;
+import org.apache.drill.exec.util.record.RecordBatchStats;
+import org.apache.drill.exec.util.record.RecordBatchStats.RecordBatchIOType;
 import org.apache.drill.exec.vector.ValueVector;
 import org.apache.drill.exec.vector.complex.RepeatedMapVector;
 import org.apache.drill.exec.vector.complex.RepeatedValueVector;
 import org.apache.drill.exec.vector.complex.writer.BaseWriter.ComplexWriter;
 
 import com.carrotsearch.hppc.IntHashSet;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import com.sun.codemodel.JExpr;
 
 // TODO - handle the case where a user tries to flatten a scalar, should just act as a project all of the columns exactly
@@ -72,8 +74,7 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
   private boolean hasRemainder = false;
   private int remainderIndex = 0;
   private int recordCount;
-  private int outputBatchSize;
-  private final FlattenMemoryManager flattenMemoryManager = new FlattenMemoryManager();
+  private final FlattenMemoryManager flattenMemoryManager;
 
   private final Flattener.Monitor monitor = new Flattener.Monitor() {
     @Override
@@ -118,6 +119,10 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
 
   private class FlattenMemoryManager extends RecordBatchMemoryManager {
 
+    FlattenMemoryManager(int outputBatchSize) {
+      super(outputBatchSize);
+    }
+
     @Override
     public void update() {
       // Get sizing information for the batch.
@@ -133,16 +138,18 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
       final int avgRowWidthFlattenColumn = columnSize.getNetSizePerEntry();
 
       // Average rowWidth excluding the flatten column.
-      final int avgRowWidthWithOutFlattenColumn = getRecordBatchSizer().netRowWidth() - avgRowWidthFlattenColumn;
+      final int avgRowWidthWithOutFlattenColumn = getRecordBatchSizer().getNetRowWidth() - avgRowWidthFlattenColumn;
 
       // Average rowWidth of single element in the flatten list.
       // subtract the offset vector size from column data size.
       final int avgRowWidthSingleFlattenEntry =
-        RecordBatchSizer.safeDivide(columnSize.getTotalNetSize() - (OFFSET_VECTOR_WIDTH * columnSize.getValueCount()), columnSize.getElementCount());
+        RecordBatchSizer.safeDivide(columnSize.getTotalNetSize() - (getOffsetVectorWidth() * columnSize.getValueCount()),
+          columnSize.getElementCount());
 
       // Average rowWidth of outgoing batch.
       final int avgOutgoingRowWidth = avgRowWidthWithOutFlattenColumn + avgRowWidthSingleFlattenEntry;
 
+      final int outputBatchSize = getOutputBatchSize();
       // Number of rows in outgoing batch
       setOutputRowCount(outputBatchSize, avgOutgoingRowWidth);
 
@@ -152,10 +159,7 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
       // i.e. all rows fit within memory budget.
       setOutputRowCount(Math.min(columnSize.getElementCount(), getOutputRowCount()));
 
-      logger.debug("incoming batch size : {}", getRecordBatchSizer());
-
-      logger.debug("output batch size : {}, avg outgoing rowWidth : {}, output rowCount : {}",
-        outputBatchSize, avgOutgoingRowWidth, getOutputRowCount());
+      RecordBatchStats.logRecordBatchStats(RecordBatchIOType.INPUT, getRecordBatchSizer(), getRecordBatchStatsContext());
 
       updateIncomingStats();
     }
@@ -165,7 +169,11 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
     super(pop, context, incoming);
 
     // get the output batch size from config.
-    outputBatchSize = (int) context.getOptions().getOption(ExecConstants.OUTPUT_BATCH_SIZE_VALIDATOR);
+    int configuredBatchSize = (int) context.getOptions().getOption(ExecConstants.OUTPUT_BATCH_SIZE_VALIDATOR);
+    flattenMemoryManager = new FlattenMemoryManager(configuredBatchSize);
+
+      RecordBatchStats.logRecordBatchStats(getRecordBatchStatsContext(),
+        "configured output batch size: %d", configuredBatchSize);
   }
 
   @Override
@@ -185,7 +193,8 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
   public IterOutcome innerNext() {
     if (hasRemainder) {
       handleRemainder();
-      return IterOutcome.OK;
+      // Check if we are supposed to return EMIT outcome and have consumed entire batch
+      return getFinalOutcome(hasRemainder);
     }
     return super.innerNext();
   }
@@ -255,7 +264,11 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
     }
 
     flattenMemoryManager.updateOutgoingStats(outputRecords);
-    return IterOutcome.OK;
+    RecordBatchStats.logRecordBatchStats(RecordBatchIOType.OUTPUT, this, getRecordBatchStatsContext());
+
+    // Get the final outcome based on hasRemainder since that will determine if all the incoming records were
+    // consumed in current output batch or not
+    return getFinalOutcome(hasRemainder);
   }
 
   private void handleRemainder() {
@@ -503,19 +516,26 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
     stats.setLongStat(Metric.AVG_OUTPUT_ROW_BYTES, flattenMemoryManager.getAvgOutputRowWidth());
     stats.setLongStat(Metric.OUTPUT_RECORD_COUNT, flattenMemoryManager.getTotalOutputRecords());
 
-    logger.debug("input: batch count : {}, avg batch bytes : {},  avg row bytes : {}, record count : {}",
+    RecordBatchStats.logRecordBatchStats(getRecordBatchStatsContext(),
+      "incoming aggregate: count : %d, avg bytes : %d,  avg row bytes : %d, record count : %d",
       flattenMemoryManager.getNumIncomingBatches(), flattenMemoryManager.getAvgInputBatchSize(),
       flattenMemoryManager.getAvgInputRowWidth(), flattenMemoryManager.getTotalInputRecords());
 
-    logger.debug("output: batch count : {}, avg batch bytes : {},  avg row bytes : {}, record count : {}",
+    RecordBatchStats.logRecordBatchStats(getRecordBatchStatsContext(),
+      "outgoing aggregate: count : %d, avg bytes : %d,  avg row bytes : %d, record count : %d",
       flattenMemoryManager.getNumOutgoingBatches(), flattenMemoryManager.getAvgOutputBatchSize(),
       flattenMemoryManager.getAvgOutputRowWidth(), flattenMemoryManager.getTotalOutputRecords());
-
   }
 
   @Override
   public void close() {
     updateStats();
     super.close();
+  }
+
+  @Override
+  public void dump() {
+    logger.error("FlattenRecordbatch[hasRemainder={}, remainderIndex={}, recordCount={}, flattener={}, container={}]",
+        hasRemainder, remainderIndex, recordCount, flattener, container);
   }
 }

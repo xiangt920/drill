@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -48,10 +48,9 @@ import org.reflections.scanners.AbstractScanner;
 import org.reflections.util.ConfigurationBuilder;
 import org.reflections.util.FilterBuilder;
 
-import com.google.common.base.Stopwatch;
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.collect.HashMultimap;
+import org.apache.drill.shaded.guava.com.google.common.collect.Multimap;
 
 import javassist.bytecode.AccessFlag;
 import javassist.bytecode.AnnotationsAttribute;
@@ -75,13 +74,13 @@ import javassist.bytecode.annotation.StringMemberValue;
 
 /**
  * Classpath scanning utility.
- * The classpath should be scanned once at startup from a DrillConfig instance. {@see ClassPathScanner#fromPrescan(DrillConfig)}
+ * The classpath should be scanned once at startup from a DrillConfig instance. {@link ClassPathScanner#fromPrescan(DrillConfig)}
  * The DrillConfig provides:
- *  - the list of packages to scan. (drill.classpath.scanning.packages) {@see CommonConstants#IMPLEMENTATIONS_SCAN_PACKAGES}
- *  - the list of base classes to scan for implementations. (drill.classpath.scanning.base.classes) {@see CommonConstants#IMPLEMENTATIONS_SCAN_CLASSES}
- *  - the list of annotations to scan for. (drill.classpath.scanning.annotations) {@see CommonConstants#IMPLEMENTATIONS_SCAN_ANNOTATIONS}
+ *  - the list of packages to scan. (drill.classpath.scanning.packages) {@link ClassPathScanner#IMPLEMENTATIONS_SCAN_PACKAGES}
+ *  - the list of base classes to scan for implementations. (drill.classpath.scanning.base.classes) {@link ClassPathScanner#IMPLEMENTATIONS_SCAN_CLASSES}
+ *  - the list of annotations to scan for. (drill.classpath.scanning.annotations) {@link ClassPathScanner#IMPLEMENTATIONS_SCAN_ANNOTATIONS}
  * Only the class directories and jars containing a drill-module.conf will be scanned.
- * Drill core packages are scanned at build time and the result is saved in a JSON file. {@see ClassPathScanner#FUNCTION_REGISTRY_FILE}
+ * Drill core packages are scanned at build time and the result is saved in a JSON file.
  * At runtime only the locations that have not been scanned yet will be scanned.
  */
 public final class ClassPathScanner {
@@ -134,12 +133,9 @@ public final class ClassPathScanner {
      * @return the class names of all children direct or indirect
      */
     public Set<ChildClassDescriptor> getChildrenOf(String name) {
-      Set<ChildClassDescriptor> result = new HashSet<>();
       Collection<ChildClassDescriptor> scannedChildren = children.get(name);
       // add all scanned children
-      for (ChildClassDescriptor child : scannedChildren) {
-        result.add(child);
-      }
+      Set<ChildClassDescriptor> result = new HashSet<>(scannedChildren);
       // recursively add children's children
       Collection<ChildClassDescriptor> allChildren = new ArrayList<>();
       allChildren.addAll(scannedChildren);
@@ -273,7 +269,7 @@ public final class ClassPathScanner {
           List<FieldDescriptor> fieldDescriptors = new ArrayList<>(classFields.size());
           for (FieldInfo field : classFields) {
             String fieldName = field.getName();
-            AnnotationsAttribute fieldAnnotations = ((AnnotationsAttribute)field.getAttribute(AnnotationsAttribute.visibleTag));
+            AnnotationsAttribute fieldAnnotations = ((AnnotationsAttribute) field.getAttribute(AnnotationsAttribute.visibleTag));
             fieldDescriptors.add(new FieldDescriptor(fieldName, field.getDescriptor(), getAnnotationDescriptors(fieldAnnotations)));
           }
           functions.add(new AnnotatedClassDescriptor(classFile.getName(), classAnnotations, fieldDescriptors));
@@ -282,6 +278,9 @@ public final class ClassPathScanner {
     }
 
     private List<AnnotationDescriptor> getAnnotationDescriptors(AnnotationsAttribute annotationsAttr) {
+      if (annotationsAttr == null) {
+        return Collections.emptyList();
+      }
       List<AnnotationDescriptor> annotationDescriptors = new ArrayList<>(annotationsAttr.numAnnotations());
       for (javassist.bytecode.annotation.Annotation annotation : annotationsAttr.getAnnotations()) {
         // Sigh: javassist uses raw collections (is this 2002?)
@@ -320,15 +319,12 @@ public final class ClassPathScanner {
    *           to scan for (relative to specified class loaders' classpath roots)
    * @param  returnRootPathname  whether to collect classpath root portion of
    *           URL for each resource instead of full URL of each resource
-   * @param  classLoaders  set of class loaders in which to look up resource;
-   *           none (empty array) to specify to use current thread's context
-   *           class loader and {@link Reflections}'s class loader
-   * @returns  ...; empty set if none
+   * @return  empty set if none
    */
   public static Set<URL> forResource(final String resourcePathname, final boolean returnRootPathname) {
     logger.debug("Scanning classpath for resources with pathname \"{}\".",
                  resourcePathname);
-    final Set<URL> resultUrlSet = Sets.newHashSet();
+    final Set<URL> resultUrlSet = new HashSet<>();
     final ClassLoader classLoader = ClassPathScanner.class.getClassLoader();
     try {
       final Enumeration<URL> resourceUrls = classLoader.getResources(resourcePathname);
@@ -441,11 +437,11 @@ public final class ClassPathScanner {
 
   static ScanResult emptyResult() {
     return new ScanResult(
-        Collections.<String>emptyList(),
-        Collections.<String>emptyList(),
-        Collections.<String>emptyList(),
-        Collections.<AnnotatedClassDescriptor>emptyList(),
-        Collections.<ParentClassDescriptor>emptyList());
+        Collections.emptyList(),
+        Collections.emptyList(),
+        Collections.emptyList(),
+        Collections.emptyList(),
+        Collections.emptyList());
   }
 
   public static ScanResult fromPrescan(DrillConfig config) {

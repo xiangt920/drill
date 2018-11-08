@@ -1,14 +1,22 @@
-<#-- Licensed to the Apache Software Foundation (ASF) under one or more contributor
-  license agreements. See the NOTICE file distributed with this work for additional
-  information regarding copyright ownership. The ASF licenses this file to
-  You under the Apache License, Version 2.0 (the "License"); you may not use
-  this file except in compliance with the License. You may obtain a copy of
-  the License at http://www.apache.org/licenses/LICENSE-2.0 Unless required
-  by applicable law or agreed to in writing, software distributed under the
-  License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
-  OF ANY KIND, either express or implied. See the License for the specific
-  language governing permissions and limitations under the License. -->
+<#--
 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
 <#include "*/generic.ftl">
 <#macro page_head>
 <script src="/static/js/d3.v3.js"></script>
@@ -57,7 +65,6 @@ table.sortable thead .sorting_desc { background-image: url("/static/img/black-de
 </#macro>
 
 <#macro page_body>
-  <a href="/queries">back</a><br/>
   <div class="page-header">
   </div>
   <h3>Query and Planning</h3>
@@ -78,7 +85,12 @@ table.sortable thead .sorting_desc { background-image: url("/static/img/black-de
       <p><pre>${model.profile.plan}</pre></p>
     </div>
     <div id="query-visual" class="tab-pane">
-      <svg id="query-visual-canvas" class="center-block"></svg>
+      <div style='padding: 15px 15px;'>
+        <button type='button' class='btn btn-default' onclick='popUpAndPrintPlan();'><span class="glyphicon glyphicon-print"></span> Print Plan</button>
+      </div>
+      <div>
+        <svg id="query-visual-canvas" class="center-block"></svg>
+      </div>
     </div>
     <div id="query-edit" class="tab-pane">
       <p>
@@ -93,6 +105,7 @@ table.sortable thead .sorting_desc { background-image: url("/static/img/black-de
         <form role="form" id="queryForm" action="/query" method="POST">
           <div id="query-editor" class="form-group">${model.getProfile().query}</div>
           <input class="form-control" id="query" name="query" type="hidden" value="${model.getProfile().query}"/>
+          <div style="padding:5px"><b>Hint: </b>Use <div id="keyboardHint" style="display:inline-block; font-style:italic"></div> to submit</div>
           <div class="form-group">
             <div class="radio-inline">
               <label>
@@ -157,7 +170,7 @@ table.sortable thead .sorting_desc { background-image: url("/static/img/black-de
   <#assign queued = queueName != "" && queueName != "-" />
 
   <div class="page-header"></div>
-  <h3>Query Profile</h3>
+  <h3>Query Profile : <span style='font-size:85%'>${model.getQueryId()}</span></h3>
   <div class="panel-group" id="query-profile-accordion">
     <div class="panel panel-default">
       <div class="panel-heading">
@@ -445,7 +458,31 @@ table.sortable thead .sorting_desc { background-image: url("/static/img/black-de
       enableBasicAutocompletion: true,
       enableLiveAutocompletion: false
     });
-  </script>
+
+    //Pops out a new window and provide prompt to print
+    var popUpAndPrintPlan = function() {
+      var srcSvg = $('#query-visual-canvas');
+      var screenRatio=0.9;
+      let printWindow = window.open('', 'PlanPrint', 'width=' + (screenRatio*screen.width) + ',height=' + (screenRatio*screen.height) );
+      printWindow.document.writeln($(srcSvg).parent().html());
+      printWindow.print();
+    };
+
+    //Provides hint based on OS
+    var browserOS = navigator.platform.toLowerCase();
+    if ((browserOS.indexOf("mac") > -1)) {
+      document.getElementById('keyboardHint').innerHTML="Meta+Enter";
+    } else {
+      document.getElementById('keyboardHint').innerHTML="Ctrl+Enter";
+    }
+
+    // meta+enter / ctrl+enter to submit query
+    document.getElementById('queryForm')
+            .addEventListener('keydown', function(e) {
+      if (!(e.keyCode == 13 && (e.metaKey || e.ctrlKey))) return;
+      if (e.target.form) doSubmitQueryWithUserName();
+    });
+    </script>
 
 </#macro>
 

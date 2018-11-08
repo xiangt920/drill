@@ -55,24 +55,47 @@ import org.apache.drill.exec.server.QueryProfileStoreContext;
 import org.apache.drill.exec.server.options.FragmentOptionManager;
 import org.apache.drill.exec.server.options.OptionList;
 import org.apache.drill.exec.server.options.OptionManager;
-import org.apache.drill.exec.server.options.OptionSet;
 import org.apache.drill.exec.store.PartitionExplorer;
 import org.apache.drill.exec.store.SchemaConfig;
 import org.apache.drill.exec.testing.ExecutionControls;
 import org.apache.drill.exec.util.ImpersonationUtil;
 import org.apache.drill.exec.work.batch.IncomingBuffers;
 
-import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
+import org.apache.drill.exec.work.filter.RuntimeFilterSink;
+import org.apache.drill.shaded.guava.com.google.common.base.Function;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
 
 import io.netty.buffer.DrillBuf;
+import org.apache.drill.exec.work.filter.RuntimeFilterWritable;
 
 /**
- * Contextual objects required for execution of a particular fragment.
- * This is the implementation; use <tt>FragmentContext</tt>
- * in code to allow tests to use test-time implementations.
+ * <p>
+ *   This is the core Context which implements all the Context interfaces:
+ *
+ *   <ul>
+ *     <li>{@link FragmentContext}: A context provided to non-exchange operators.</li>
+ *     <li>{@link ExchangeFragmentContext}: A context provided to exchange operators.</li>
+ *     <li>{@link RootFragmentContext}: A context provided to fragment roots.</li>
+ *     <li>{@link ExecutorFragmentContext}: A context used by the Drillbit.</li>
+ *   </ul>
+ *
+ *   The interfaces above expose resources to varying degrees. They are ordered from most restrictive ({@link FragmentContext})
+ *   to least restrictive ({@link ExecutorFragmentContext}).
+ * </p>
+ * <p>
+ *   Since {@link FragmentContextImpl} implements all of the interfaces listed above, the facade pattern is used in order
+ *   to cast a {@link FragmentContextImpl} object to the desired interface where-ever it is needed. The facade pattern
+ *   is powerful since it allows us to easily create minimal context objects to be used in unit tests. Without
+ *   the use of interfaces and the facade pattern we would have to create a complete {@link FragmentContextImpl} object
+ *   to unit test any part of the code that depends on a context.
+ * </p>
+ * <p>
+ *  <b>General guideline:</b> Use the most narrow interface for the task. For example, "internal" operators don't need visibility to the networking functionality.
+ *  Using the narrow interface allows unit testing without using mocking libraries. Often, the surrounding structure already has exposed the most narrow interface. If there are
+ *  opportunities to clean up older code, we can do so as needed to make testing easier.
+ * </p>
  */
 public class FragmentContextImpl extends BaseFragmentContext implements ExecutorFragmentContext {
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FragmentContextImpl.class);
@@ -113,6 +136,8 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
   private final AccountingUserConnection accountingUserConnection;
   /** Stores constants and their holders by type */
   private final Map<String, Map<MinorType, ValueHolder>> constantValueHolderCache;
+
+  private RuntimeFilterSink runtimeFilterSink;
 
   /**
    * Create a FragmentContext instance for non-root fragment.
@@ -184,6 +209,11 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
     stats = new FragmentStats(allocator, fragment.getAssignment());
     bufferManager = new BufferManagerImpl(this.allocator);
     constantValueHolderCache = Maps.newHashMap();
+    boolean enableRF = context.getOptionManager().getOption(ExecConstants.HASHJOIN_ENABLE_RUNTIME_FILTER);
+    if (enableRF) {
+      ExecutorService executorService = context.getExecutor();
+      this.runtimeFilterSink = new RuntimeFilterSink(this.allocator, executorService);
+    }
   }
 
   /**
@@ -215,6 +245,8 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
     Preconditions.checkArgument(this.buffers == null, "Can only set buffers once.");
     this.buffers = buffers;
   }
+
+  @Override
   public QueryProfileStoreContext getProfileStoreContext() {
     return context.getProfileStoreContext();
   }
@@ -224,6 +256,7 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
     return context.getUserConnections();
   }
 
+  @Override
   public void setExecutorState(final ExecutorState executorState) {
     Preconditions.checkArgument(this.executorState == null, "ExecutorState can only be set once.");
     this.executorState = executorState;
@@ -233,6 +266,7 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
     executorState.fail(cause);
   }
 
+  @Override
   public SchemaPlus getFullRootSchema() {
     if (queryContext == null) {
       fail(new UnsupportedOperationException("Schema tree can only be created in root fragment. " +
@@ -254,6 +288,7 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
     return queryContext.getFullRootSchema(schemaConfig);
   }
 
+  @Override
   public FragmentStats getStats() {
     return stats;
   }
@@ -302,10 +337,12 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
    * The FragmentHandle for this Fragment
    * @return FragmentHandle
    */
+  @Override
   public FragmentHandle getHandle() {
     return fragment.getHandle();
   }
 
+  @Override
   public String getFragIdString() {
     final FragmentHandle handle = getHandle();
     final String frag = handle != null ? handle.getMajorFragmentId() + ":" + handle.getMinorFragmentId() : "0:0";
@@ -323,10 +360,21 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
     return getConfig().getBoolean(ExecConstants.USER_AUTHENTICATION_ENABLED);
   }
 
+  @Override
+  public void addRuntimeFilter(RuntimeFilterWritable runtimeFilter) {
+    this.runtimeFilterSink.aggregate(runtimeFilter);
+  }
+
+  @Override
+  public RuntimeFilterSink getRuntimeFilterSink() {
+    return runtimeFilterSink;
+  }
+
   /**
    * Get this fragment's allocator.
    * @return the allocator
    */
+  @Override
   @Deprecated
   public BufferAllocator getAllocator() {
     if (allocator == null) {
@@ -377,10 +425,12 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
     return tunnel;
   }
 
+  @Override
   public IncomingBuffers getBuffers() {
     return buffers;
   }
 
+  @Override
   public OperatorContext newOperatorContext(PhysicalOperator popConfig, OperatorStats stats)
       throws OutOfMemoryException {
     OperatorContextImpl context = new OperatorContextImpl(popConfig, this, stats);
@@ -388,6 +438,7 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
     return context;
   }
 
+  @Override
   public OperatorContext newOperatorContext(PhysicalOperator popConfig)
       throws OutOfMemoryException {
     OperatorContextImpl context = new OperatorContextImpl(popConfig, this);
@@ -410,10 +461,12 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
     return executionControls;
   }
 
+  @Override
   public String getQueryUserName() {
     return fragment.getCredentials().getUserName();
   }
 
+  @Override
   public boolean isImpersonationEnabled() {
     // TODO(DRILL-2097): Until SimpleRootExec tests are removed, we need to consider impersonation disabled if there is
     // no config
@@ -428,13 +481,16 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
   public void close() {
     waitForSendComplete();
 
+    // Close the buffers before closing the operators; this is needed as buffer ownership
+    // is attached to the receive operators.
+    suppressingClose(buffers);
+
     // close operator context
     for (OperatorContextImpl opContext : contexts) {
       suppressingClose(opContext);
     }
-
+    suppressingClose(runtimeFilterSink);
     suppressingClose(bufferManager);
-    suppressingClose(buffers);
     suppressingClose(allocator);
   }
 
@@ -470,6 +526,7 @@ public class FragmentContextImpl extends BaseFragmentContext implements Executor
     return valueHolder;
   }
 
+  @Override
   public ExecutorService getExecutor(){
     return context.getExecutor();
   }

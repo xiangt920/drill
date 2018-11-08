@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -19,8 +19,7 @@ package org.apache.drill.exec.store.easy.text.compliant;
 
 import org.apache.drill.exec.store.easy.text.TextFormatPlugin.TextFormatConfig;
 
-import com.google.common.base.Charsets;
-import com.univocity.parsers.common.TextParsingException;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
 
 public class TextParsingSettings {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TextParsingSettings.class);
@@ -210,7 +209,7 @@ public class TextParsingSettings {
 
   /**
    * Configures how to handle unescaped quotes inside quoted values. If set to {@code true}, the parser will parse the quote normally as part of the value.
-   * If set the {@code false}, a {@link TextParsingException} will be thrown. Defaults to {@code true}.
+   * If set the {@code false}, a {@link com.univocity.parsers.common.TextParsingException} will be thrown. Defaults to {@code true}.
    * @param parseUnescapedQuotes indicates whether or not the CSV parser should accept unescaped quotes inside quoted values.
    */
   public void setParseUnescapedQuotes(boolean parseUnescapedQuotes) {

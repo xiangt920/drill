@@ -22,8 +22,8 @@ import java.util.Collection;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.exec.physical.rowSet.ResultVectorCache;
 import org.apache.drill.exec.physical.rowSet.impl.ResultSetLoaderImpl.ResultSetOptions;
+import org.apache.drill.exec.physical.rowSet.project.RequestedTuple;
 import org.apache.drill.exec.record.metadata.TupleMetadata;
-import org.apache.drill.exec.vector.BaseValueVector;
 import org.apache.drill.exec.vector.ValueVector;
 
 /**
@@ -36,6 +36,7 @@ public class OptionBuilder {
   protected int vectorSizeLimit;
   protected int rowCountLimit;
   protected Collection<SchemaPath> projection;
+  protected RequestedTuple projectionSet;
   protected ResultVectorCache vectorCache;
   protected TupleMetadata schema;
   protected long maxBatchSize;
@@ -84,10 +85,13 @@ public class OptionBuilder {
    * @return this builder
    */
 
-  // TODO: Use SchemaPath in place of strings.
-
   public OptionBuilder setProjection(Collection<SchemaPath> projection) {
     this.projection = projection;
+    return this;
+  }
+
+  public OptionBuilder setProjectionSet(RequestedTuple projectionSet) {
+    this.projectionSet = projectionSet;
     return this;
   }
 

@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.vector;
 
 import org.apache.drill.common.types.TypeProtos;
@@ -25,7 +24,7 @@ import org.apache.drill.exec.expr.holders.ValueHolder;
 public class UntypedNullHolder implements ValueHolder {
   public static final TypeProtos.MajorType TYPE = Types.optional(TypeProtos.MinorType.NULL);
   public static final int WIDTH = 0;
-  public int isSet = 1;
+  public int isSet = 0;
 
   public TypeProtos.MajorType getType() {return TYPE;}
 

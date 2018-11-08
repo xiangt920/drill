@@ -25,8 +25,8 @@ import org.apache.drill.exec.ops.OperatorContext;
 import org.apache.drill.exec.physical.impl.sort.RecordBatchData;
 import org.apache.drill.exec.record.RecordBatch.IterOutcome;
 
-import com.google.common.collect.Range;
-import com.google.common.collect.TreeRangeMap;
+import org.apache.drill.shaded.guava.com.google.common.collect.Range;
+import org.apache.drill.shaded.guava.com.google.common.collect.TreeRangeMap;
 import org.apache.drill.exec.record.selection.SelectionVector2;
 import org.apache.drill.exec.record.selection.SelectionVector4;
 
@@ -366,5 +366,19 @@ public class RecordIterator implements VectorAccessible {
   public void close() {
     clear();
     clearInflightBatches();
+  }
+
+  @Override
+  public String toString() {
+    return "RecordIterator[outerPosition=" + outerPosition
+        + ", innerPosition=" + innerPosition
+        + ", innerRecordCount=" + innerRecordCount
+        + ", totalRecordCount=" + totalRecordCount
+        + ", startBatchPosition=" + startBatchPosition
+        + ", markedInnerPosition" + markedInnerPosition
+        + ", markedOuterPosition=" + markedOuterPosition
+        + ", lastOutcome=" + lastOutcome
+        + ", inputIndex=" + inputIndex
+        + "]";
   }
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.resolver;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.apache.drill.common.expression.FunctionCall;
 import org.apache.drill.common.expression.LogicalExpression;
 import org.apache.drill.common.types.TypeProtos;
@@ -26,7 +26,6 @@ import org.apache.drill.exec.expr.fn.DrillFuncHolder;
 import java.util.List;
 
 public class ExactFunctionResolver implements FunctionResolver {
-
 
   /*
    * This function resolves the input call to a func holder only if all
@@ -37,17 +36,17 @@ public class ExactFunctionResolver implements FunctionResolver {
   @Override
   public DrillFuncHolder getBestMatch(List<DrillFuncHolder> methods, FunctionCall call) {
 
-    int currcost;
+    int currCost;
+
+    final List<TypeProtos.MajorType> argumentTypes = Lists.newArrayList();
+    for (LogicalExpression expression : call.args) {
+      argumentTypes.add(expression.getMajorType());
+    }
 
     for (DrillFuncHolder h : methods) {
-      final List<TypeProtos.MajorType> argumentTypes = Lists.newArrayList();
-      for (LogicalExpression expression : call.args) {
-        argumentTypes.add(expression.getMajorType());
-      }
-      currcost = TypeCastRules.getCost(argumentTypes, h);
-
+      currCost = TypeCastRules.getCost(argumentTypes, h);
       // Return if we found a function that has an exact match with the input arguments
-      if (currcost  == 0){
+      if (currCost == 0) {
         return h;
       }
     }

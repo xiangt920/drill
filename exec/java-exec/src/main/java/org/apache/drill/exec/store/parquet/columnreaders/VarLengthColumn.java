@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -14,7 +14,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ */
 package org.apache.drill.exec.store.parquet.columnreaders;
 
 import java.io.IOException;
@@ -32,10 +32,10 @@ public abstract class VarLengthColumn<V extends ValueVector> extends ColumnReade
 
   Binary currDictVal;
 
-  VarLengthColumn(ParquetRecordReader parentReader, int allocateSize, ColumnDescriptor descriptor,
+  VarLengthColumn(ParquetRecordReader parentReader, ColumnDescriptor descriptor,
                   ColumnChunkMetaData columnChunkMetaData, boolean fixedLength, V v,
                   SchemaElement schemaElement) throws ExecutionSetupException {
-    super(parentReader, allocateSize, descriptor, columnChunkMetaData, fixedLength, v, schemaElement);
+    super(parentReader, descriptor, columnChunkMetaData, fixedLength, v, schemaElement);
       if (columnChunkMetaData.getEncodings().contains(Encoding.PLAIN_DICTIONARY)) {
         usingDictionary = true;
       }

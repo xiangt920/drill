@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,9 +17,7 @@
  */
 package org.apache.drill.exec.expr;
 
-import org.apache.drill.exec.record.RecordBatch;
-
-public interface DrillSimpleFunc extends DrillFunc{
-  public void setup();
-  public void eval();
+public interface DrillSimpleFunc extends DrillFunc {
+  void setup();
+  void eval();
 }

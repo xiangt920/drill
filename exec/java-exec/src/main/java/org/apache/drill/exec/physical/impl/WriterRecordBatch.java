@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.physical.impl;
 
 import java.io.IOException;
@@ -96,8 +95,14 @@ public class WriterRecordBatch extends AbstractRecordBatch<Writer> {
             return upstream;
 
           case NOT_YET:
-          case NONE:
             break;
+          case NONE:
+            if (schema != null) {
+              // Schema is for the output batch schema which is setup in setupNewSchema(). Since the output
+              // schema is fixed ((Fragment(VARCHAR), Number of records written (BIGINT)) we should set it
+              // up even with 0 records for it to be reported back to the client.
+              break;
+            }
 
           case OK_NEW_SCHEMA:
             setupNewSchema();
@@ -203,5 +208,11 @@ public class WriterRecordBatch extends AbstractRecordBatch<Writer> {
   public void close() {
     closeWriter();
     super.close();
+  }
+
+  @Override
+  public void dump() {
+    logger.error("WriterRecordBatch[container={}, popConfig={}, counter={}, fragmentUniqueId={}, schema={}]",
+        container, popConfig, counter, fragmentUniqueId, schema);
   }
 }

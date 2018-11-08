@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -39,12 +39,12 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.cache.Cache;
+import org.apache.drill.shaded.guava.com.google.common.cache.CacheBuilder;
+import org.apache.drill.shaded.guava.com.google.common.cache.RemovalListener;
+import org.apache.drill.shaded.guava.com.google.common.cache.RemovalNotification;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientURI;
 import com.mongodb.MongoCredential;
@@ -54,7 +54,6 @@ public class MongoStoragePlugin extends AbstractStoragePlugin {
   static final Logger logger = LoggerFactory
       .getLogger(MongoStoragePlugin.class);
 
-  private final DrillbitContext context;
   private final MongoStoragePluginConfig mongoConfig;
   private final MongoSchemaFactory schemaFactory;
   private final Cache<MongoCnxnKey, MongoClient> addressClientMap;
@@ -63,17 +62,13 @@ public class MongoStoragePlugin extends AbstractStoragePlugin {
   public MongoStoragePlugin(MongoStoragePluginConfig mongoConfig,
       DrillbitContext context, String name) throws IOException,
       ExecutionSetupException {
-    this.context = context;
+    super(context, name);
     this.mongoConfig = mongoConfig;
     this.clientURI = new MongoClientURI(this.mongoConfig.getConnection());
     this.addressClientMap = CacheBuilder.newBuilder()
         .expireAfterAccess(24, TimeUnit.HOURS)
         .removalListener(new AddressCloser()).build();
     this.schemaFactory = new MongoSchemaFactory(this, name);
-  }
-
-  public DrillbitContext getContext() {
-    return this.context;
   }
 
   @Override

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.hive;
 
-import com.google.common.base.Strings;
+import org.apache.drill.shaded.guava.com.google.common.base.Strings;
 import org.apache.drill.categories.HiveStorageTest;
 import org.apache.drill.test.TestBuilder;
 import org.apache.drill.categories.SlowTest;
@@ -46,9 +46,11 @@ public class TestInfoSchemaOnHiveStorage extends HiveTestBase {
         .baselineValues("hive.default", "kv")
         .baselineValues("hive.default", "kv_parquet")
         .baselineValues("hive.default", "kv_sh")
-        .baselineValues("hive.default", "countstar_parquet")
         .baselineValues("hive.default", "simple_json")
         .baselineValues("hive.default", "partition_with_few_schemas")
+        .baselineValues("hive.default", "kv_native")
+        .baselineValues("hive.default", "kv_native_ext")
+        .baselineValues("hive.default", "sub_dir_table")
         .go();
 
     testBuilder()
@@ -88,7 +90,7 @@ public class TestInfoSchemaOnHiveStorage extends HiveTestBase {
         .baselineValues("dfs.tmp")
         .baselineValues("sys")
         .baselineValues("cp.default")
-        .baselineValues("INFORMATION_SCHEMA")
+        .baselineValues("information_schema")
         .go();
   }
 
@@ -249,9 +251,11 @@ public class TestInfoSchemaOnHiveStorage extends HiveTestBase {
         .baselineValues("DRILL", "hive.default", "partition_pruning_test", "TABLE")
         .baselineValues("DRILL", "hive.default", "partition_with_few_schemas", "TABLE")
         .baselineValues("DRILL", "hive.default", "kv_parquet", "TABLE")
-        .baselineValues("DRILL", "hive.default", "countstar_parquet", "TABLE")
         .baselineValues("DRILL", "hive.default", "kv_sh", "TABLE")
         .baselineValues("DRILL", "hive.default", "simple_json", "TABLE")
+        .baselineValues("DRILL", "hive.default", "kv_native", "TABLE")
+        .baselineValues("DRILL", "hive.default", "kv_native_ext", "TABLE")
+        .baselineValues("DRILL", "hive.default", "sub_dir_table", "TABLE")
         .baselineValues("DRILL", "hive.skipper", "kv_text_small", "TABLE")
         .baselineValues("DRILL", "hive.skipper", "kv_text_large", "TABLE")
         .baselineValues("DRILL", "hive.skipper", "kv_incorrect_skip_header", "TABLE")

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -35,7 +35,7 @@ import org.apache.drill.exec.store.dfs.WorkspaceSchemaFactory.TableInstance;
 import org.apache.drill.exec.store.dfs.WorkspaceSchemaFactory.TableSignature;
 import org.slf4j.Logger;
 
-import com.google.common.annotations.VisibleForTesting;
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
 
 /**
  * manages format plugins options to define table macros

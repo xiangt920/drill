@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,9 +17,8 @@
  */
 package org.apache.drill.common.logical.data;
 
+import java.util.Collections;
 import java.util.Iterator;
-
-import com.google.common.collect.Iterators;
 
 
 /**
@@ -29,7 +28,7 @@ public abstract class SourceOperator extends LogicalOperatorBase{
 
   @Override
   public Iterator<LogicalOperator> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
   }
 
 }

@@ -34,8 +34,8 @@ import org.apache.hadoop.hbase.filter.RegexStringComparator;
 import org.apache.hadoop.hbase.filter.RowFilter;
 import org.apache.hadoop.hbase.filter.SingleColumnValueFilter;
 
-import com.google.common.base.Charsets;
-import com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
 
 public class HBaseFilterBuilder extends AbstractExprVisitor<HBaseScanSpec, Void, RuntimeException> implements DrillHBaseConstants {
 
@@ -61,6 +61,7 @@ public class HBaseFilterBuilder extends AbstractExprVisitor<HBaseScanSpec, Void,
        * remove it since its effect is also achieved through startRow and stopRow.
        */
       if (parsedSpec.filter instanceof RowFilter &&
+          ((RowFilter)parsedSpec.filter).getOperator() != CompareOp.NOT_EQUAL &&
           ((RowFilter)parsedSpec.filter).getComparator() instanceof BinaryComparator) {
         parsedSpec.filter = null;
       }
@@ -291,7 +292,7 @@ public class HBaseFilterBuilder extends AbstractExprVisitor<HBaseScanSpec, Void,
             startRow = prefix.getBytes(Charsets.UTF_8);
             stopRow = startRow.clone();
             boolean isMaxVal = true;
-            for (int i = stopRow.length - 1; i >= 0 ; --i) {
+            for (int i = stopRow.length - 1; i >= 0; --i) {
               int nextByteValue = (0xff & stopRow[i]) + 1;
               if (nextByteValue < 0xff) {
                 stopRow[i] = (byte) nextByteValue;

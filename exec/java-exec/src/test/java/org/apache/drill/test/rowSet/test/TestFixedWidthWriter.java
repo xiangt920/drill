@@ -395,14 +395,13 @@ public class TestFixedWidthWriter extends SubOperatorTest {
 
         @Override
         public boolean canExpand(ScalarWriter writer, int delta) {
-//          System.out.println("Delta: " + delta);
           totalAlloc += delta;
           return totalAlloc < 16_384 * 4;
         }
       });
       writer.startWrite();
       try {
-        for (int i = 0; ; i++ ) {
+        for (int i = 0;; i++ ) {
           index.index = i;
           writer.startRow();
           writer.setInt(i);

@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -14,14 +14,12 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ */
 package org.apache.drill.exec.expr.fn.impl.conv;
-
 
 import org.apache.drill.exec.expr.DrillSimpleFunc;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate.FunctionScope;
-import org.apache.drill.exec.expr.annotations.FunctionTemplate.NullHandling;
 import org.apache.drill.exec.expr.annotations.Output;
 import org.apache.drill.exec.vector.complex.writer.BaseWriter;
 
@@ -29,7 +27,7 @@ import org.apache.drill.exec.vector.complex.writer.BaseWriter;
  * This and {@link DummyConvertTo} class merely act as a placeholder so that Optiq
  * allows the 'flatten()' function in SQL.
  */
-@FunctionTemplate(name = "flatten", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+@FunctionTemplate(name = "flatten", scope = FunctionScope.SIMPLE)
 public class DummyFlatten implements DrillSimpleFunc {
 
   @Output BaseWriter.ComplexWriter out;

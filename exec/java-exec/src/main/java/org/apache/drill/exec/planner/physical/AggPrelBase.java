@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.planner.physical;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.util.BitSets;
 import org.apache.calcite.util.ImmutableBitSet;
@@ -35,7 +35,6 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlKind;
@@ -48,9 +47,44 @@ import java.util.List;
 
 public abstract class AggPrelBase extends DrillAggregateRelBase implements Prel {
 
-  public enum OperatorPhase {PHASE_1of1, PHASE_1of2, PHASE_2of2}
+  public enum OperatorPhase {
+    PHASE_1of1(false, false, false, "Single"),
+    PHASE_1of2(true, true, false, "1st"),
+    PHASE_2of2(true, false, true, "2nd");
 
-  protected OperatorPhase operPhase = OperatorPhase.PHASE_1of1 ; // default phase
+    private boolean hasTwo;
+    private boolean is1st;
+    private boolean is2nd;
+    private String name;
+
+    OperatorPhase(boolean hasTwo,
+                  boolean is1st,
+                  boolean is2nd,
+                  String name) {
+      this.hasTwo = hasTwo;
+      this.is1st = is1st;
+      this.is2nd = is2nd;
+      this.name = name;
+    }
+
+    public boolean hasTwo() {
+      return hasTwo;
+    }
+
+    public boolean is1st() {
+      return is1st;
+    }
+
+    public boolean is2nd() {
+      return is2nd;
+    }
+
+    public String getName() {
+      return name;
+    }
+  }
+
+  protected OperatorPhase operPhase = OperatorPhase.PHASE_1of1; // default phase
   protected List<NamedExpression> keys = Lists.newArrayList();
   protected List<NamedExpression> aggExprs = Lists.newArrayList();
   protected List<AggregateCall> phase2AggCallList = Lists.newArrayList();
@@ -189,4 +223,26 @@ public abstract class AggPrelBase extends DrillAggregateRelBase implements Prel 
     return true;
   }
 
+  @Override
+  public Prel prepareForLateralUnnestPipeline(List<RelNode> children) {
+    List<Integer> groupingCols = Lists.newArrayList();
+    groupingCols.add(0);
+    for (int groupingCol : groupSet.asList()) {
+      groupingCols.add(groupingCol + 1);
+    }
+
+    ImmutableBitSet groupingSet = ImmutableBitSet.of(groupingCols);
+    List<ImmutableBitSet> groupingSets = Lists.newArrayList();
+    groupingSets.add(groupingSet);
+    List<AggregateCall> aggregateCalls = Lists.newArrayList();
+    for (AggregateCall aggCall : aggCalls) {
+      List<Integer> arglist = Lists.newArrayList();
+      for (int arg : aggCall.getArgList()) {
+        arglist.add(arg + 1);
+      }
+      aggregateCalls.add(AggregateCall.create(aggCall.getAggregation(), aggCall.isDistinct(),
+              aggCall.isApproximate(), arglist, aggCall.filterArg, aggCall.type, aggCall.name));
+    }
+    return (Prel) copy(traitSet, children.get(0),indicator,groupingSet,groupingSets, aggregateCalls);
+  }
 }

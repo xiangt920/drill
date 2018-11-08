@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -19,7 +19,6 @@ package org.apache.drill.jdbc.impl;
 
 import static org.slf4j.LoggerFactory.getLogger;
 
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
 import java.util.ArrayList;
@@ -30,8 +29,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.google.common.base.Stopwatch;
-import org.apache.calcite.avatica.AvaticaResultSet;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
 import org.apache.calcite.avatica.AvaticaStatement;
 import org.apache.calcite.avatica.ColumnMetaData;
 import org.apache.calcite.avatica.Meta;
@@ -57,7 +55,7 @@ import org.apache.drill.jdbc.SchemaChangeListener;
 import org.apache.drill.jdbc.SqlTimeoutException;
 import org.slf4j.Logger;
 
-import com.google.common.collect.Queues;
+import org.apache.drill.shaded.guava.com.google.common.collect.Queues;
 
 
 class DrillCursor implements Cursor {

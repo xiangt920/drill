@@ -40,9 +40,12 @@ import org.apache.drill.exec.record.selection.SelectionVector2;
 import org.apache.drill.exec.record.selection.SelectionVector4;
 import org.apache.drill.exec.vector.ValueVector;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 public class FilterRecordBatch extends AbstractSingleRecordBatch<Filter> {
+
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FilterRecordBatch.class);
+
   private SelectionVector2 sv2;
   private SelectionVector4 sv4;
   private Filterer filter;
@@ -81,7 +84,7 @@ public class FilterRecordBatch extends AbstractSingleRecordBatch<Filter> {
       throw new UnsupportedOperationException(e);
     }
 
-    return IterOutcome.OK;
+    return getFinalOutcome(false);
   }
 
   @Override
@@ -168,6 +171,9 @@ public class FilterRecordBatch extends AbstractSingleRecordBatch<Filter> {
     final ErrorCollector collector = new ErrorCollectorImpl();
     final List<TransferPair> transfers = Lists.newArrayList();
     final ClassGenerator<Filterer> cg = CodeGenerator.getRoot(Filterer.TEMPLATE_DEFINITION2, context.getOptions());
+    // Uncomment below lines to enable saving generated code file for debugging
+    // cg.getCodeGenerator().plainJavaCapable(true);
+    // cg.getCodeGenerator().saveCodeForDebugging(true);
 
     final LogicalExpression expr = ExpressionTreeMaterializer.materialize(popConfig.getExpr(), incoming, collector,
             context.getFunctionRegistry(), false, unionTypeEnabled);
@@ -192,5 +198,10 @@ public class FilterRecordBatch extends AbstractSingleRecordBatch<Filter> {
     } catch (ClassTransformationException | IOException e) {
       throw new SchemaChangeException("Failure while attempting to load generated class", e);
     }
+  }
+
+  @Override
+  public void dump() {
+    logger.error("FilterRecordBatch[container={}, selectionVector2={}, filter={}, popConfig={}]", container, sv2, filter, popConfig);
   }
 }

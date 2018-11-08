@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -34,7 +34,7 @@ import org.apache.calcite.rex.RexNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
 
 public class MongoPushDownFilterForScan extends StoragePluginOptimizerRule {
   private static final Logger logger = LoggerFactory
@@ -77,8 +77,9 @@ public class MongoPushDownFilterForScan extends StoragePluginOptimizerRule {
     }
     newGroupsScan.setFilterPushedDown(true);
 
-    final ScanPrel newScanPrel = ScanPrel.create(scan, filter.getTraitSet(),
-        newGroupsScan, scan.getRowType());
+    final ScanPrel newScanPrel = new ScanPrel(scan.getCluster(), filter.getTraitSet(),
+        newGroupsScan, scan.getRowType(), scan.getTable());
+
     if (mongoFilterBuilder.isAllExpressionsConverted()) {
       /*
        * Since we could convert the entire filter condition expression into an

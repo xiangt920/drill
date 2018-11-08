@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -22,8 +22,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.drill.exec.store.sys.PersistentStore;
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 
 import java.util.EnumSet;
 
@@ -51,6 +50,7 @@ public class OptionValue implements Comparable<OptionValue> {
   public static final String JSON_STRING_VAL = "string_val";
   public static final String JSON_BOOL_VAL = "bool_val";
   public static final String JSON_FLOAT_VAL = "float_val";
+  public static final String JSON_INTEGER_VAL = "int_val";
   public static final String JSON_SCOPE = "scope";
 
   /**
@@ -253,6 +253,7 @@ public class OptionValue implements Comparable<OptionValue> {
     } else if (!string_val.equals(other.string_val)) {
       return false;
     }
+
     return true;
   }
 

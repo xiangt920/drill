@@ -25,8 +25,9 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
-import com.google.common.util.concurrent.ListenableFuture;
+import org.apache.drill.shaded.guava.com.google.common.util.concurrent.ListenableFuture;
 import io.netty.buffer.DrillBuf;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
@@ -64,7 +65,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.apache.hadoop.security.UserGroupInformation;
 
 
@@ -203,20 +204,10 @@ public abstract class HiveAbstractReader extends AbstractRecordReader {
           }
         }
       }
-      ColumnProjectionUtils.appendReadColumns(job, columnIds);
-
-      // TODO: Use below overloaded method instead of above simpler version of it, once Hive client dependencies
-      // (from all profiles) will be updated to 2.3 version or above
-//      ColumnProjectionUtils.appendReadColumns(job, columnIds, selectedColumnNames,
-//          Lists.newArrayList(Iterables.transform(getColumns(), new Function<SchemaPath, String>()
-//      {
-//        @Nullable
-//        @Override
-//        public String apply(@Nullable SchemaPath path)
-//        {
-//          return path.getRootSegmentPath();
-//        }
-//      })));
+      List<String> paths = getColumns().stream()
+          .map(SchemaPath::getRootSegmentPath)
+          .collect(Collectors.toList());
+      ColumnProjectionUtils.appendReadColumns(job, columnIds, selectedColumnNames, paths);
 
       for (String columnName : selectedColumnNames) {
         StructField fieldRef = finalOI.getStructFieldRef(columnName);
@@ -227,7 +218,7 @@ public abstract class HiveAbstractReader extends AbstractRecordReader {
 
         selectedColumnObjInspectors.add(fieldOI);
         selectedColumnTypes.add(typeInfo);
-        selectedColumnFieldConverters.add(HiveFieldConverter.create(typeInfo, fragmentContext));
+        selectedColumnFieldConverters.add(HiveFieldConverter.create(typeInfo));
       }
 
       for(int i=0; i<selectedColumnNames.size(); ++i){
@@ -430,4 +421,19 @@ public abstract class HiveAbstractReader extends AbstractRecordReader {
     }
   }
 
+  @Override
+  public String toString() {
+    long position = -1;
+    try {
+      if (reader != null) {
+        position = reader.getPos();
+      }
+    } catch (IOException e) {
+      logger.trace("Unable to obtain reader position.", e);
+    }
+    return getClass().getSimpleName() + "[Database=" + table.getDbName()
+        + ", Table=" + table.getTableName()
+        + ", Position=" + position
+        + "]";
+  }
 }

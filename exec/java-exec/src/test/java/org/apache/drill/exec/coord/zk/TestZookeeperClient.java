@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * <p/>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,7 +21,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -57,10 +57,10 @@ public class TestZookeeperClient {
   private CuratorFramework curator;
   private ZookeeperClient client;
 
-  static class ClientWithMockCache extends ZookeeperClient {
+  private static class ClientWithMockCache extends ZookeeperClient {
     private final PathChildrenCache cacheMock = Mockito.mock(PathChildrenCache.class);
 
-    public ClientWithMockCache(final CuratorFramework curator, final String root, final CreateMode mode) {
+    ClientWithMockCache(final CuratorFramework curator, final String root, final CreateMode mode) {
       super(curator, root, mode);
     }
 
@@ -97,7 +97,7 @@ public class TestZookeeperClient {
 
     Mockito
         .verify(client.getCache())
-        .start();
+        .start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
   }
 
   @Test
@@ -125,7 +125,7 @@ public class TestZookeeperClient {
 
     Mockito
         .when(client.getCache().getCurrentData(absPath))
-        .thenThrow(Exception.class);
+        .thenThrow(RuntimeException.class);
 
     client.hasPath(path);
   }
@@ -163,7 +163,7 @@ public class TestZookeeperClient {
         .when(client.getCache().getCurrentData(abspath))
         .thenReturn(null);
 
-    assertEquals("get should return null", null, client.get(path));
+    assertNull("get should return null", client.get(path));
 
     Mockito
         .when(client.getCache().getCurrentData(abspath))
@@ -198,7 +198,7 @@ public class TestZookeeperClient {
 
 
   @Test
-  public void testEntriesReturnsRelativePaths() throws Exception {
+  public void testEntriesReturnsRelativePaths() {
     final ChildData child = Mockito.mock(ChildData.class);
     Mockito
         .when(child.getPath())

@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import java.lang.UnsupportedOperationException;
 
 <@pp.dropOutputFile />
@@ -82,6 +81,17 @@ public class UnionListWriter extends AbstractFieldWriter {
     return this;
   }
 
+  <#if minor.class == "VarDecimal">
+  @Override
+  public ${name}Writer <#if uncappedName == "int">integer<#else>${uncappedName}</#if>(String name, int scale, int precision) {
+    assert inMap;
+    final int nextOffset = offsets.getAccessor().get(idx() + 1);
+    vector.getMutator().setNotNull(idx());
+    writer.setPosition(nextOffset);
+    ${name}Writer ${uncappedName}Writer = writer.${uncappedName}(name, scale, precision);
+    return ${uncappedName}Writer;
+  }
+  <#else>
   @Override
   public ${name}Writer <#if uncappedName == "int">integer<#else>${uncappedName}</#if>(String name) {
     assert inMap;
@@ -91,6 +101,7 @@ public class UnionListWriter extends AbstractFieldWriter {
     ${name}Writer ${uncappedName}Writer = writer.<#if uncappedName == "int">integer<#else>${uncappedName}</#if>(name);
     return ${uncappedName}Writer;
   }
+  </#if>
   </#if>
   </#list></#list>
 

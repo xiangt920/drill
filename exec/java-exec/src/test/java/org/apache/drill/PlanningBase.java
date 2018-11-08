@@ -20,12 +20,17 @@ package org.apache.drill;
 import java.io.IOException;
 import java.net.URL;
 
+import org.apache.drill.shaded.guava.com.google.common.base.Function;
+import io.netty.buffer.DrillBuf;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.config.LogicalPlanPersistence;
 import org.apache.drill.common.scanner.ClassPathScanner;
 import org.apache.drill.common.scanner.persistence.ScanResult;
+import org.apache.drill.common.types.TypeProtos;
+import org.apache.drill.exec.expr.holders.ValueHolder;
+import org.apache.drill.exec.vector.ValueHolderHelper;
 import org.apache.drill.test.TestTools;
 import org.apache.drill.exec.ExecTest;
 import org.apache.drill.exec.expr.fn.FunctionImplementationRegistry;
@@ -51,10 +56,12 @@ import org.junit.Rule;
 import org.junit.rules.TestRule;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.base.Charsets;
-import com.google.common.collect.ImmutableList;
-import com.google.common.io.Resources;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.io.Resources;
+import org.mockito.Matchers;
 
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -78,7 +85,7 @@ public class PlanningBase extends ExecTest {
     provider.start();
     final ScanResult scanResult = ClassPathScanner.fromPrescan(config);
     final LogicalPlanPersistence logicalPlanPersistence = new LogicalPlanPersistence(config, scanResult);
-    final SystemOptionManager systemOptions = new SystemOptionManager(logicalPlanPersistence , provider, config);
+    final SystemOptionManager systemOptions = new SystemOptionManager(logicalPlanPersistence, provider, config);
     systemOptions.init();
     @SuppressWarnings("resource")
     final UserSession userSession = UserSession.Builder.newBuilder().withOptionManager(systemOptions).build();
@@ -116,6 +123,18 @@ public class PlanningBase extends ExecTest {
     when(context.getAllocator()).thenReturn(allocator);
     when(context.getExecutionControls()).thenReturn(executionControls);
     when(context.getLpPersistence()).thenReturn(logicalPlanPersistence);
+    // mocks for org.apache.drill.TestTpchPlanning#tpch06 test.
+    // With changes for decimal types, subtract udf for decimals is used.
+    when(context.getManagedBuffer()).thenReturn(allocator.buffer(4));
+    when(context.getConstantValueHolder(eq("0.03"),
+        eq(TypeProtos.MinorType.VARDECIMAL),
+        Matchers.<Function<DrillBuf, ValueHolder>>any()))
+      .thenReturn(ValueHolderHelper.getVarDecimalHolder(allocator.buffer(4), "0.03"));
+    when(context.getConstantValueHolder(eq("0.01"),
+        eq(TypeProtos.MinorType.VARDECIMAL),
+        Matchers.<Function<DrillBuf, ValueHolder>>any()))
+      .thenReturn(ValueHolderHelper.getVarDecimalHolder(allocator.buffer(4), "0.01"));
+
 
     for (final String sql : sqlStrings) {
       if (sql.trim().isEmpty()) {

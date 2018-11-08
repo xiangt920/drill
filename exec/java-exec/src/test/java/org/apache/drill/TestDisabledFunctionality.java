@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,6 +18,7 @@
 package org.apache.drill;
 import org.apache.drill.categories.UnlikelyTest;
 import org.apache.drill.common.exceptions.UserException;
+import org.apache.drill.exec.planner.physical.PlannerSettings;
 import org.apache.drill.exec.work.ExecErrorConstants;
 import org.apache.drill.exec.work.foreman.SqlUnsupportedException;
 import org.apache.drill.exec.work.foreman.UnsupportedDataTypeException;
@@ -44,30 +45,6 @@ public class TestDisabledFunctionality extends BaseTestQuery {
   private static void throwAsUnsupportedException(UserException ex) throws Exception {
     SqlUnsupportedException.errorClassNameToException(ex.getOrCreatePBError(false).getException().getExceptionClass());
     throw ex;
-  }
-
-  @Test(expected = UnsupportedFunctionException.class)  // see DRILL-1937
-  public void testDisabledExplainplanForComparisonWithNonscalarSubquery() throws Exception {
-    try {
-      test("explain plan for select n_name from cp.`tpch/nation.parquet` " +
-           "where n_nationkey = " +
-           "(select r_regionkey from cp.`tpch/region.parquet` " +
-           "where r_regionkey = 1)");
-    } catch(UserException ex) {
-      throwAsUnsupportedException(ex);
-    }
-  }
-
-  @Test(expected = UnsupportedFunctionException.class)  // see DRILL-1937
-  public void testDisabledComparisonWithNonscalarSubquery() throws Exception {
-    try {
-      test("select n_name from cp.`tpch/nation.parquet` " +
-           "where n_nationkey = " +
-           "(select r_regionkey from cp.`tpch/region.parquet` " +
-           "where r_regionkey = 1)");
-    } catch(UserException ex) {
-      throwAsUnsupportedException(ex);
-    }
   }
 
   @Test(expected = UnsupportedRelOperatorException.class) // see DRILL-1921
@@ -214,19 +191,6 @@ public class TestDisabledFunctionality extends BaseTestQuery {
     }
   }
 
-  @Test(expected = UnsupportedFunctionException.class) // see DRILL-1325, DRILL-2155, see DRILL-1937
-  public void testMultipleUnsupportedOperatorations() throws Exception {
-    try {
-      test("select a.lastname, b.n_name " +
-          "from cp.`employee.json` a, cp.`tpch/nation.parquet` b " +
-          "where b.n_nationkey = " +
-          "(select r_regionkey from cp.`tpch/region.parquet` " +
-          "where r_regionkey = 1)");
-    } catch(UserException ex) {
-      throwAsUnsupportedException(ex);
-    }
-  }
-
   @Test(expected = UnsupportedRelOperatorException.class) // see DRILL-2068, DRILL-1325
   public void testExplainPlanForCartesianJoin() throws Exception {
     try {
@@ -307,14 +271,24 @@ public class TestDisabledFunctionality extends BaseTestQuery {
 
   @Test // DRILL-2848
   public void testDisableDecimalCasts() throws Exception {
-    final String query = "select cast('1.2' as decimal(9, 2)) from cp.`employee.json` limit 1";
-    errorMsgTestHelper(query, ExecErrorConstants.DECIMAL_DISABLE_ERR_MSG);
+    try {
+      alterSession(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY, false);
+      final String query = "select cast('1.2' as decimal(9, 2)) from cp.`employee.json` limit 1";
+      errorMsgTestHelper(query, ExecErrorConstants.DECIMAL_DISABLE_ERR_MSG);
+    } finally {
+      resetSessionOption(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY);
+    }
   }
 
   @Test // DRILL-2848
   public void testDisableDecimalFromParquet() throws Exception {
-    final String query = "select * from cp.`parquet/decimal_dictionary.parquet`";
-    errorMsgTestHelper(query, ExecErrorConstants.DECIMAL_DISABLE_ERR_MSG);
+    try {
+      alterSession(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY, false);
+      final String query = "select * from cp.`parquet/decimal_dictionary.parquet`";
+      errorMsgTestHelper(query, ExecErrorConstants.DECIMAL_DISABLE_ERR_MSG);
+    } finally {
+      resetSessionOption(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY);
+    }
   }
 
   @Test (expected = UnsupportedFunctionException.class) //DRILL-3802

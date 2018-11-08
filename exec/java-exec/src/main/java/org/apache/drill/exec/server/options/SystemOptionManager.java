@@ -17,12 +17,14 @@
  */
 package org.apache.drill.exec.server.options;
 
-import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import org.apache.commons.collections.IteratorUtils;
 import org.apache.drill.common.config.DrillConfig;
@@ -31,7 +33,6 @@ import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.map.CaseInsensitiveMap;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.compile.ClassCompilerSelector;
-import org.apache.drill.exec.compile.ClassTransformer;
 import org.apache.drill.exec.planner.physical.PlannerSettings;
 import org.apache.drill.exec.store.sys.PersistentStore;
 import org.apache.drill.exec.store.sys.PersistentStoreConfig;
@@ -39,17 +40,15 @@ import org.apache.drill.exec.store.sys.PersistentStoreProvider;
 import org.apache.drill.exec.store.sys.store.provider.InMemoryStoreProvider;
 import org.apache.drill.exec.util.AssertionUtil;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 /**
- * {@link OptionManager} that holds options within {@link org.apache.drill.exec.server.DrillbitContext}.
+ *  <p> {@link OptionManager} that holds options within {@link org.apache.drill.exec.server.DrillbitContext}.
  * Only one instance of this class exists per drillbit. Options set at the system level affect the entire system and
  * persist between restarts.
- */
-
-/**
+ *  </p>
+ *
  *  <p> All the system options are externalized into conf file. While adding a new system option
  *  a validator should be added and the default value for the option should be set in
  *  the conf files(example : drill-module.conf) under the namespace drill.exec.options.
@@ -80,7 +79,9 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
       new OptionDefinition(PlannerSettings.EXCHANGE),
       new OptionDefinition(PlannerSettings.HASHAGG),
       new OptionDefinition(PlannerSettings.STREAMAGG),
+      new OptionDefinition(PlannerSettings.TOPN, new OptionMetaData(OptionValue.AccessibleScopes.ALL, false, true)),
       new OptionDefinition(PlannerSettings.HASHJOIN),
+      new OptionDefinition(PlannerSettings.SEMIJOIN),
       new OptionDefinition(PlannerSettings.MERGEJOIN),
       new OptionDefinition(PlannerSettings.NESTEDLOOPJOIN),
       new OptionDefinition(PlannerSettings.MULTIPHASE),
@@ -115,13 +116,38 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
       new OptionDefinition(PlannerSettings.PARQUET_ROWGROUP_FILTER_PUSHDOWN_PLANNING_THRESHOLD),
       new OptionDefinition(PlannerSettings.QUOTING_IDENTIFIERS),
       new OptionDefinition(PlannerSettings.JOIN_OPTIMIZATION),
+      new OptionDefinition(PlannerSettings.ENABLE_UNNEST_LATERAL),
       new OptionDefinition(PlannerSettings.FORCE_2PHASE_AGGR), // for testing
+      new OptionDefinition(ExecConstants.HASHJOIN_NUM_PARTITIONS_VALIDATOR),
+      new OptionDefinition(ExecConstants.HASHJOIN_MAX_MEMORY_VALIDATOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM, true, true)),
+      new OptionDefinition(ExecConstants.HASHJOIN_NUM_ROWS_IN_BATCH_VALIDATOR),
+      new OptionDefinition(ExecConstants.HASHJOIN_MAX_BATCHES_IN_MEMORY_VALIDATOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM, true, true)),
+      new OptionDefinition(ExecConstants.HASHJOIN_FALLBACK_ENABLED_VALIDATOR), // for enable/disable unbounded HashJoin
+      new OptionDefinition(ExecConstants.HASHJOIN_ENABLE_RUNTIME_FILTER),
+      new OptionDefinition(ExecConstants.HASHJOIN_BLOOM_FILTER_MAX_SIZE),
+      new OptionDefinition(ExecConstants.HASHJOIN_BLOOM_FILTER_FPP_VALIDATOR),
+      // ------------------------------------------- Index planning related options BEGIN --------------------------------------------------------------
+      new OptionDefinition(PlannerSettings.USE_SIMPLE_OPTIMIZER),
+      new OptionDefinition(PlannerSettings.INDEX_PLANNING),
+      new OptionDefinition(PlannerSettings.ENABLE_STATS),
+      new OptionDefinition(PlannerSettings.DISABLE_FULL_TABLE_SCAN),
+      new OptionDefinition(PlannerSettings.INDEX_MAX_CHOSEN_INDEXES_PER_TABLE),
+      new OptionDefinition(PlannerSettings.INDEX_FORCE_SORT_NONCOVERING),
+      new OptionDefinition(PlannerSettings.INDEX_USE_HASHJOIN_NONCOVERING),
+      new OptionDefinition(PlannerSettings.INDEX_COVERING_SELECTIVITY_THRESHOLD),
+      new OptionDefinition(PlannerSettings.INDEX_NONCOVERING_SELECTIVITY_THRESHOLD),
+      new OptionDefinition(PlannerSettings.INDEX_ROWKEYJOIN_COST_FACTOR),
+      new OptionDefinition(PlannerSettings.INDEX_STATS_ROWCOUNT_SCALING_FACTOR),
+      // TODO: Deprecate the following 2 (also in PlannerSettings.java)
+      new OptionDefinition(PlannerSettings.INDEX_PREFER_INTERSECT_PLANS),
+      new OptionDefinition(PlannerSettings.INDEX_MAX_INDEXES_TO_INTERSECT),
+      // ------------------------------------------- Index planning related options END   --------------------------------------------------------------
       new OptionDefinition(ExecConstants.HASHAGG_NUM_PARTITIONS_VALIDATOR),
       new OptionDefinition(ExecConstants.HASHAGG_MAX_MEMORY_VALIDATOR),
       new OptionDefinition(ExecConstants.HASHAGG_MIN_BATCHES_PER_PARTITION_VALIDATOR), // for tuning
       new OptionDefinition(ExecConstants.HASHAGG_USE_MEMORY_PREDICTION_VALIDATOR), // for testing
       new OptionDefinition(ExecConstants.HASHAGG_FALLBACK_ENABLED_VALIDATOR), // for enable/disable unbounded HashAgg
-      new OptionDefinition(ExecConstants.CAST_TO_NULLABLE_NUMERIC_OPTION),
+      new OptionDefinition(ExecConstants.CAST_EMPTY_STRING_TO_NULL_OPTION),
       new OptionDefinition(ExecConstants.OUTPUT_FORMAT_VALIDATOR),
       new OptionDefinition(ExecConstants.PARQUET_BLOCK_SIZE_VALIDATOR),
       new OptionDefinition(ExecConstants.PARQUET_WRITER_USE_SINGLE_FS_BLOCK_VALIDATOR),
@@ -129,6 +155,8 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
       new OptionDefinition(ExecConstants.PARQUET_DICT_PAGE_SIZE_VALIDATOR),
       new OptionDefinition(ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE_VALIDATOR),
       new OptionDefinition(ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING_VALIDATOR),
+      new OptionDefinition(ExecConstants.PARQUET_WRITER_USE_PRIMITIVE_TYPES_FOR_DECIMALS_VALIDATOR),
+      new OptionDefinition(ExecConstants.PARQUET_WRITER_LOGICAL_TYPE_FOR_DECIMALS_VALIDATOR),
       new OptionDefinition(ExecConstants.PARQUET_VECTOR_FILL_THRESHOLD_VALIDATOR),
       new OptionDefinition(ExecConstants.PARQUET_VECTOR_FILL_CHECK_THRESHOLD_VALIDATOR),
       new OptionDefinition(ExecConstants.PARQUET_RECORD_READER_IMPLEMENTATION_VALIDATOR),
@@ -140,6 +168,9 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
       new OptionDefinition(ExecConstants.PARQUET_PAGEREADER_BUFFER_SIZE_VALIDATOR),
       new OptionDefinition(ExecConstants.PARQUET_PAGEREADER_USE_FADVISE_VALIDATOR),
       new OptionDefinition(ExecConstants.PARQUET_READER_INT96_AS_TIMESTAMP_VALIDATOR),
+      new OptionDefinition(ExecConstants.PARQUET_FLAT_READER_BULK_VALIDATOR),
+      new OptionDefinition(ExecConstants.PARQUET_FLAT_BATCH_NUM_RECORDS_VALIDATOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM_AND_SESSION, true, true)),
+      new OptionDefinition(ExecConstants.PARQUET_FLAT_BATCH_MEMORY_SIZE_VALIDATOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM_AND_SESSION, true, true)),
       new OptionDefinition(ExecConstants.JSON_READER_ALL_TEXT_MODE_VALIDATOR),
       new OptionDefinition(ExecConstants.JSON_WRITER_NAN_INF_NUMBERS_VALIDATOR),
       new OptionDefinition(ExecConstants.JSON_READER_NAN_INF_NUMBERS_VALIDATOR),
@@ -160,6 +191,9 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
       new OptionDefinition(ExecConstants.KAFKA_POLL_TIMEOUT_VALIDATOR),
       new OptionDefinition(ExecConstants.KAFKA_READER_READ_NUMBERS_AS_DOUBLE_VALIDATOR),
       new OptionDefinition(ExecConstants.HIVE_OPTIMIZE_SCAN_WITH_NATIVE_READERS_VALIDATOR),
+      new OptionDefinition(ExecConstants.HIVE_OPTIMIZE_PARQUET_SCAN_WITH_NATIVE_READER_VALIDATOR),
+      new OptionDefinition(ExecConstants.HIVE_OPTIMIZE_MAPRDB_JSON_SCAN_WITH_NATIVE_READER_VALIDATOR),
+      new OptionDefinition(ExecConstants.HIVE_CONF_PROPERTIES_VALIDATOR),
       new OptionDefinition(ExecConstants.SLICE_TARGET_OPTION),
       new OptionDefinition(ExecConstants.AFFINITY_FACTOR),
       new OptionDefinition(ExecConstants.MAX_WIDTH_GLOBAL),
@@ -174,12 +208,17 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
       new OptionDefinition(ExecConstants.MIN_HASH_TABLE_SIZE),
       new OptionDefinition(ExecConstants.MAX_HASH_TABLE_SIZE),
       new OptionDefinition(ExecConstants.EARLY_LIMIT0_OPT),
+      new OptionDefinition(ExecConstants.LATE_LIMIT0_OPT),
       new OptionDefinition(ExecConstants.ENABLE_MEMORY_ESTIMATION),
       new OptionDefinition(ExecConstants.MAX_QUERY_MEMORY_PER_NODE),
       new OptionDefinition(ExecConstants.PERCENT_MEMORY_PER_QUERY),
       new OptionDefinition(ExecConstants.MIN_MEMORY_PER_BUFFERED_OP),
       new OptionDefinition(ExecConstants.NON_BLOCKING_OPERATORS_MEMORY),
       new OptionDefinition(ExecConstants.HASH_JOIN_TABLE_FACTOR),
+      new OptionDefinition(ExecConstants.HASHJOIN_HASHTABLE_CALC_TYPE, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM_AND_SESSION, true, true)),
+      new OptionDefinition(ExecConstants.HASHJOIN_SAFETY_FACTOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM_AND_SESSION, true, true)),
+      new OptionDefinition(ExecConstants.HASHJOIN_HASH_DOUBLE_FACTOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM_AND_SESSION, true, true)),
+      new OptionDefinition(ExecConstants.HASHJOIN_FRAGMENTATION_FACTOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM_AND_SESSION, true, true)),
       new OptionDefinition(ExecConstants.HASH_AGG_TABLE_FACTOR),
       new OptionDefinition(ExecConstants.AVERAGE_FIELD_WIDTH),
       new OptionDefinition(ExecConstants.NEW_VIEW_DEFAULT_PERMS_VALIDATOR),
@@ -192,11 +231,14 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
       new OptionDefinition(ClassCompilerSelector.JAVA_COMPILER_DEBUG),
       new OptionDefinition(ExecConstants.ENABLE_VERBOSE_ERRORS),
       new OptionDefinition(ExecConstants.ENABLE_WINDOW_FUNCTIONS_VALIDATOR),
-      new OptionDefinition(ClassTransformer.SCALAR_REPLACEMENT_VALIDATOR),
+      new OptionDefinition(ExecConstants.SCALAR_REPLACEMENT_VALIDATOR),
       new OptionDefinition(ExecConstants.ENABLE_NEW_TEXT_READER),
       new OptionDefinition(ExecConstants.ENABLE_BULK_LOAD_TABLE_LIST),
       new OptionDefinition(ExecConstants.BULK_LOAD_TABLE_LIST_BULK_SIZE),
       new OptionDefinition(ExecConstants.WEB_LOGS_MAX_LINES_VALIDATOR),
+      new OptionDefinition(ExecConstants.WEB_DISPLAY_FORMAT_TIMESTAMP_VALIDATOR),
+      new OptionDefinition(ExecConstants.WEB_DISPLAY_FORMAT_DATE_VALIDATOR),
+      new OptionDefinition(ExecConstants.WEB_DISPLAY_FORMAT_TIME_VALIDATOR),
       new OptionDefinition(ExecConstants.IMPLICIT_FILENAME_COLUMN_LABEL_VALIDATOR),
       new OptionDefinition(ExecConstants.IMPLICIT_SUFFIX_COLUMN_LABEL_VALIDATOR),
       new OptionDefinition(ExecConstants.IMPLICIT_FQN_COLUMN_LABEL_VALIDATOR),
@@ -214,14 +256,22 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
       new OptionDefinition(ExecConstants.ENABLE_VECTOR_VALIDATOR),
       new OptionDefinition(ExecConstants.ENABLE_ITERATOR_VALIDATOR),
       new OptionDefinition(ExecConstants.OUTPUT_BATCH_SIZE_VALIDATOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM, true, false)),
+      new OptionDefinition(ExecConstants.STATS_LOGGING_BATCH_SIZE_VALIDATOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM_AND_SESSION, true, true)),
+      new OptionDefinition(ExecConstants.STATS_LOGGING_BATCH_FG_SIZE_VALIDATOR,new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM_AND_SESSION, true, true)),
+      new OptionDefinition(ExecConstants.STATS_LOGGING_BATCH_OPERATOR_VALIDATOR,new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM_AND_SESSION, true, true)),
+      new OptionDefinition(ExecConstants.OUTPUT_BATCH_SIZE_AVAIL_MEM_FACTOR_VALIDATOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM, true, false)),
       new OptionDefinition(ExecConstants.FRAG_RUNNER_RPC_TIMEOUT_VALIDATOR, new OptionMetaData(OptionValue.AccessibleScopes.SYSTEM, true, true)),
+      new OptionDefinition(ExecConstants.LIST_FILES_RECURSIVELY_VALIDATOR),
+      new OptionDefinition(ExecConstants.QUERY_ROWKEYJOIN_BATCHSIZE)
     };
 
-    final CaseInsensitiveMap<OptionDefinition> map = CaseInsensitiveMap.newHashMap();
+    CaseInsensitiveMap<OptionDefinition> map = Arrays.stream(definitions)
+      .collect(Collectors.toMap(
+        d -> d.getValidator().getOptionName(),
+        Function.identity(),
+        (o, n) -> n,
+        CaseInsensitiveMap::newHashMap));
 
-    for (final OptionDefinition definition: definitions) {
-      map.put(definition.getValidator().getOptionName(), definition);
-    }
 
     if (AssertionUtil.isAssertionsEnabled()) {
       map.put(ExecConstants.DRILLBIT_CONTROL_INJECTIONS, new OptionDefinition(ExecConstants.DRILLBIT_CONTROLS_VALIDATOR));
@@ -275,7 +325,7 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
    * Initializes this option manager.
    *
    * @return this option manager
-   * @throws IOException
+   * @throws Exception if unable to initialize option manager
    */
   public SystemOptionManager init() throws Exception {
     options = provider.getOrCreateStore(config);
@@ -375,16 +425,13 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
 
   @Override
   public void deleteAllLocalOptions() {
-    final Set<String> names = Sets.newHashSet();
-    for (final Map.Entry<String, PersistedOptionValue> entry : Lists.newArrayList(options.getAll())) {
-      names.add(entry.getKey());
-    }
-    for (final String name : names) {
-      options.delete(name); // should be lowercase
-    }
+    Iterable<Map.Entry<String, PersistedOptionValue>> allOptions = () -> options.getAll();
+    StreamSupport.stream(allOptions.spliterator(), false)
+      .map(Entry::getKey)
+      .forEach(name -> options.delete(name)); // should be lowercase
   }
 
-  public static CaseInsensitiveMap<OptionValue> populateDefaultValues(Map<String, OptionDefinition> definitions, DrillConfig bootConfig) {
+  private CaseInsensitiveMap<OptionValue> populateDefaultValues(Map<String, OptionDefinition> definitions, DrillConfig bootConfig) {
     // populate the options from the config
     final Map<String, OptionValue> defaults = new HashMap<>();
 

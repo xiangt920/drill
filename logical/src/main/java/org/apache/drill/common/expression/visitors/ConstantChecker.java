@@ -17,6 +17,7 @@
  */
 package org.apache.drill.common.expression.visitors;
 
+import org.apache.drill.common.expression.AnyValueExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -98,10 +99,7 @@ final class ConstantChecker implements ExprVisitor<Boolean, ErrorCollector, Runt
       return false;
     }
 
-    if (!ifExpr.elseExpression.accept(this, errors)) {
-      return false;
-    }
-    return true;
+    return ifExpr.elseExpression.accept(this, errors);
   }
 
   @Override
@@ -170,6 +168,11 @@ final class ConstantChecker implements ExprVisitor<Boolean, ErrorCollector, Runt
   }
 
   @Override
+  public Boolean visitVarDecimalConstant(ValueExpressions.VarDecimalExpression decExpr, ErrorCollector errors) {
+    return true;
+  }
+
+  @Override
   public Boolean visitDoubleConstant(DoubleExpression dExpr, ErrorCollector errors) {
     return true;
   }
@@ -196,6 +199,11 @@ final class ConstantChecker implements ExprVisitor<Boolean, ErrorCollector, Runt
 
   @Override
   public Boolean visitConvertExpression(ConvertExpression e, ErrorCollector value) throws RuntimeException {
+    return e.getInput().accept(this, value);
+  }
+
+  @Override
+  public Boolean visitAnyValueExpression(AnyValueExpression e, ErrorCollector value) throws RuntimeException {
     return e.getInput().accept(this, value);
   }
 

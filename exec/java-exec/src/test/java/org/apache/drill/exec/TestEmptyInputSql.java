@@ -15,11 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.PlanTestBase;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.drill.exec.planner.physical.PlannerSettings;
 import org.apache.drill.test.BaseTestQuery;
 import org.apache.drill.test.rowSet.schema.SchemaBuilder;
 import org.apache.drill.categories.UnlikelyTest;
@@ -69,7 +70,6 @@ public class TestEmptyInputSql extends BaseTestQuery {
   /**
    * Test with query against an empty file. Select clause has one or more *
    * star column is expanded into an empty list.
-   * @throws Exception
    */
   @Test
   public void testQueryStarColEmptyJson() throws Exception {
@@ -92,7 +92,6 @@ public class TestEmptyInputSql extends BaseTestQuery {
   /**
    * Test with query against an empty file. Select clause has one or more qualified *
    * star column is expanded into an empty list.
-   * @throws Exception
    */
   @Test
   public void testQueryQualifiedStarColEmptyJson() throws Exception {
@@ -129,31 +128,57 @@ public class TestEmptyInputSql extends BaseTestQuery {
 
   /**
    * Test with query against an empty file. Select clause has three expressions.
-   * 1.0 + 100.0 as constant expression, is resolved to required FLOAT8
+   * 1.0 + 100.0 as constant expression, is resolved to required FLOAT8/VARDECIMAL
    * cast(100 as varchar(100) is resolved to required varchar(100)
    * cast(columns as varchar(100)) is resolved to nullable varchar(100).
    */
   @Test
   public void testQueryConstExprEmptyJson() throws Exception {
-    final BatchSchema expectedSchema = new SchemaBuilder()
-        .add("key", TypeProtos.MinorType.FLOAT8)
-        .add("name", TypeProtos.MinorType.VARCHAR, 100)
-        .addNullable("name2", TypeProtos.MinorType.VARCHAR, 100)
-        .build();
+    try {
+      alterSession(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY, false);
+      BatchSchema expectedSchema = new SchemaBuilder()
+          .add("key", TypeProtos.MinorType.FLOAT8)
+          .add("name", TypeProtos.MinorType.VARCHAR, 100)
+          .addNullable("name2", TypeProtos.MinorType.VARCHAR, 100)
+          .build();
 
-    testBuilder()
-        .sqlQuery("select 1.0 + 100.0 as key, "
-          + " cast(100 as varchar(100)) as name, "
-          + " cast(columns as varchar(100)) as name2 "
-          + " from cp.`%s` ", SINGLE_EMPTY_JSON)
-        .schemaBaseLine(expectedSchema)
-        .build()
-        .run();
+      testBuilder()
+          .sqlQuery("select 1.0 + 100.0 as key, "
+            + " cast(100 as varchar(100)) as name, "
+            + " cast(columns as varchar(100)) as name2 "
+            + " from cp.`%s` ", SINGLE_EMPTY_JSON)
+          .schemaBaseLine(expectedSchema)
+          .build()
+          .run();
+
+      alterSession(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY, true);
+      expectedSchema = new SchemaBuilder()
+          .add("key",
+              TypeProtos.MajorType.newBuilder()
+                  .setMinorType(TypeProtos.MinorType.VARDECIMAL)
+                  .setMode(TypeProtos.DataMode.REQUIRED)
+                  .setPrecision(5)
+                  .setScale(1)
+                  .build())
+          .add("name", TypeProtos.MinorType.VARCHAR, 100)
+          .addNullable("name2", TypeProtos.MinorType.VARCHAR, 100)
+          .build();
+
+      testBuilder()
+          .sqlQuery("select 1.0 + 100.0 as key, "
+            + " cast(100 as varchar(100)) as name, "
+            + " cast(columns as varchar(100)) as name2 "
+            + " from cp.`%s` ", SINGLE_EMPTY_JSON)
+          .schemaBaseLine(expectedSchema)
+          .build()
+          .run();
+    } finally {
+      resetSessionOption(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY);
+    }
   }
 
   /**
    * Test select * against empty csv with empty header. * is expanded into empty list of fields.
-   * @throws Exception
    */
   @Test
   public void testQueryEmptyCsvH() throws Exception {
@@ -168,9 +193,8 @@ public class TestEmptyInputSql extends BaseTestQuery {
   }
 
   /**
-   * Test select * against empty csv file. * is exapnede into "columns : repeated-varchar",
+   * Test select * against empty csv file. * is expanded into "columns : repeated-varchar",
    * which is the default column from reading a csv file.
-   * @throws Exception
    */
   @Test
   public void testQueryEmptyCsv() throws Exception {
@@ -198,12 +222,9 @@ public class TestEmptyInputSql extends BaseTestQuery {
 
   @Test
   public void testEmptyDirectoryAndFieldInQuery() throws Exception {
-    final List<Pair<SchemaPath, TypeProtos.MajorType>> expectedSchema = Lists.newArrayList();
-    final TypeProtos.MajorType majorType = TypeProtos.MajorType.newBuilder()
-        .setMinorType(TypeProtos.MinorType.INT) // field "key" is absent in schemaless table
-        .setMode(TypeProtos.DataMode.OPTIONAL)
+    final BatchSchema expectedSchema = new SchemaBuilder()
+        .addNullable("key", TypeProtos.MinorType.INT)
         .build();
-    expectedSchema.add(Pair.of(SchemaPath.getSimplePath("key"), majorType));
 
     testBuilder()
         .sqlQuery("select key from dfs.tmp.`%s`", EMPTY_DIR_NAME)
@@ -212,6 +233,40 @@ public class TestEmptyInputSql extends BaseTestQuery {
         .run();
   }
 
+  @Test
+  public void testRenameProjectEmptyDirectory() throws Exception {
+    final BatchSchema expectedSchema = new SchemaBuilder()
+        .addNullable("WeekId", TypeProtos.MinorType.INT)
+        .addNullable("ProductName", TypeProtos.MinorType.INT)
+        .build();
 
+    testBuilder()
+        .sqlQuery("select WeekId, Product as ProductName from (select CAST(`dir0` as INT) AS WeekId, " +
+            "Product from dfs.tmp.`%s`)", EMPTY_DIR_NAME)
+        .schemaBaseLine(expectedSchema)
+        .build()
+        .run();
+  }
+
+  @Test
+  public void testRenameProjectEmptyJson() throws Exception {
+    final BatchSchema expectedSchema = new SchemaBuilder()
+        .addNullable("WeekId", TypeProtos.MinorType.INT)
+        .addNullable("ProductName", TypeProtos.MinorType.INT)
+        .build();
+
+    testBuilder()
+        .sqlQuery("select WeekId, Product as ProductName from (select CAST(`dir0` as INT) AS WeekId, " +
+            "Product from cp.`%s`)", SINGLE_EMPTY_JSON)
+        .schemaBaseLine(expectedSchema)
+        .build()
+        .run();
+  }
+
+  @Test
+  public void testEmptyDirectoryPlanSerDe() throws Exception {
+    String query = String.format("select * from dfs.tmp.`%s`", EMPTY_DIR_NAME);
+    PlanTestBase.testPhysicalPlanExecutionBasedOnQuery(query);
+  }
 
 }

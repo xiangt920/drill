@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.physical.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -96,6 +95,17 @@ public class WindowPOP extends AbstractSingle {
     return frameUnitsRows;
   }
 
+  @Override
+  public String toString() {
+    return "WindowPOP[withins=" + withins
+        + ", aggregations=" + aggregations
+        + ", orderings=" + orderings
+        + ", frameUnitsRows=" + frameUnitsRows
+        + ", start=" + start
+        + ", end=" + end
+        + "]";
+  }
+
   @JsonTypeName("windowBound")
   public static class Bound {
     private final boolean unbounded;
@@ -117,6 +127,11 @@ public class WindowPOP extends AbstractSingle {
 
     public long getOffset() {
       return offset;
+    }
+
+    @Override
+    public String toString() {
+      return "Bound[unbounded=" + unbounded + ", offset=" + offset + "]";
     }
   }
 

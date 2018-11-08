@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -14,7 +14,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ */
 package org.apache.drill.exec.store;
 
 import org.apache.calcite.schema.SchemaPlus;
@@ -36,7 +36,7 @@ public class PartitionExplorerImpl implements PartitionExplorer {
                                            List<String> partitionValues
                                            ) throws PartitionNotFoundException {
 
-    AbstractSchema subSchema = rootSchema.getSubSchema(schema).unwrap(AbstractSchema.class);
+    AbstractSchema subSchema = rootSchema.getSubSchema(schema.toLowerCase()).unwrap(AbstractSchema.class);
     return subSchema.getSubPartitions(table, partitionColumns, partitionValues);
   }
 }

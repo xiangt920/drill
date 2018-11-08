@@ -22,7 +22,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 
 import org.apache.drill.exec.ops.QueryContext;
 import org.apache.drill.exec.physical.PhysicalPlan;
@@ -38,8 +37,8 @@ import org.apache.drill.exec.work.foreman.rm.QueryQueue.QueryQueueException;
 import org.apache.drill.exec.work.foreman.rm.QueryQueue.QueueLease;
 import org.apache.drill.exec.work.foreman.rm.QueryQueue.QueueTimeoutException;
 
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.Multimap;
+import org.apache.drill.shaded.guava.com.google.common.collect.ArrayListMultimap;
+import org.apache.drill.shaded.guava.com.google.common.collect.Multimap;
 
 /**
  * Global resource manager that provides basic admission control (AC) via a
@@ -230,7 +229,7 @@ public class ThrottledResourceManager extends AbstractResourceManager {
       @Override
       public Void visitOp(PhysicalOperator op, List<PhysicalOperator> value)
           throws RuntimeException {
-        if (op.isBufferedOperator()) {
+        if (op.isBufferedOperator(null)) {
           value.add(op);
         }
         visitChildren(op, value);

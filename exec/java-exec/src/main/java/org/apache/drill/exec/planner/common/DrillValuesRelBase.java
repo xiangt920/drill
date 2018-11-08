@@ -1,10 +1,11 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,11 +17,15 @@
  */
 package org.apache.drill.exec.planner.common;
 
-import com.fasterxml.jackson.core.JsonLocation;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.util.TokenBuffer;
-import com.google.common.collect.ImmutableList;
+import static org.apache.drill.exec.planner.logical.DrillOptiq.isLiteralNull;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.core.Values;
@@ -29,29 +34,28 @@ import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.util.NlsString;
 import org.apache.drill.common.JSONOptions;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
+import org.apache.drill.common.util.GuavaUtils;
 import org.apache.drill.exec.vector.complex.fn.ExtendedJsonOutput;
 import org.apache.drill.exec.vector.complex.fn.JsonOutput;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeConstants;
 import org.joda.time.Period;
 
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.util.List;
-
-import static org.apache.drill.exec.planner.logical.DrillOptiq.isLiteralNull;
+import com.fasterxml.jackson.core.JsonLocation;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.util.TokenBuffer;
 
 /**
  * Base class for logical and physical Values implemented in Drill.
  */
 public abstract class DrillValuesRelBase extends Values implements DrillRelNode {
 
-  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DrillValuesRelBase.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   protected final JSONOptions content;
 
-  public DrillValuesRelBase(RelOptCluster cluster, RelDataType rowType, ImmutableList<ImmutableList<RexLiteral>> tuples, RelTraitSet traits) {
+  public DrillValuesRelBase(RelOptCluster cluster, RelDataType rowType, List<? extends List<RexLiteral>> tuples, RelTraitSet traits) {
     this(cluster, rowType, tuples, traits, convertToJsonOptions(rowType, tuples));
   }
 
@@ -61,10 +65,10 @@ public abstract class DrillValuesRelBase extends Values implements DrillRelNode 
    */
   public DrillValuesRelBase(RelOptCluster cluster,
                             RelDataType rowType,
-                            ImmutableList<ImmutableList<RexLiteral>> tuples,
+                            List<? extends List<RexLiteral>> tuples,
                             RelTraitSet traits,
                             JSONOptions content) {
-    super(cluster, rowType, tuples, traits);
+    super(cluster, rowType, GuavaUtils.convertToNestedUnshadedImmutableList(tuples), traits);
     this.content = content;
   }
 
@@ -83,7 +87,7 @@ public abstract class DrillValuesRelBase extends Values implements DrillRelNode 
    * @param tuples list of constant values in a row-expression
    * @return json representation of tuples
    */
-  private static JSONOptions convertToJsonOptions(RelDataType rowType, ImmutableList<ImmutableList<RexLiteral>> tuples) {
+  private static JSONOptions convertToJsonOptions(RelDataType rowType, List<? extends List<RexLiteral>> tuples) {
     try {
       return new JSONOptions(convertToJsonNode(rowType, tuples), JsonLocation.NA);
     } catch (IOException e) {
@@ -91,7 +95,7 @@ public abstract class DrillValuesRelBase extends Values implements DrillRelNode 
     }
   }
 
-  private static JsonNode convertToJsonNode(RelDataType rowType, ImmutableList<ImmutableList<RexLiteral>> tuples) throws IOException {
+  private static JsonNode convertToJsonNode(RelDataType rowType, List<? extends List<RexLiteral>> tuples) throws IOException {
     TokenBuffer out = new TokenBuffer(MAPPER.getFactory().getCodec(), false);
     JsonOutput json = new ExtendedJsonOutput(out);
     json.writeStartArray();
@@ -168,12 +172,13 @@ public abstract class DrillValuesRelBase extends Values implements DrillRelNode 
         return;
 
       case DECIMAL:
+        // Converting exact decimal into double since values in the list may have different scales
+        // so the resulting scale wouldn't be calculated correctly
         if (isLiteralNull(literal)) {
           out.writeDoubleNull();
         } else {
           out.writeDouble(((BigDecimal) literal.getValue()).doubleValue());
         }
-        logger.warn("Converting exact decimal into approximate decimal. Should be fixed once full decimal support is implemented.");
         return;
 
       case VARCHAR:
@@ -196,7 +201,7 @@ public abstract class DrillValuesRelBase extends Values implements DrillRelNode 
         if (isLiteralNull(literal)) {
           out.writeDateNull();
         } else {
-          out.writeDate(new DateTime(literal.getValue()));
+          out.writeDate(LocalDateTime.ofInstant(Instant.ofEpochMilli(new DateTime(literal.getValue()).getMillis()), ZoneOffset.UTC).toLocalDate());
         }
         return;
 
@@ -204,7 +209,7 @@ public abstract class DrillValuesRelBase extends Values implements DrillRelNode 
         if (isLiteralNull(literal)) {
           out.writeTimeNull();
         } else {
-          out.writeTime(new DateTime(literal.getValue()));
+          out.writeTime(LocalDateTime.ofInstant(Instant.ofEpochMilli(new DateTime(literal.getValue()).getMillis()), ZoneOffset.UTC).toLocalTime());
         }
         return;
 
@@ -212,7 +217,7 @@ public abstract class DrillValuesRelBase extends Values implements DrillRelNode 
         if (isLiteralNull(literal)) {
           out.writeTimestampNull();
         } else {
-          out.writeTimestamp(new DateTime(literal.getValue()));
+          out.writeTimestamp(LocalDateTime.ofInstant(Instant.ofEpochMilli(new DateTime(literal.getValue()).getMillis()), ZoneOffset.UTC));
         }
         return;
 

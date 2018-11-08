@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -14,7 +14,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ */
 package org.apache.drill;
 
 import static org.apache.drill.test.TestBuilder.listOf;
@@ -39,7 +39,7 @@ import org.apache.drill.test.TestBuilder;
 import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 // TODO - update framework to remove any dependency on the Drill engine for reading baseline result sets
 // currently using it with the assumption that the csv and json readers are well tested, and handling diverse
@@ -144,7 +144,7 @@ public class TestFrameworkTest extends BaseTestQuery {
           .sqlQuery("select cast(dec_col as decimal(38,2)) dec_col from cp.`testframework/decimal_test.json`")
           .unOrdered()
           .csvBaselineFile("testframework/decimal_test.tsv")
-          .baselineTypes(Types.withScaleAndPrecision(TypeProtos.MinorType.DECIMAL38SPARSE, TypeProtos.DataMode.REQUIRED, 2, 38))
+          .baselineTypes(Types.withScaleAndPrecision(TypeProtos.MinorType.VARDECIMAL, TypeProtos.DataMode.REQUIRED, 2, 38))
           .baselineColumns("dec_col")
           .build().run();
 

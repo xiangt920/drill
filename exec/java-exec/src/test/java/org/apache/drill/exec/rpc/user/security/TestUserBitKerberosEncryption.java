@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.rpc.user.security;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import com.typesafe.config.ConfigValueFactory;
 import org.apache.drill.test.BaseTestQuery;
 import org.apache.drill.categories.SecurityTest;
@@ -31,7 +31,6 @@ import org.apache.drill.exec.rpc.data.DataRpcMetrics;
 import org.apache.drill.exec.rpc.security.KerberosHelper;
 import org.apache.drill.exec.rpc.user.UserRpcMetrics;
 import org.apache.drill.exec.rpc.user.security.testing.UserAuthenticatorTestImpl;
-import org.apache.drill.exec.server.BootStrapContext;
 import org.apache.hadoop.security.authentication.util.KerberosName;
 import org.apache.hadoop.security.authentication.util.KerberosUtil;
 import org.apache.kerby.kerberos.kerb.client.JaasKrbUtil;
@@ -513,8 +512,7 @@ public class TestUserBitKerberosEncryption extends BaseTestQuery {
       fail();
     } catch (Exception ex) {
       assert (ex.getCause() instanceof NonTransientRpcException);
-      System.out.println("Caught exception: " + ex.getMessage());
-      logger.info("Caught exception: " + ex.getMessage());
+      logger.error("Caught exception: ", ex);
     }
   }
 
@@ -544,8 +542,7 @@ public class TestUserBitKerberosEncryption extends BaseTestQuery {
       fail();
     } catch (Exception ex) {
       assert (ex.getCause() instanceof NonTransientRpcException);
-      System.out.println("Caught exception: " + ex.getMessage());
-      logger.info("Caught exception: " + ex.getMessage());
+      logger.error("Caught exception: ", ex);
     }
   }
 
@@ -580,8 +577,7 @@ public class TestUserBitKerberosEncryption extends BaseTestQuery {
       fail();
     } catch (Exception ex) {
       assert (ex.getCause() instanceof RpcException);
-      System.out.println("Caught exception: " + ex.getMessage());
-      logger.info("Caught exception: " + ex.getMessage());
+      logger.error("Caught exception: ", ex);
     }
   }
 

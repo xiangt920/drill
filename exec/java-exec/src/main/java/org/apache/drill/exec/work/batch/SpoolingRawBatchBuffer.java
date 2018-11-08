@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -43,10 +43,10 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
-import com.google.common.collect.Queues;
+import org.apache.drill.shaded.guava.com.google.common.base.Joiner;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.collect.Queues;
 
 /**
  * This implementation of RawBatchBuffer starts writing incoming batches to disk once the buffer size reaches a threshold.
@@ -102,14 +102,10 @@ public class SpoolingRawBatchBuffer extends BaseRawBatchBuffer<SpoolingRawBatchB
     }
 
     @Override
-    public RawFragmentBatch poll() throws IOException {
+    public RawFragmentBatch poll() throws IOException, InterruptedException {
       RawFragmentBatchWrapper batchWrapper = buffer.poll();
       if (batchWrapper != null) {
-        try {
-          return batchWrapper.get();
-        } catch (InterruptedException e) {
-          return null;
-        }
+        return batchWrapper.get();
       }
       return null;
     }
@@ -117,6 +113,15 @@ public class SpoolingRawBatchBuffer extends BaseRawBatchBuffer<SpoolingRawBatchB
     @Override
     public RawFragmentBatch take() throws IOException, InterruptedException {
       return buffer.take().get();
+    }
+
+    @Override
+    public RawFragmentBatch poll(long timeout, TimeUnit timeUnit) throws InterruptedException, IOException {
+      RawFragmentBatchWrapper batchWrapper = buffer.poll(timeout, timeUnit);
+      if (batchWrapper != null) {
+        return batchWrapper.get();
+      }
+      return null;
     }
 
     @Override

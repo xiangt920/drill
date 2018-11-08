@@ -33,9 +33,9 @@ import javax.ws.rs.core.SecurityContext;
 import javax.xml.bind.annotation.XmlRootElement;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.google.common.base.Joiner;
-import com.google.common.base.Strings;
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.base.Joiner;
+import org.apache.drill.shaded.guava.com.google.common.base.Strings;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
@@ -88,7 +88,7 @@ public class DrillRoot {
     Collection<DrillbitInfo> drillbits = getClusterInfoJSON().getDrillbits();
     Map<String, String> drillStatusMap = new HashMap<String, String>();
     for (DrillbitInfo drillbit : drillbits) {
-      drillStatusMap.put(drillbit.getAddress() + "-" + drillbit.getUserPort(), drillbit.getState());
+      drillStatusMap.put(drillbit.getAddress() + "-" + drillbit.getHttpPort(), drillbit.getState());
     }
     return setResponse(drillStatusMap);
   }
@@ -239,6 +239,7 @@ public class DrillRoot {
   private Response shutdown(String resp) throws Exception {
     Map<String, String> shutdownInfo = new HashMap<String, String>();
     new Thread(new Runnable() {
+        @Override
         public void run() {
           try {
             drillbit.close();
@@ -421,6 +422,7 @@ public static class ClusterInfo {
 
 public static class DrillbitInfo implements Comparable<DrillbitInfo> {
   private final String address;
+  private final String httpPort;
   private final String userPort;
   private final String controlPort;
   private final String dataPort;
@@ -432,6 +434,7 @@ public static class DrillbitInfo implements Comparable<DrillbitInfo> {
   @JsonCreator
   public DrillbitInfo(DrillbitEndpoint drillbit, boolean current, boolean versionMatch) {
     this.address = drillbit.getAddress();
+    this.httpPort = String.valueOf(drillbit.getHttpPort());
     this.userPort = String.valueOf(drillbit.getUserPort());
     this.controlPort = String.valueOf(drillbit.getControlPort());
     this.dataPort = String.valueOf(drillbit.getDataPort());
@@ -442,6 +445,8 @@ public static class DrillbitInfo implements Comparable<DrillbitInfo> {
   }
 
   public String getAddress() { return address; }
+
+  public String getHttpPort() { return httpPort; }
 
   public String getUserPort() { return userPort; }
 

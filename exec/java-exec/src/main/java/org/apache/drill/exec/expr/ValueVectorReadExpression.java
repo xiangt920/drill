@@ -17,15 +17,15 @@
  */
 package org.apache.drill.exec.expr;
 
-import java.util.Iterator;
-
-import com.google.common.collect.ImmutableSet;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet;
 import org.apache.drill.common.expression.ExpressionPosition;
 import org.apache.drill.common.expression.LogicalExpression;
 import org.apache.drill.common.expression.PathSegment;
 import org.apache.drill.common.expression.visitors.ExprVisitor;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.exec.record.TypedFieldId;
+
+import java.util.Iterator;
 
 /**
  * Wraps a value vector field to be read, providing metadata about the field.
@@ -73,6 +73,10 @@ public class ValueVectorReadExpression implements LogicalExpression {
 
   @Override
   public <T, V, E extends Exception> T accept(ExprVisitor<T, V, E> visitor, V value) throws E {
+    if (visitor instanceof AbstractExecExprVisitor) {
+      AbstractExecExprVisitor<T, V, E> abstractExecExprVisitor = (AbstractExecExprVisitor<T, V, E>) visitor;
+      return abstractExecExprVisitor.visitValueVectorReadExpression(this, value);
+    }
     return visitor.visitUnknown(this, value);
   }
 

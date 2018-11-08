@@ -17,9 +17,9 @@
  */
 package org.apache.drill.exec.rpc.data;
 
-import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigValueFactory;
 import io.netty.buffer.ByteBuf;
@@ -69,7 +69,6 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.mockito.Mockito;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.List;
@@ -164,8 +163,6 @@ public class TestBitBitKerberos extends BaseTestQuery {
     @Override
     public void success(Ack value, ByteBuf buffer) {
       long micros = watch.elapsed(TimeUnit.MILLISECONDS);
-      System.out.println(String.format("Total time to send: %d, start time %d", micros,
-          System.currentTimeMillis() - micros));
       while (true) {
         long nowMax = max.get();
         if (nowMax < micros) {
@@ -226,9 +223,7 @@ public class TestBitBitKerberos extends BaseTestQuery {
         tunnel.sendRecordBatch(new TimingOutcome(max),
           new FragmentWritableBatch(false, QueryId.getDefaultInstance(), 1, 1, 1, 1,
             getRandomBatch(c1.getAllocator(), 5000)));
-        System.out.println(System.currentTimeMillis() - t1);
       }
-      System.out.println(String.format("Max time: %d", max.get()));
       assertTrue(max.get() > 2700);
       Thread.sleep(5000);
     } catch (Exception | AssertionError e) {
@@ -283,9 +278,7 @@ public class TestBitBitKerberos extends BaseTestQuery {
         tunnel.sendRecordBatch(new TimingOutcome(max),
           new FragmentWritableBatch(false, QueryId.getDefaultInstance(), 1, 1, 1, 1,
             getRandomBatch(c2.getAllocator(), 5000)));
-        System.out.println(System.currentTimeMillis() - t1);
       }
-      System.out.println(String.format("Max time: %d", max.get()));
       assertTrue(max.get() > 2700);
       Thread.sleep(5000);
     } finally {
@@ -343,9 +336,7 @@ public class TestBitBitKerberos extends BaseTestQuery {
         tunnel.sendRecordBatch(new TimingOutcome(max),
           new FragmentWritableBatch(false, QueryId.getDefaultInstance(), 1, 1, 1, 1,
             getRandomBatch(c2.getAllocator(), 5000)));
-        System.out.println(System.currentTimeMillis() - t1);
       }
-      System.out.println(String.format("Max time: %d", max.get()));
       assertTrue(max.get() > 2700);
       Thread.sleep(5000);
     } catch (Exception | AssertionError ex) {
@@ -493,7 +484,6 @@ public class TestBitBitKerberos extends BaseTestQuery {
       try {
         v++;
         if (v % 10 == 0) {
-          System.out.println("sleeping.");
           Thread.sleep(3000);
         }
       } catch (InterruptedException e) {

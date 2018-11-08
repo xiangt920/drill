@@ -24,16 +24,21 @@ import org.apache.drill.exec.record.ExpandableHyperContainer;
 import org.apache.drill.exec.record.RecordBatch;
 import org.apache.drill.exec.record.VectorContainer;
 import org.apache.drill.exec.record.VectorWrapper;
-
+import org.apache.drill.exec.util.record.RecordBatchStats;
+import org.apache.drill.exec.util.record.RecordBatchStats.RecordBatchIOType;
 import javax.inject.Named;
 import java.util.LinkedList;
 import java.util.List;
+
+import static org.apache.drill.exec.record.JoinBatchMemoryManager.LEFT_INDEX;
 
 /*
  * Template class that combined with the runtime generated source implements the NestedLoopJoin interface. This
  * class contains the main nested loop join logic.
  */
 public abstract class NestedLoopJoinTemplate implements NestedLoopJoin {
+
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(NestedLoopJoinBatch.class);
 
   // Current left input batch being processed
   private RecordBatch left = null;
@@ -49,6 +54,8 @@ public abstract class NestedLoopJoinTemplate implements NestedLoopJoin {
 
   // Iteration status tracker
   private IterationStatusTracker tracker = new IterationStatusTracker();
+
+  private int targetOutputRecords;
 
   /**
    * Method initializes necessary state and invokes the doSetup() to set the
@@ -69,8 +76,12 @@ public abstract class NestedLoopJoinTemplate implements NestedLoopJoin {
     this.leftRecordCount = left.getRecordCount();
     this.rightCounts = rightCounts;
     this.outgoing = outgoing;
-
     doSetup(context, rightContainer, left, outgoing);
+  }
+
+  @Override
+  public void setTargetOutputCount(int targetOutputRecords) {
+    this.targetOutputRecords = targetOutputRecords;
   }
 
   /**
@@ -84,11 +95,11 @@ public abstract class NestedLoopJoinTemplate implements NestedLoopJoin {
     int outputIndex = 0;
     while (leftRecordCount != 0) {
       outputIndex = populateOutgoingBatch(joinType, outputIndex);
-      if (outputIndex >= NestedLoopJoinBatch.MAX_BATCH_SIZE) {
+      if (outputIndex >= targetOutputRecords) {
         break;
       }
       // reset state and get next left batch
-      resetAndGetNextLeft();
+      resetAndGetNextLeft(outputIndex);
     }
     return outputIndex;
   }
@@ -128,7 +139,7 @@ public abstract class NestedLoopJoinTemplate implements NestedLoopJoin {
             outputIndex++;
             rightRecordMatched = true;
 
-            if (outputIndex >= NestedLoopJoinBatch.MAX_BATCH_SIZE) {
+            if (outputIndex >= targetOutputRecords) {
               nextRightRecordToProcess++;
 
               // no more space left in the batch, stop processing
@@ -143,7 +154,7 @@ public abstract class NestedLoopJoinTemplate implements NestedLoopJoin {
         // project records from the left side only, records from right will be null
         emitLeft(nextLeftRecordToProcess, outputIndex);
         outputIndex++;
-        if (outputIndex >= NestedLoopJoinBatch.MAX_BATCH_SIZE) {
+        if (outputIndex >= targetOutputRecords) {
           nextLeftRecordToProcess++;
 
           // no more space left in the batch, stop processing
@@ -165,7 +176,7 @@ public abstract class NestedLoopJoinTemplate implements NestedLoopJoin {
    * Resets some internal state which indicates the next records to process in the left and right batches,
    * also fetches the next left input batch.
    */
-  private void resetAndGetNextLeft() {
+  private void resetAndGetNextLeft(int outputIndex) {
     for (VectorWrapper<?> vw : left) {
       vw.getValueVector().clear();
     }
@@ -181,6 +192,10 @@ public abstract class NestedLoopJoinTemplate implements NestedLoopJoin {
         leftRecordCount = 0;
         break;
       case OK:
+        setTargetOutputCount(outgoing.getBatchMemoryManager().update(left, LEFT_INDEX,outputIndex));
+        RecordBatchStats.logRecordBatchStats(RecordBatchIOType.INPUT_LEFT,
+          outgoing.getBatchMemoryManager().getRecordBatchSizer(LEFT_INDEX),
+          outgoing.getRecordBatchStatsContext());
         leftRecordCount = left.getRecordCount();
         break;
     }

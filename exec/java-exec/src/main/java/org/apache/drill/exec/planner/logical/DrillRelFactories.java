@@ -15,20 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.planner.logical;
 
 import org.apache.calcite.plan.Contexts;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.CorrelationId;
+import org.apache.calcite.rel.core.JoinInfo;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.core.RelFactories;
-import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.tools.RelBuilderFactory;
+import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.drill.exec.planner.DrillRelBuilder;
 
 import java.util.List;
@@ -39,7 +40,6 @@ import static org.apache.calcite.rel.core.RelFactories.DEFAULT_FILTER_FACTORY;
 import static org.apache.calcite.rel.core.RelFactories.DEFAULT_JOIN_FACTORY;
 import static org.apache.calcite.rel.core.RelFactories.DEFAULT_MATCH_FACTORY;
 import static org.apache.calcite.rel.core.RelFactories.DEFAULT_PROJECT_FACTORY;
-import static org.apache.calcite.rel.core.RelFactories.DEFAULT_SEMI_JOIN_FACTORY;
 import static org.apache.calcite.rel.core.RelFactories.DEFAULT_SET_OP_FACTORY;
 import static org.apache.calcite.rel.core.RelFactories.DEFAULT_SORT_FACTORY;
 import static org.apache.calcite.rel.core.RelFactories.DEFAULT_TABLE_SCAN_FACTORY;
@@ -50,7 +50,7 @@ import static org.apache.calcite.rel.core.RelFactories.DEFAULT_VALUES_FACTORY;
  */
 
 public class DrillRelFactories {
-
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DrillRelFactories.class);
   public static final RelFactories.ProjectFactory DRILL_LOGICAL_PROJECT_FACTORY =
       new DrillProjectFactoryImpl();
 
@@ -59,6 +59,18 @@ public class DrillRelFactories {
 
   public static final RelFactories.JoinFactory DRILL_LOGICAL_JOIN_FACTORY = new DrillJoinFactoryImpl();
 
+  public static final RelFactories.AggregateFactory DRILL_LOGICAL_AGGREGATE_FACTORY = new DrillAggregateFactoryImpl();
+
+  public static final RelFactories.SemiJoinFactory DRILL_SEMI_JOIN_FACTORY = new SemiJoinFactoryImpl();
+
+  private static class SemiJoinFactoryImpl implements RelFactories.SemiJoinFactory {
+    public RelNode createSemiJoin(RelNode left, RelNode right,
+                                  RexNode condition) {
+      final JoinInfo joinInfo = JoinInfo.of(left, right, condition);
+      return DrillSemiJoinRel.create(left, right,
+              condition, joinInfo.leftKeys, joinInfo.rightKeys);
+    }
+  }
   /**
    * A {@link RelBuilderFactory} that creates a {@link DrillRelBuilder} that will
    * create logical relational expressions for everything.
@@ -68,7 +80,7 @@ public class DrillRelFactories {
           Contexts.of(DEFAULT_PROJECT_FACTORY,
               DEFAULT_FILTER_FACTORY,
               DEFAULT_JOIN_FACTORY,
-              DEFAULT_SEMI_JOIN_FACTORY,
+              DRILL_SEMI_JOIN_FACTORY,
               DEFAULT_SORT_FACTORY,
               DEFAULT_AGGREGATE_FACTORY,
               DEFAULT_MATCH_FACTORY,
@@ -78,7 +90,7 @@ public class DrillRelFactories {
 
   /**
    * Implementation of {@link RelFactories.ProjectFactory} that returns a vanilla
-   * {@link org.apache.calcite.rel.logical.LogicalProject}.
+   * {@link DrillProjectRel}.
    */
   private static class DrillProjectFactoryImpl implements RelFactories.ProjectFactory {
     @Override
@@ -94,7 +106,7 @@ public class DrillRelFactories {
 
   /**
    * Implementation of {@link RelFactories.FilterFactory} that
-   * returns a vanilla {@link LogicalFilter}.
+   * returns a vanilla {@link DrillFilterRel}.
    */
   private static class DrillFilterFactoryImpl implements RelFactories.FilterFactory {
     @Override
@@ -105,7 +117,7 @@ public class DrillRelFactories {
 
   /**
    * Implementation of {@link RelFactories.JoinFactory} that returns a vanilla
-   * {@link org.apache.calcite.rel.logical.LogicalJoin}.
+   * {@link DrillJoinRel}.
    */
   private static class DrillJoinFactoryImpl implements RelFactories.JoinFactory {
 
@@ -124,4 +136,16 @@ public class DrillRelFactories {
     }
   }
 
+  /**
+   * Implementation of {@link RelFactories.AggregateFactory} that returns a vanilla
+   * {@link DrillAggregateRel}.
+   */
+  private static class DrillAggregateFactoryImpl implements RelFactories.AggregateFactory {
+
+    @Override
+    public RelNode createAggregate(RelNode input, boolean indicator, ImmutableBitSet groupSet,
+                                   com.google.common.collect.ImmutableList<ImmutableBitSet> groupSets, List<AggregateCall> aggCalls) {
+      return new DrillAggregateRel(input.getCluster(), input.getTraitSet(), input, indicator, groupSet, groupSets, aggCalls);
+    }
+  }
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -35,8 +35,8 @@ import org.apache.drill.exec.memory.BaseAllocator.Verbosity;
 import org.apache.drill.exec.metrics.DrillMetrics;
 import org.apache.drill.exec.ops.BufferManager;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 
 /**
  * Manages the relationship between one or more allocators and a particular
@@ -344,7 +344,7 @@ public class AllocationManager {
      * use.
      *
      * @param allocator
-     * @return
+     * @return The ledger associated with a particular BufferAllocator.
      */
 
     public BufferLedger getLedgerForAllocator(BufferAllocator allocator) {
@@ -375,10 +375,8 @@ public class AllocationManager {
      * @param length
      *          The length in bytes that this DrillBuf will provide access to.
      * @param manager
-     *          An optional BufferManager argument that can be used to manage expansion of this DrillBuf
-     * @param retain
-     *          Whether or not the newly created buffer should get an additional reference count added to it.
-     * @return A new DrillBuf that shares references with all DrillBufs associated with this BufferLedger
+     *          An optional BufferManager argument that can be used to manage expansion of this DrillBuf.
+     * @return A new DrillBuf that shares references with all DrillBufs associated with this BufferLedger.
      */
     public DrillBuf newDrillBuf(int offset, int length, BufferManager manager) {
       allocator.assertOpen();

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * <p/>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,8 +17,8 @@
  */
 package org.apache.drill.exec.store;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 import org.apache.drill.test.BaseTestQuery;
 import org.apache.drill.test.rowSet.schema.SchemaBuilder;
 import org.apache.drill.common.types.TypeProtos;
@@ -59,11 +59,11 @@ public class TestImplicitFileColumns extends BaseTestQuery {
   public static void setup() throws Exception {
     File files = dirTestWatcher.makeRootSubDir(FILES);
     mainFile = new File(files, MAIN_FILE);
-    Files.write(MAIN, mainFile, Charsets.UTF_8);
+    Files.asCharSink(mainFile, Charsets.UTF_8).write(MAIN);
     File nestedFolder = new File(files, NESTED);
     nestedFolder.mkdirs();
     nestedFile = new File(nestedFolder, NESTED_FILE);
-    Files.write(NESTED, nestedFile, Charsets.UTF_8);
+    Files.asCharSink(nestedFile, Charsets.UTF_8).write(NESTED);
 
     dirTestWatcher.copyResourceToRoot(JSON_TBL);
     dirTestWatcher.copyResourceToRoot(PARQUET_TBL);

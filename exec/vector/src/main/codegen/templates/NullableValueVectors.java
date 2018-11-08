@@ -52,6 +52,17 @@ package org.apache.drill.exec.vector;
 
 public final class ${className} extends BaseDataValueVector implements <#if type.major == "VarLen">VariableWidth<#else>FixedWidth</#if>Vector, NullableVector {
 
+  /**
+   * Optimization to set contiguous values nullable state in a bulk manner; cannot define this array
+   * within the Mutator class as Java doesn't allow static initialization within a non static inner class.
+   */
+  private static final int DEFINED_VALUES_ARRAY_LEN = 1 << 10;
+  private static final byte[] DEFINED_VALUES_ARRAY  = new byte[DEFINED_VALUES_ARRAY_LEN];
+
+  static {
+    Arrays.fill(DEFINED_VALUES_ARRAY, (byte) 1);
+  }
+
   private final FieldReader reader = new Nullable${minor.class}ReaderImpl(Nullable${minor.class}Vector.this);
 
   /**
@@ -212,6 +223,13 @@ public final class ${className} extends BaseDataValueVector implements <#if type
     // the value length.
     return bits.getPayloadByteCount(valueCount) + values.getPayloadByteCount(valueCount);
   }
+
+  <#if type.major != "VarLen">
+  @Override
+  public int getValueWidth(){
+    return bits.getValueWidth() + ${type.width};
+  }
+  </#if>
 
   <#if type.major == "VarLen">
   @Override
@@ -377,6 +395,13 @@ public final class ${className} extends BaseDataValueVector implements <#if type
     return v;
   }
 
+  /**
+   * @return Underlying "bits" vector value capacity
+   */
+  public int getBitsValueCapacity() {
+    return bits.getValueCapacity();
+  }
+
   public void copyFrom(int fromIndex, int thisIndex, Nullable${minor.class}Vector from){
     final Accessor fromAccessor = from.getAccessor();
     if (!fromAccessor.isNull(fromIndex)) {
@@ -408,7 +433,7 @@ public final class ${className} extends BaseDataValueVector implements <#if type
 
     // Handle the case of not-nullable copied into a nullable
     if (from instanceof ${minor.class}Vector) {
-      bits.getMutator().set(toIndex,1);
+      bits.getMutator().setSafe(toIndex,1);
       values.copyFromSafe(fromIndex,toIndex,(${minor.class}Vector)from);
       return;
     }
@@ -482,7 +507,7 @@ public final class ${className} extends BaseDataValueVector implements <#if type
       vAccessor.get(index, holder);
       holder.isSet = bAccessor.get(index);
 
-      <#if minor.class.startsWith("Decimal")>
+      <#if minor.class.contains("Decimal")>
       holder.scale = getField().getScale();
       holder.precision = getField().getPrecision();
       </#if>
@@ -530,6 +555,18 @@ public final class ${className} extends BaseDataValueVector implements <#if type
       bits.getMutator().set(index, 1);
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public void setIndexDefined(int index, int numValues) {
+      int remaining = numValues;
+
+      while (remaining > 0) {
+        int batchSz = Math.min(remaining, DEFINED_VALUES_ARRAY_LEN);
+        bits.getMutator().set(index + (numValues - remaining), DEFINED_VALUES_ARRAY, 0, batchSz);
+        remaining -= batchSz;
+      }
+    }
+
     /**
      * Set the variable length element at the specified index to the supplied value.
      *
@@ -542,9 +579,7 @@ public final class ${className} extends BaseDataValueVector implements <#if type
       final ${valuesName}.Mutator valuesMutator = values.getMutator();
       final UInt1Vector.Mutator bitsMutator = bits.getMutator();
       <#if type.major == "VarLen">
-      for (int i = lastSet + 1; i < index; i++) {
-        valuesMutator.set(i, emptyByteArray);
-      }
+      valuesMutator.fillEmpties(lastSet, index);
       </#if>
       bitsMutator.set(index, 1);
       valuesMutator.set(index, value);
@@ -554,9 +589,7 @@ public final class ${className} extends BaseDataValueVector implements <#if type
     <#if type.major == "VarLen">
     private void fillEmpties(int index) {
       final ${valuesName}.Mutator valuesMutator = values.getMutator();
-      for (int i = lastSet; i < index; i++) {
-        valuesMutator.setSafe(i + 1, emptyByteArray);
-      }
+      valuesMutator.fillEmpties(lastSet, index+1);
       while(index > bits.getValueCapacity()) {
         bits.reAlloc();
       }
@@ -607,9 +640,7 @@ public final class ${className} extends BaseDataValueVector implements <#if type
     public void set(int index, Nullable${minor.class}Holder holder) {
       final ${valuesName}.Mutator valuesMutator = values.getMutator();
       <#if type.major == "VarLen">
-      for (int i = lastSet + 1; i < index; i++) {
-        valuesMutator.set(i, emptyByteArray);
-      }
+      valuesMutator.fillEmpties(lastSet, index);
       </#if>
       bits.getMutator().set(index, holder.isSet);
       valuesMutator.set(index, holder);
@@ -619,9 +650,7 @@ public final class ${className} extends BaseDataValueVector implements <#if type
     public void set(int index, ${minor.class}Holder holder) {
       final ${valuesName}.Mutator valuesMutator = values.getMutator();
       <#if type.major == "VarLen">
-      for (int i = lastSet + 1; i < index; i++) {
-        valuesMutator.set(i, emptyByteArray);
-      }
+      valuesMutator.fillEmpties(lastSet, index);
       </#if>
       bits.getMutator().set(index, 1);
       valuesMutator.set(index, holder);
@@ -636,9 +665,7 @@ public final class ${className} extends BaseDataValueVector implements <#if type
     public void set(int index, int isSet<#list fields as field><#if field.include!true >, ${field.type} ${field.name}Field</#if></#list> ) {
       final ${valuesName}.Mutator valuesMutator = values.getMutator();
       <#if type.major == "VarLen">
-      for (int i = lastSet + 1; i < index; i++) {
-        valuesMutator.set(i, emptyByteArray);
-      }
+      valuesMutator.fillEmpties(lastSet, index);
       </#if>
       bits.getMutator().set(index, isSet);
       valuesMutator.set(index<#list fields as field><#if field.include!true >, ${field.name}Field</#if></#list>);
@@ -694,17 +721,29 @@ public final class ${className} extends BaseDataValueVector implements <#if type
     }
 
     </#if>
-    <#if minor.class == "Decimal28Sparse" || minor.class == "Decimal38Sparse">
+    <#if minor.class == "Decimal28Sparse" || minor.class == "Decimal38Sparse" || minor.class == "VarDecimal">
     public void set(int index, BigDecimal value) {
+      <#if type.major == "VarLen">
+      if (index > lastSet + 1) {
+        fillEmpties(index);
+      }
+      </#if>
       bits.getMutator().set(index, 1);
       values.getMutator().set(index, value);
       setCount++;
+      <#if type.major == "VarLen">lastSet = index;</#if>
     }
 
     public void setSafe(int index, BigDecimal value) {
+      <#if type.major == "VarLen">
+      if (index > lastSet + 1) {
+        fillEmpties(index);
+      }
+      </#if>
       bits.getMutator().setSafe(index, 1);
       values.getMutator().setSafe(index, value);
       setCount++;
+      <#if type.major == "VarLen">lastSet = index;</#if>
     }
 
     </#if>
@@ -717,7 +756,85 @@ public final class ${className} extends BaseDataValueVector implements <#if type
       values.getMutator().setValueCount(valueCount);
       bits.getMutator().setValueCount(valueCount);
     }
+    <#if type.major == "VarLen">
+    /** Enables this wrapper container class to participate in bulk mutator logic */
+    private final class VarLenBulkInputCallbackImpl implements VarLenBulkInput.BulkInputCallback<VarLenBulkEntry> {
+      /** The default buffer size */
+      private static final int DEFAULT_BUFF_SZ = 1024 << 2;
+      /** A buffered mutator to the bits vector */
+      private final UInt1Vector.BufferedMutator bitsMutator;
 
+      private VarLenBulkInputCallbackImpl(int _start_idx) {
+        bitsMutator = new UInt1Vector.BufferedMutator(_start_idx, DEFAULT_BUFF_SZ, bits);
+      }
+
+      /** {@inheritDoc} */
+      @Override
+      public void onNewBulkEntry(final VarLenBulkEntry entry) {
+        final int[] lengths = entry.getValuesLength();
+        final ByteBuffer buffer = bitsMutator.getByteBuffer();
+        final byte[] bufferArray = buffer.array();
+        int remaining = entry.getNumValues();
+        int srcPos = 0;
+
+        // We need to set the bit indicators
+
+        do {
+          if (buffer.remaining() < 1) {
+            bitsMutator.flush();
+          }
+
+          final int toCopy      = Math.min(remaining, buffer.remaining());
+          final int startTgtPos = buffer.position();
+          final int maxTgtPos   = startTgtPos + toCopy;
+
+          if (entry.hasNulls()) {
+            for (int idx = startTgtPos; idx < maxTgtPos; idx++) {
+              final int valLen = lengths[srcPos++];
+
+              if (valLen >= 0) {
+                bufferArray[idx] = 1;
+                ++setCount;
+              } else {
+                // This is a null entry
+                bufferArray[idx] = 0;
+              }
+            }
+          } else { // Optimization when there are no nulls within this bulk entry
+            for (int idx = startTgtPos; idx < maxTgtPos; idx++) {
+              bufferArray[idx] = 1;
+            }
+            setCount += toCopy;
+          }
+
+          // Update counters
+          buffer.position(maxTgtPos);
+          remaining -= toCopy;
+
+        } while (remaining > 0);
+        <#if type.major == "VarLen">
+        // Update global counters
+        lastSet += entry.getNumValues();
+        </#if>
+      }
+
+      /** {@inheritDoc} */
+      @Override
+      public void onEndBulkInput() {
+        bitsMutator.flush();
+      }
+    }
+
+    /** {@inheritDoc} */
+    public void setSafe(VarLenBulkInput<VarLenBulkEntry> input) {
+      // Register a callback so that we can assign indicators to each value
+      VarLenBulkInput.BulkInputCallback<VarLenBulkEntry> callback = new VarLenBulkInputCallbackImpl(input.getStartIndex());
+
+      // Now delegate bulk processing to the value container
+      values.getMutator().setSafe(input, callback);
+    }
+
+    </#if>
     @Override
     public void generateTestData(int valueCount){
       bits.getMutator().generateTestDataAlt(valueCount);

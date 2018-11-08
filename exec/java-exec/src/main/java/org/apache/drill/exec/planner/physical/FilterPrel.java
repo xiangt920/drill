@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,16 +15,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.planner.physical;
 
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.calcite.rex.RexBuilder;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
 import org.apache.drill.exec.physical.config.Filter;
 import org.apache.drill.exec.planner.common.DrillFilterRelBase;
+import org.apache.drill.exec.planner.common.DrillRelOptUtil;
 import org.apache.drill.exec.planner.logical.DrillParseContext;
 import org.apache.drill.exec.planner.physical.visitor.PrelVisitor;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
@@ -35,7 +36,7 @@ import org.apache.calcite.rex.RexNode;
 
 
 public class FilterPrel extends DrillFilterRelBase implements Prel {
-  protected FilterPrel(RelOptCluster cluster, RelTraitSet traits, RelNode child, RexNode condition) {
+  public FilterPrel(RelOptCluster cluster, RelTraitSet traits, RelNode child, RexNode condition) {
     super(Prel.DRILL_PHYSICAL, cluster, traits, child, condition);
   }
 
@@ -83,4 +84,11 @@ public class FilterPrel extends DrillFilterRelBase implements Prel {
     return true;
   }
 
+  @Override
+  public Prel prepareForLateralUnnestPipeline(List<RelNode> children) {
+    RexBuilder builder = this.getCluster().getRexBuilder();
+    // right shift the previous field indices.
+    return (Prel) this.copy(this.traitSet, children.get(0), DrillRelOptUtil.transformExpr(builder,
+            condition, DrillRelOptUtil.rightShiftColsInRowType(this.getInput().getRowType())));
+  }
 }

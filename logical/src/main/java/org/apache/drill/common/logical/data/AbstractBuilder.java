@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -16,11 +16,6 @@
  * limitations under the License.
  */
 package org.apache.drill.common.logical.data;
-
-import java.util.List;
-
-import org.apache.drill.common.expression.FieldReference;
-import org.apache.drill.common.expression.LogicalExpression;
 
 public abstract class AbstractBuilder<T extends LogicalOperator> {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AbstractBuilder.class);

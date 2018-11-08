@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -44,7 +44,7 @@ public class ScanPrule extends Prule{
 
     final RelTraitSet traits = scan.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(partition);
 
-    final DrillScanPrel newScan = ScanPrel.create(scan, traits, groupScan, scan.getRowType());
+    final ScanPrel newScan = new ScanPrel(scan.getCluster(), traits, groupScan, scan.getRowType(), scan.getTable());
 
     call.transformTo(newScan);
   }

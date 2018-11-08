@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,6 +17,7 @@
  */
 package org.apache.drill.exec.physical.config;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -29,7 +30,6 @@ import org.apache.drill.exec.physical.base.PhysicalVisitor;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.Iterators;
 
 public class Values extends AbstractBase implements Leaf {
 
@@ -60,12 +60,13 @@ public class Values extends AbstractBase implements Leaf {
 
   @Override
   public int getOperatorType() {
+    // TODO: DRILL-6643: this implementation should be revisited
     return -1;
   }
 
   @Override
   public Iterator<PhysicalOperator> iterator() {
-    return Iterators.emptyIterator();
+    return Collections.emptyIterator();
   }
 
 }

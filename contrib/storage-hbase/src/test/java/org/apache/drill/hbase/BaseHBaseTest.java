@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -33,8 +33,8 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 
 public class BaseHBaseTest extends BaseTestQuery {
 
@@ -71,7 +71,7 @@ public class BaseHBaseTest extends BaseTestQuery {
   }
 
   protected String getPlanText(String planFile, String tableName) throws IOException {
-    return Files.toString(DrillFileUtils.getResourceAsFile(planFile), Charsets.UTF_8)
+    return Files.asCharSource(DrillFileUtils.getResourceAsFile(planFile), Charsets.UTF_8).read()
         .replaceFirst("\"hbase\\.zookeeper\\.property\\.clientPort\".*:.*\\d+", "\"hbase.zookeeper.property.clientPort\" : " + HBaseTestsSuite.getZookeeperPort())
         .replace("[TABLE_NAME]", tableName);
   }
@@ -79,22 +79,21 @@ public class BaseHBaseTest extends BaseTestQuery {
   protected void runHBasePhysicalVerifyCount(String planFile, String tableName, int expectedRowCount) throws Exception{
     String physicalPlan = getPlanText(planFile, tableName);
     List<QueryDataBatch> results = testPhysicalWithResults(physicalPlan);
-    printResultAndVerifyRowCount(results, expectedRowCount);
+    logResultAndVerifyRowCount(results, expectedRowCount);
   }
 
   protected List<QueryDataBatch> runHBaseSQLlWithResults(String sql) throws Exception {
     sql = canonizeHBaseSQL(sql);
-    System.out.println("Running query:\n" + sql);
     return testSqlWithResults(sql);
   }
 
   protected void runHBaseSQLVerifyCount(String sql, int expectedRowCount) throws Exception{
     List<QueryDataBatch> results = runHBaseSQLlWithResults(sql);
-    printResultAndVerifyRowCount(results, expectedRowCount);
+    logResultAndVerifyRowCount(results, expectedRowCount);
   }
 
-  private void printResultAndVerifyRowCount(List<QueryDataBatch> results, int expectedRowCount) throws SchemaChangeException {
-    int rowCount = printResult(results);
+  private void logResultAndVerifyRowCount(List<QueryDataBatch> results, int expectedRowCount) throws SchemaChangeException {
+    int rowCount = logResult(results);
     if (expectedRowCount != -1) {
       Assert.assertEquals(expectedRowCount, rowCount);
     }

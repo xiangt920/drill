@@ -17,23 +17,43 @@
  */
 package org.apache.drill.exec.fn.impl;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import mockit.integration.junit4.JMockit;
-import org.apache.drill.test.BaseTestQuery;
-import org.apache.drill.categories.SqlFunctionTest;
-import org.apache.drill.categories.UnlikelyTest;
-import org.joda.time.DateTime;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.runner.RunWith;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
+import org.apache.drill.categories.SqlFunctionTest;
+import org.apache.drill.categories.UnlikelyTest;
+import org.apache.drill.common.exceptions.UserRemoteException;
+import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.exec.planner.physical.PlannerSettings;
+import org.apache.drill.exec.record.RecordBatchLoader;
+import org.apache.drill.exec.rpc.user.QueryDataBatch;
+import org.apache.drill.exec.vector.IntervalYearVector;
+import org.apache.drill.test.BaseTestQuery;
+import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
+
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
+
+import mockit.integration.junit4.JMockit;
+
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
 
 @RunWith(JMockit.class)
 @Category({UnlikelyTest.class, SqlFunctionTest.class})
 public class TestCastFunctions extends BaseTestQuery {
+
+  @Rule
+  public ExpectedException thrown = ExpectedException.none();
 
   @Test
   public void testVarbinaryToDate() throws Exception {
@@ -41,8 +61,8 @@ public class TestCastFunctions extends BaseTestQuery {
       .sqlQuery("select count(*) as cnt from cp.`employee.json` where (cast(convert_to(birth_date, 'utf8') as date)) = date '1961-08-26'")
       .unOrdered()
       .baselineColumns("cnt")
-      .baselineValues(1l)
-      .build().run();
+      .baselineValues(1L)
+      .go();
   }
 
   @Test // DRILL-2827
@@ -66,9 +86,8 @@ public class TestCastFunctions extends BaseTestQuery {
         .sqlQuery(query)
         .ordered()
         .baselineColumns("col1", "col2")
-        .baselineValues(1155l, 1155l)
-        .build()
-        .run();
+        .baselineValues(1155L, 1155L)
+        .go();
   }
 
   @Test // DRILL-3769
@@ -82,7 +101,7 @@ public class TestCastFunctions extends BaseTestQuery {
       .sqlQuery(query)
       .ordered()
       .baselineColumns("col")
-      .baselineValues(new DateTime(1969, 12, 31, 0, 0))
+      .baselineValues(LocalDate.of(1969, 12, 31))
       .build()
       .run();
   }
@@ -116,8 +135,7 @@ public class TestCastFunctions extends BaseTestQuery {
           .unOrdered()
           .baselineColumns("col1")
           .baselineValues(values.get(value))
-          .build()
-          .run();
+          .go();
       } finally {
         test("drop table if exists dfs.tmp.table_with_float");
       }
@@ -148,8 +166,7 @@ public class TestCastFunctions extends BaseTestQuery {
           .unOrdered()
           .baselineColumns("col1", "col2")
           .baselineValues((float) value, (double) value)
-          .build()
-          .run();
+          .go();
       } finally {
         test("drop table if exists dfs.tmp.table_with_int");
       }
@@ -185,8 +202,7 @@ public class TestCastFunctions extends BaseTestQuery {
           .unOrdered()
           .baselineColumns("col1")
           .baselineValues(values.get(value))
-          .build()
-          .run();
+          .go();
       } finally {
         test("drop table if exists dfs.tmp.table_with_float");
       }
@@ -219,8 +235,7 @@ public class TestCastFunctions extends BaseTestQuery {
           .unOrdered()
           .baselineColumns("col1", "col2")
           .baselineValues((float) value, (double) value)
-          .build()
-          .run();
+          .go();
       } finally {
         test("drop table if exists dfs.tmp.table_with_bigint");
       }
@@ -256,8 +271,7 @@ public class TestCastFunctions extends BaseTestQuery {
           .unOrdered()
           .baselineColumns("col1")
           .baselineValues(values.get(value))
-          .build()
-          .run();
+          .go();
       } finally {
         test("drop table if exists dfs.tmp.table_with_double");
       }
@@ -293,8 +307,7 @@ public class TestCastFunctions extends BaseTestQuery {
           .unOrdered()
           .baselineColumns("col1")
           .baselineValues(values.get(value))
-          .build()
-          .run();
+          .go();
       } finally {
         test("drop table if exists dfs.tmp.table_with_double");
       }
@@ -324,8 +337,7 @@ public class TestCastFunctions extends BaseTestQuery {
           .unOrdered()
           .baselineColumns("col1", "col2")
           .baselineValues((long) value, value)
-          .build()
-          .run();
+          .go();
       } finally {
         test("drop table if exists dfs.tmp.table_with_int");
       }
@@ -362,8 +374,7 @@ public class TestCastFunctions extends BaseTestQuery {
           .unOrdered()
           .baselineColumns("col1", "col2")
           .baselineValues((double) ((float) (value)), (float) value)
-          .build()
-          .run();
+          .go();
       } finally {
         test("drop table if exists dfs.tmp.table_with_float");
       }
@@ -385,20 +396,19 @@ public class TestCastFunctions extends BaseTestQuery {
 
           .baselineValues(new BigDecimal(Integer.MAX_VALUE),
                           new BigDecimal(Integer.MAX_VALUE),
-                          new BigDecimal((int) Long.MAX_VALUE),
+                          new BigDecimal(Long.MAX_VALUE),
                           new BigDecimal(Long.MAX_VALUE))
 
           .baselineValues(new BigDecimal(Integer.MIN_VALUE),
                           new BigDecimal(Integer.MIN_VALUE),
-                          new BigDecimal((int) Long.MIN_VALUE),
+                          new BigDecimal(Long.MIN_VALUE),
                           new BigDecimal(Long.MIN_VALUE))
 
           .baselineValues(new BigDecimal(123456789),
                           new BigDecimal(123456789),
                           new BigDecimal(123456789),
                           new BigDecimal(123456789))
-          .build()
-          .run();
+          .go();
       } finally {
         test("drop table if exists dfs.tmp.table_with_int");
         test("alter session reset planner.enable_decimal_data_type");
@@ -417,11 +427,16 @@ public class TestCastFunctions extends BaseTestQuery {
         .baselineValues(0, 0, 0L, 0L)
         .baselineValues(1, 1, 1L, 1L)
         .baselineValues(-1, -1, -1L, -1L)
-        .baselineValues(Integer.MAX_VALUE, (int) Long.MAX_VALUE, (long) Integer.MAX_VALUE, Long.MAX_VALUE)
-        .baselineValues(Integer.MIN_VALUE, (int) Long.MIN_VALUE, (long) Integer.MIN_VALUE, Long.MIN_VALUE)
+        .baselineValues(Integer.MAX_VALUE,
+                        (int) Long.MAX_VALUE,
+                        (long) Integer.MAX_VALUE,
+                        Long.MAX_VALUE)
+        .baselineValues(Integer.MIN_VALUE,
+                        (int) Long.MIN_VALUE,
+                        (long) Integer.MIN_VALUE,
+                        Long.MIN_VALUE)
         .baselineValues(123456789, 123456789, 123456789L, 123456789L)
-        .build()
-        .run();
+        .go();
     } finally {
       test("drop table if exists dfs.tmp.table_with_int");
       test("alter session reset planner.enable_decimal_data_type");
@@ -443,11 +458,70 @@ public class TestCastFunctions extends BaseTestQuery {
         .baselineValues(-0.12f, -0.1004f, -0.12, -0.1004)
         .baselineValues(-123.1234f, -987654321.1234567891f, -123.1234, -987654321.1235)
         .baselineValues(-1.0001f, -2.0301f, -1.0001, -2.0301)
-        .build()
-        .run();
+        .go();
     } finally {
       test("drop table if exists dfs.tmp.table_with_int");
       test("alter session reset planner.enable_decimal_data_type");
+    }
+  }
+
+  @Test
+  public void testCastDecimalToVarDecimal() throws Exception {
+    try {
+      setSessionOption(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY, true);
+
+      testBuilder()
+        .physicalPlanFromFile("decimal/cast_decimal_vardecimal.json")
+        .unOrdered()
+        .baselineColumns("DEC28_COL", "DEC38_COL", "DEC9_COL", "DEC18_COL")
+        .baselineValues(new BigDecimal("-100000000001.0000000000000000"), new BigDecimal("1123.3000000000000000"),
+            new BigDecimal("1123"), new BigDecimal("-100000000001"))
+        .baselineValues(new BigDecimal("11.1234567890123456"), new BigDecimal("0.3000000000000000"),
+            new BigDecimal("0"), new BigDecimal("11"))
+        .baselineValues(new BigDecimal("0.1000000000010000"), new BigDecimal("123456789.0000000000000000"),
+            new BigDecimal("123456789"), new BigDecimal("0"))
+        .baselineValues(new BigDecimal("-0.1200000000000000"), new BigDecimal("0.0000020000000000"),
+            new BigDecimal("0"), new BigDecimal("0"))
+        .baselineValues(new BigDecimal("100000000001.1234567890010000"), new BigDecimal("111.3000000000000000"),
+            new BigDecimal("111"), new BigDecimal("100000000001"))
+        .baselineValues(new BigDecimal("-100000000001.0000000000000000"), new BigDecimal("121.0930000000000000"),
+            new BigDecimal("121"), new BigDecimal("-100000000001"))
+        .baselineValues(new BigDecimal("123456789123456789.0000000000000000"), new BigDecimal("12.3000000000000000"),
+            new BigDecimal("12"), new BigDecimal("123456789123456789"))
+        .go();
+    } finally {
+      test("drop table if exists dfs.tmp.table_with_int");
+      resetSessionOption(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY);
+    }
+  }
+
+  @Test
+  public void testCastVarDecimalToDecimal() throws Exception {
+    try {
+      setSessionOption(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY, true);
+
+      testBuilder()
+        .physicalPlanFromFile("decimal/cast_vardecimal_decimal.json")
+        .unOrdered()
+        .baselineColumns("DEC28_COL", "DEC38_COL", "DEC9_COL", "DEC18_COL")
+        .baselineValues(new BigDecimal("-100000000001.0000000000000000"), new BigDecimal("1123.3000000000000000"),
+          new BigDecimal("1123"), new BigDecimal("-100000000001"))
+        .baselineValues(new BigDecimal("11.1234567890123456"), new BigDecimal("0.3000000000000000"),
+          new BigDecimal("0"), new BigDecimal("11"))
+        .baselineValues(new BigDecimal("0.1000000000010000"), new BigDecimal("123456789.0000000000000000"),
+          new BigDecimal("123456789"), new BigDecimal("0"))
+        .baselineValues(new BigDecimal("-0.1200000000000000"), new BigDecimal("0.0000020000000000"),
+          new BigDecimal("0"), new BigDecimal("0"))
+        .baselineValues(new BigDecimal("100000000001.1234567890010000"), new BigDecimal("111.3000000000000000"),
+          new BigDecimal("111"), new BigDecimal("100000000001"))
+        .baselineValues(new BigDecimal("-100000000001.0000000000000000"), new BigDecimal("121.0930000000000000"),
+          new BigDecimal("121"), new BigDecimal("-100000000001"))
+        .baselineValues(new BigDecimal("123456789123456789.0000000000000000"), new BigDecimal("12.3000000000000000"),
+          new BigDecimal("12"), new BigDecimal("123456789123456789"))
+        .go();
+    } finally {
+      test("drop table if exists dfs.tmp.table_with_int");
+      resetSessionOption(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY);
     }
   }
 
@@ -477,8 +551,7 @@ public class TestCastFunctions extends BaseTestQuery {
             .unOrdered()
             .baselineColumns("c")
             .baselineValues(1L)
-            .build()
-            .run();
+            .go();
         }
       }
     } finally {
@@ -509,12 +582,122 @@ public class TestCastFunctions extends BaseTestQuery {
           .unOrdered()
           .baselineColumns("c")
           .baselineValues(1L)
-          .build()
-          .run();
+          .go();
       }
     } finally {
       test("drop table if exists dfs.tmp.table_with_decimal");
       test("alter session reset planner.enable_decimal_data_type");
     }
+  }
+
+  @Test
+  public void testCastDecimalLiteral() throws Exception {
+    String query =
+        "select case when true then cast(100.0 as decimal(38,2)) else cast('123.0' as decimal(38,2)) end as c1";
+
+    testBuilder()
+        .sqlQuery(query)
+        .ordered()
+        .baselineColumns("c1")
+        .baselineValues(new BigDecimal("100.00"))
+        .go();
+  }
+
+  @Test
+  public void testCastDecimalZeroPrecision() throws Exception {
+    String query = "select cast('123.0' as decimal(0, 5))";
+
+    thrown.expect(UserRemoteException.class);
+    thrown.expectMessage(containsString("VALIDATION ERROR: Expected precision greater than 0, but was 0"));
+
+    test(query);
+  }
+
+  @Test
+  public void testCastDecimalGreaterScaleThanPrecision() throws Exception {
+    String query = "select cast('123.0' as decimal(3, 5))";
+
+    thrown.expect(UserRemoteException.class);
+    thrown.expectMessage(containsString("VALIDATION ERROR: Expected scale less than or equal to precision, but was scale 5 and precision 3"));
+
+    test(query);
+  }
+
+  @Test
+  public void testCastIntDecimalOverflow() throws Exception {
+    String query = "select cast(i1 as DECIMAL(4, 0)) as s1 from (select cast(123456 as int) as i1)";
+
+    thrown.expect(UserRemoteException.class);
+    thrown.expectMessage(containsString("VALIDATION ERROR: Value 123456 overflows specified precision 4 with scale 0"));
+
+    test(query);
+  }
+
+  @Test
+  public void testCastBigIntDecimalOverflow() throws Exception {
+    String query = "select cast(i1 as DECIMAL(4, 0)) as s1 from (select cast(123456 as bigint) as i1)";
+
+    thrown.expect(UserRemoteException.class);
+    thrown.expectMessage(containsString("VALIDATION ERROR: Value 123456 overflows specified precision 4 with scale 0"));
+
+    test(query);
+  }
+
+  @Test
+  public void testCastFloatDecimalOverflow() throws Exception {
+    String query = "select cast(i1 as DECIMAL(4, 0)) as s1 from (select cast(123456.123 as float) as i1)";
+
+    thrown.expect(UserRemoteException.class);
+    thrown.expectMessage(containsString("VALIDATION ERROR: Value 123456.123 overflows specified precision 4 with scale 0"));
+
+    test(query);
+  }
+
+  @Test
+  public void testCastDoubleDecimalOverflow() throws Exception {
+    String query = "select cast(i1 as DECIMAL(4, 0)) as s1 from (select cast(123456.123 as double) as i1)";
+
+    thrown.expect(UserRemoteException.class);
+    thrown.expectMessage(containsString("VALIDATION ERROR: Value 123456.123 overflows specified precision 4 with scale 0"));
+
+    test(query);
+  }
+
+  @Test
+  public void testCastVarCharDecimalOverflow() throws Exception {
+    String query = "select cast(i1 as DECIMAL(4, 0)) as s1 from (select cast(123456.123 as varchar) as i1)";
+
+    thrown.expect(UserRemoteException.class);
+    thrown.expectMessage(containsString("VALIDATION ERROR: Value 123456.123 overflows specified precision 4 with scale 0"));
+
+    test(query);
+  }
+
+  @Test // DRILL-6783
+  public void testCastVarCharIntervalYear() throws Exception {
+    String query = "select cast('P31M' as interval month) as i from cp.`employee.json` limit 10";
+    List<QueryDataBatch> result = testSqlWithResults(query);
+    RecordBatchLoader loader = new RecordBatchLoader(getDrillbitContext().getAllocator());
+
+    QueryDataBatch b = result.get(0);
+    loader.load(b.getHeader().getDef(), b.getData());
+
+    IntervalYearVector vector = (IntervalYearVector) loader.getValueAccessorById(
+          IntervalYearVector.class,
+          loader.getValueVectorId(SchemaPath.getCompoundPath("i")).getFieldIds())
+        .getValueVector();
+
+    Set<String> resultSet = new HashSet<>();
+    for (int i = 0; i < loader.getRecordCount(); i++) {
+      String displayValue = vector.getAccessor().getAsStringBuilder(i).toString();
+      resultSet.add(displayValue);
+    }
+
+    Assert.assertEquals(
+        "Casting literal string as INTERVAL should yield the same result for each row", 1, resultSet.size());
+    Assert.assertThat(resultSet, hasItem("2 years 7 months"));
+
+    b.release();
+    loader.clear();
   }
 }

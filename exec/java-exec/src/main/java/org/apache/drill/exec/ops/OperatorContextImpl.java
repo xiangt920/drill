@@ -22,12 +22,11 @@ import java.util.concurrent.Callable;
 
 import org.apache.drill.exec.exception.OutOfMemoryException;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
-import org.apache.drill.exec.work.WorkManager;
 import org.apache.hadoop.security.UserGroupInformation;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.ListeningExecutorService;
-import com.google.common.util.concurrent.MoreExecutors;
+import org.apache.drill.shaded.guava.com.google.common.util.concurrent.ListenableFuture;
+import org.apache.drill.shaded.guava.com.google.common.util.concurrent.ListeningExecutorService;
+import org.apache.drill.shaded.guava.com.google.common.util.concurrent.MoreExecutors;
 
 class OperatorContextImpl extends BaseOperatorContext implements AutoCloseable {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OperatorContextImpl.class);

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * <p/>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,13 +17,14 @@
  */
 package org.apache.drill.exec.util.filereader;
 
-import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
 import io.netty.buffer.DrillBuf;
 import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.hadoop.fs.ByteBufferReadable;
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.parquet.hadoop.util.CompatibilityUtil;
+import org.apache.parquet.hadoop.util.HadoopStreams;
+import org.apache.parquet.io.SeekableInputStream;
 
 import java.io.FilterInputStream;
 import java.io.IOException;
@@ -86,12 +87,16 @@ public class DirectBufInputStream extends FilterInputStream {
     buf.clear();
     ByteBuffer directBuffer = buf.nioBuffer(0, len);
     int lengthLeftToRead = len;
+    SeekableInputStream seekableInputStream = HadoopStreams.wrap(getInputStream());
     while (lengthLeftToRead > 0) {
       if(logger.isTraceEnabled()) {
         logger.trace("PERF: Disk read start. {}, StartOffset: {}, TotalByteSize: {}", this.streamId, this.startOffset, this.totalByteSize);
       }
       Stopwatch timer = Stopwatch.createStarted();
-      int bytesRead = CompatibilityUtil.getBuf(getInputStream(), directBuffer, lengthLeftToRead);
+      int bytesRead = seekableInputStream.read(directBuffer);
+      if (bytesRead < 0) {
+        return bytesRead;
+      }
       lengthLeftToRead -= bytesRead;
       if(logger.isTraceEnabled()) {
         logger.trace(
@@ -113,7 +118,7 @@ public class DirectBufInputStream extends FilterInputStream {
       b.release();
       throw e;
     }
-    if (bytesRead <= -1) {
+    if (bytesRead < 0) {
       b.release();
       return null;
     }

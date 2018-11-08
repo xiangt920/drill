@@ -15,10 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.physical.impl.union;
 
-import com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
 import org.apache.drill.exec.exception.SchemaChangeException;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.record.RecordBatch;
@@ -43,7 +42,7 @@ public abstract class UnionAllerTemplate implements UnionAller {
     }
 
     for (TransferPair t : transfers) {
-      t.transfer();
+      t.splitAndTransfer(startIndex, recordCount);
     }
     return recordCount;
   }

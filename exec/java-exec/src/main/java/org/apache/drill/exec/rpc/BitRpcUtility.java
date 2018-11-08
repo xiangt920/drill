@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.rpc;
 
-import com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
 import com.google.protobuf.Internal.EnumLite;
 import com.google.protobuf.MessageLite;
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
@@ -101,6 +101,24 @@ public final class BitRpcUtility {
         endpoint.getAddress()), e);
       connectionHandler.connectionFailed(RpcConnectionHandler.FailureType.AUTHENTICATION, ex);
     }
+  }
+
+  /**
+   * Verifies if local and remote Drillbit Endpoint has same control server by using address and control port
+   * information. This method is used instead of equals in {@link DrillbitEndpoint} because DrillbitEndpoint stores
+   * state information in it.
+   * For local Drillbit a reference is stored in {@link org.apache.drill.exec.server.DrillbitContext} as soon as
+   * Drillbit is started in {@link org.apache.drill.exec.service.ServiceEngine#start} with state as STARTUP, but
+   * while planning minor fragment the assignment list is used from active list of Drillbits in which state for local
+   * Drillbit will not be STARTUP
+   * @param local - DrillbitEndpoint instance for local bit
+   * @param remote - DrillbitEndpoint instance for remote bit
+   * @return true if address and control port for local and remote are same.
+   *         false - otherwise
+   */
+  public static boolean isLocalControlServer(DrillbitEndpoint local, DrillbitEndpoint remote) {
+    return local.hasAddress() && local.hasControlPort() && remote.hasAddress() && remote.hasControlPort() &&
+      local.getAddress().equals(remote.getAddress()) && local.getControlPort() == remote.getControlPort();
   }
 
   // Suppress default constructor

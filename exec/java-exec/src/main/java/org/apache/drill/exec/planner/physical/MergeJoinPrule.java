@@ -31,7 +31,7 @@ import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptRuleOperand;
 import org.apache.calcite.util.trace.CalciteTrace;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.slf4j.Logger;
 
 public class MergeJoinPrule extends JoinPruleBase {
@@ -70,11 +70,11 @@ public class MergeJoinPrule extends JoinPruleBase {
       RelCollation collationRight = getCollation(join.getRightKeys());
 
       if(isDist){
-        createDistBothPlan(call, join, PhysicalJoinType.MERGE_JOIN, left, right, collationLeft, collationRight, hashSingleKey);
+        createDistBothPlan(call, join, PhysicalJoinType.MERGE_JOIN, left, right, collationLeft, collationRight, hashSingleKey, false);
       }else{
         if (checkBroadcastConditions(call.getPlanner(), join, left, right)) {
           createBroadcastPlan(call, join, join.getCondition(), PhysicalJoinType.MERGE_JOIN,
-              left, right, collationLeft, collationRight);
+              left, right, collationLeft, collationRight, false);
         }
       }
 

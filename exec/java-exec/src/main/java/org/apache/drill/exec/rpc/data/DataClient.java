@@ -17,7 +17,6 @@
  */
 package org.apache.drill.exec.rpc.data;
 
-import com.google.common.collect.ImmutableList;
 import com.google.protobuf.MessageLite;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
@@ -51,7 +50,7 @@ public class DataClient extends BasicClient<RpcType, DataClientConnection, BitCl
     super(
         DataRpcConfig.getMapping(config.getBootstrapContext().getConfig(),
             config.getBootstrapContext().getExecutor()),
-        config.getBootstrapContext().getAllocator().getAsByteBufAllocator(),
+        config.getAllocator().getAsByteBufAllocator(),
         config.getBootstrapContext().getBitClientLoopGroup(),
         RpcType.HANDSHAKE,
         BitServerHandshake.class,

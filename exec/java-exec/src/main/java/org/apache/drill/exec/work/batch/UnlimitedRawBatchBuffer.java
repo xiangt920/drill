@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -19,11 +19,12 @@ package org.apache.drill.exec.work.batch;
 
 import java.io.IOException;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.record.RawFragmentBatch;
 
-import com.google.common.collect.Queues;
+import org.apache.drill.shaded.guava.com.google.common.collect.Queues;
 
 public class UnlimitedRawBatchBuffer extends BaseRawBatchBuffer<RawFragmentBatch> {
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UnlimitedRawBatchBuffer.class);
@@ -40,7 +41,7 @@ public class UnlimitedRawBatchBuffer extends BaseRawBatchBuffer<RawFragmentBatch
   }
 
   private class UnlimitedBufferQueue implements BufferQueue<RawFragmentBatch> {
-    private final LinkedBlockingDeque<RawFragmentBatch> buffer = Queues.newLinkedBlockingDeque();;
+    private final LinkedBlockingDeque<RawFragmentBatch> buffer = Queues.newLinkedBlockingDeque();
 
     @Override
     public void addOomBatch(RawFragmentBatch batch) {
@@ -60,6 +61,15 @@ public class UnlimitedRawBatchBuffer extends BaseRawBatchBuffer<RawFragmentBatch
     public RawFragmentBatch take() throws IOException, InterruptedException {
       RawFragmentBatch batch = buffer.take();
       batch.sendOk();
+      return batch;
+    }
+
+    @Override
+    public RawFragmentBatch poll(long timeout, TimeUnit timeUnit) throws InterruptedException, IOException {
+      RawFragmentBatch batch = buffer.poll(timeout, timeUnit);
+      if (batch != null) {
+        batch.sendOk();
+      }
       return batch;
     }
 

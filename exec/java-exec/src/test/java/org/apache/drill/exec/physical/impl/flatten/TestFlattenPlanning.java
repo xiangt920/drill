@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * <p/>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -66,8 +66,9 @@ public class TestFlattenPlanning extends PlanTestBase {
   @Test // DRILL-6099 : push limit past flatten(project)
   public void testLimitPushdownPastFlatten() throws Exception {
     final String query = "select rownum, flatten(complex) comp from cp.`store/json/test_flatten_mappify2.json` limit 1";
-    final String[] expectedPatterns = {".*Limit\\(fetch=\\[1\\]\\).*",".*Flatten.*",".*Limit\\(fetch=\\[1\\]\\).*"};
-    final String[] excludedPatterns = null;
+    //DRILL-6318 : limit should not push past flatten(project)
+    final String[] expectedPatterns = {"(?s).*Limit.*Flatten.*Project.*"};
+    final String[] excludedPatterns = {"(?s).*Limit.*Flatten.*Limit.*"};
     PlanTestBase.testPlanMatchingPatterns(query, expectedPatterns, excludedPatterns);
   }
 

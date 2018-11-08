@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -29,8 +29,8 @@ import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelTraitSet;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 /**
  *
@@ -47,26 +47,25 @@ public class SortPrule extends Prule{
 
   @Override
   public void onMatch(RelOptRuleCall call) {
-    final DrillSortRel sort = (DrillSortRel) call.rel(0);
+    final DrillSortRel sort = call.rel(0);
     final RelNode input = sort.getInput();
 
     // Keep the collation in logical sort. Convert input into a RelNode with 1) this collation, 2) Physical, 3) hash distributed on
 
     DrillDistributionTrait hashDistribution =
-        new DrillDistributionTrait(DrillDistributionTrait.DistributionType.HASH_DISTRIBUTED, ImmutableList.copyOf(getDistributionField(sort)));
+            new DrillDistributionTrait(DrillDistributionTrait.DistributionType.HASH_DISTRIBUTED, ImmutableList.copyOf(getDistributionField(sort)));
 
-    final RelTraitSet traits = sort.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(hashDistribution);
-
-    final RelNode convertedInput = convert(input, traits);
+    final RelTraitSet traits = RelTraitSet.createEmpty().plus(Prel.DRILL_PHYSICAL).plus(hashDistribution);
+    SortPrel child = new SortPrel(sort.getCluster(), traits.plus(sort.getCollation()),
+            convert(sort.getInput(), traits), sort.getCollation(), false);
 
     if(isSingleMode(call)){
-      call.transformTo(convertedInput);
+      call.transformTo(child);
     }else{
-      RelNode exch = new SingleMergeExchangePrel(sort.getCluster(), sort.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON), convertedInput, sort.getCollation());
+      RelNode exch = new SingleMergeExchangePrel(sort.getCluster(), sort.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON), child, sort.getCollation());
       call.transformTo(exch);  // transform logical "sort" into "SingleMergeExchange".
 
     }
-
   }
 
   private List<DistributionField> getDistributionField(DrillSortRel rel) {
@@ -76,7 +75,6 @@ public class SortPrule extends Prule{
       DistributionField field = new DistributionField(relField.getFieldIndex());
       distFields.add(field);
     }
-
     return distFields;
   }
 

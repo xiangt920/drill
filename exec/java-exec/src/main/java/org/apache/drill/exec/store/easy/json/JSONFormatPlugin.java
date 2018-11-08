@@ -18,10 +18,10 @@
 package org.apache.drill.exec.store.easy.json;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.logical.FormatPluginConfig;
 import org.apache.drill.common.logical.StoragePluginConfig;
@@ -43,8 +43,7 @@ import org.apache.hadoop.fs.FileSystem;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
 
 public class JSONFormatPlugin extends EasyFormatPlugin<JSONFormatConfig> {
 
@@ -60,14 +59,17 @@ public class JSONFormatPlugin extends EasyFormatPlugin<JSONFormatConfig> {
   }
 
   @Override
-  public RecordReader getRecordReader(FragmentContext context, DrillFileSystem dfs, FileWork fileWork,
-      List<SchemaPath> columns, String userName) throws ExecutionSetupException {
+  public RecordReader getRecordReader(FragmentContext context,
+                                      DrillFileSystem dfs,
+                                      FileWork fileWork,
+                                      List<SchemaPath> columns,
+                                      String userName) {
     return new JSONRecordReader(context, fileWork.getPath(), dfs, columns);
   }
 
   @Override
   public RecordWriter getRecordWriter(FragmentContext context, EasyWriter writer) throws IOException {
-    Map<String, String> options = Maps.newHashMap();
+    Map<String, String> options = new HashMap<>();
 
     options.put("location", writer.getLocation());
 
@@ -76,7 +78,7 @@ public class JSONFormatPlugin extends EasyFormatPlugin<JSONFormatConfig> {
     options.put("prefix", fragmentId);
 
     options.put("separator", " ");
-    options.put(FileSystem.FS_DEFAULT_NAME_KEY, ((FileSystemConfig)writer.getStorageConfig()).connection);
+    options.put(FileSystem.FS_DEFAULT_NAME_KEY, ((FileSystemConfig) writer.getStorageConfig()).getConnection());
 
     options.put("extension", "json");
     options.put("extended", Boolean.toString(context.getOptions().getOption(ExecConstants.JSON_EXTENDED_TYPES)));
@@ -142,7 +144,7 @@ public class JSONFormatPlugin extends EasyFormatPlugin<JSONFormatConfig> {
 
   @Override
   public int getWriterOperatorType() {
-    throw new UnsupportedOperationException();
+     return CoreOperatorType.JSON_WRITER_VALUE;
   }
 
   @Override

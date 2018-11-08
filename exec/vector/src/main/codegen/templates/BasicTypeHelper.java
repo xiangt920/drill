@@ -15,9 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import org.apache.drill.exec.vector.UntypedNullHolder;
 import org.apache.drill.exec.vector.UntypedNullVector;
+import org.apache.drill.exec.vector.complex.impl.UntypedHolderReaderImpl;
 
 <@pp.dropOutputFile />
 <@pp.changeOutputFile name="/org/apache/drill/exec/expr/BasicTypeHelper.java" />
@@ -68,12 +68,6 @@ public class BasicTypeHelper {
     throw new UnsupportedOperationException(buildErrorMessage("get size", major));
   }
 
-  public static ValueVector getNewVector(String name, BufferAllocator allocator, MajorType type, CallBack callback){
-    MaterializedField field = MaterializedField.create(name, type);
-    return getNewVector(field, allocator, callback);
-  }
-  
-  
   public static Class<? extends ValueVector> getValueVectorClass(MinorType type, DataMode mode){
     switch (type) {
     case UNION:
@@ -228,17 +222,31 @@ public class BasicTypeHelper {
         }
   </#list>
 </#list>
+      case NULL:
+        return UntypedHolderReaderImpl.class;
       default:
         break;
       }
       throw new UnsupportedOperationException(buildErrorMessage("get holder reader implementation", type, mode));
   }
   
+  public static ValueVector getNewVector(String name, BufferAllocator allocator, MajorType type, CallBack callback) {
+    MaterializedField field = MaterializedField.create(name, type);
+    return getNewVector(field, allocator, callback);
+  }
+  
   public static ValueVector getNewVector(MaterializedField field, BufferAllocator allocator){
     return getNewVector(field, allocator, null);
   }
-  public static ValueVector getNewVector(MaterializedField field, BufferAllocator allocator, CallBack callBack){
-    MajorType type = field.getType();
+  
+  public static ValueVector getNewVector(MaterializedField field, BufferAllocator allocator, CallBack callBack) {
+    return getNewVector(field, field.getType(), allocator, callBack);
+  }
+  
+  // Creates an internal or external vector. Internal vectors may have
+  // types that disagree with their materialized field.
+  
+  public static ValueVector getNewVector(MaterializedField field, MajorType type, BufferAllocator allocator, CallBack callBack) {
 
     switch (type.getMinorType()) {
     
@@ -396,7 +404,9 @@ public class BasicTypeHelper {
     MajorType type1 = v1.getField().getType();
     MajorType type2 = v2.getField().getType();
 
-    if (type1.getMinorType() != type2.getMinorType()) {
+    if (type1.getMinorType() != type2.getMinorType()
+        || type1.getScale() != type1.getScale()
+        || type1.getPrecision() != type1.getPrecision()) {
       return false;
     }
 
@@ -540,11 +550,19 @@ public class BasicTypeHelper {
     }
     <#list vv.types as type>
     <#list type.minor as minor>
+    <#if minor.class.contains("Decimal")>
+      else if (holder instanceof ${minor.class}Holder) {
+        return  getType((${minor.class}Holder) holder);
+      } else if (holder instanceof Nullable${minor.class}Holder) {
+        return  getType((Nullable${minor.class}Holder) holder);
+      }
+    <#else>
       else if (holder instanceof ${minor.class}Holder) {
         return ((${minor.class}Holder) holder).TYPE;
       } else if (holder instanceof Nullable${minor.class}Holder) {
       return ((Nullable${minor.class}Holder) holder).TYPE;
       }
+    </#if>
     </#list>
     </#list>
     else if (holder instanceof UntypedNullHolder) {
@@ -554,4 +572,30 @@ public class BasicTypeHelper {
 
   }
 
+  <#list vv.types as type>
+  <#list type.minor as minor>
+  <#if minor.class.contains("Decimal")>
+  <#list ["Nullable", "", "Repeated"] as dataMode>
+  public static MajorType getType(${dataMode}${minor.class}Holder holder) {
+    return MajorType.newBuilder()
+        .setMinorType(MinorType.${minor.class?upper_case})
+      <#if dataMode == "Nullable">
+        .setMode(DataMode.OPTIONAL)
+        .setScale(holder.scale)
+        .setPrecision(holder.precision)
+      <#elseif dataMode == "Repeated">
+        .setMode(DataMode.REPEATED)
+        .setScale(holder.vector.getField().getScale())
+        .setPrecision(holder.vector.getField().getPrecision())
+      <#else>
+        .setMode(DataMode.REQUIRED)
+        .setScale(holder.scale)
+        .setPrecision(holder.precision)
+      </#if>
+        .build();
+  }
+  </#list>
+  </#if>
+  </#list>
+  </#list>
 }

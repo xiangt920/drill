@@ -15,10 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.expr.fn.impl;
-
-import io.netty.buffer.DrillBuf;
 
 import javax.inject.Inject;
 
@@ -39,6 +36,9 @@ import org.apache.drill.exec.expr.holders.TimeHolder;
 import org.apache.drill.exec.expr.holders.TimeStampHolder;
 import org.apache.drill.exec.expr.holders.VarCharHolder;
 import org.apache.drill.exec.ops.ContextInformation;
+import org.apache.drill.exec.physical.impl.project.OutputSizeEstimateConstants;
+
+import io.netty.buffer.DrillBuf;
 
 public class DateTypeFunctions {
 
@@ -270,7 +270,8 @@ public class DateTypeFunctions {
 
     }
 
-    @FunctionTemplate(name = "timeofday", scope = FunctionTemplate.FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL, isRandom = true)
+    @FunctionTemplate(name = "timeofday", scope = FunctionTemplate.FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL, isRandom = true,
+                      outputSizeEstimate = OutputSizeEstimateConstants.DATE_TIME_LENGTH)
     public static class TimeOfDay implements DrillSimpleFunc {
         @Inject DrillBuf buffer;
         @Output VarCharHolder out;
@@ -281,8 +282,8 @@ public class DateTypeFunctions {
 
         @Override
         public void eval() {
-            org.joda.time.DateTime temp = new org.joda.time.DateTime();
-            String str = org.apache.drill.exec.expr.fn.impl.DateUtility.formatTimeStampTZ.print(temp);
+            java.time.ZonedDateTime temp = java.time.ZonedDateTime.now();
+            String str = org.apache.drill.exec.expr.fn.impl.DateUtility.formatTimeStampTZ.format(temp);
             out.buffer = buffer;
             out.start = 0;
             out.end = Math.min(100,  str.length()); // truncate if target type has length smaller than that of input's string

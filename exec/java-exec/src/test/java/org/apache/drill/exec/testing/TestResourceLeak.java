@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -48,8 +48,8 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Resources;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Resources;
 
 /*
  * TODO(DRILL-3170)
@@ -94,7 +94,7 @@ public class TestResourceLeak extends DrillTest {
   public void tpch01() throws Exception {
     final String query = getFile("memory/tpch01_memory_leak.sql");
     try {
-      QueryTestUtil.test(client, "alter session set `planner.slice_target` = 10; " + query);
+      QueryTestUtil.testRunAndLog(client, "alter session set `planner.slice_target` = 10; " + query);
     } catch (UserRemoteException e) {
       if (e.getMessage().contains("Allocator closed with outstanding buffers allocated")) {
         return;

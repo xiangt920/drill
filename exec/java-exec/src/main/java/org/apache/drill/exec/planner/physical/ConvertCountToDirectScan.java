@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.planner.physical;
 
 import java.util.ArrayList;
@@ -27,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.google.common.collect.ImmutableMap;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableMap;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptRuleOperand;
@@ -129,9 +128,8 @@ public class ConvertCountToDirectScan extends Prule {
     final ScanStats scanStats = new ScanStats(ScanStats.GroupScanProperty.EXACT_ROW_COUNT, 1, 1, scanRowType.getFieldCount());
     final GroupScan directScan = new MetadataDirectGroupScan(reader, oldGrpScan.getFiles(), scanStats);
 
-    final ScanPrel newScan = ScanPrel.create(scan,
-        scan.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON), directScan,
-        scanRowType);
+    final DirectScanPrel newScan = new DirectScanPrel(scan.getCluster(),
+        scan.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON), directScan, scanRowType);
 
     final ProjectPrel newProject = new ProjectPrel(agg.getCluster(), agg.getTraitSet().plus(Prel.DRILL_PHYSICAL)
         .plus(DrillDistributionTrait.SINGLETON), newScan, prepareFieldExpressions(scanRowType), agg.getRowType());
@@ -155,12 +153,11 @@ public class ConvertCountToDirectScan extends Prule {
   private Map<String, Long> collectCounts(PlannerSettings settings, DrillAggregateRel agg, DrillScanRel scan, DrillProjectRel project) {
     final Set<String> implicitColumnsNames = ColumnExplorer.initImplicitFileColumns(settings.getOptions()).keySet();
     final GroupScan oldGrpScan = scan.getGroupScan();
-    final long totalRecordCount = oldGrpScan.getScanStats(settings).getRecordCount();
+    final long totalRecordCount = (long)oldGrpScan.getScanStats(settings).getRecordCount();
     final LinkedHashMap<String, Long> result = new LinkedHashMap<>();
 
     for (int i = 0; i < agg.getAggCallList().size(); i++) {
       AggregateCall aggCall = agg.getAggCallList().get(i);
-    //for (AggregateCall aggCall : agg.getAggCallList()) {
       long cnt;
 
       // rule can be applied only for count function, return empty counts

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -54,8 +54,8 @@ public class TestHBaseQueries extends BaseHBaseTest {
       setColumnWidths(new int[] {8, 15});
       runHBaseSQLVerifyCount("SELECT *\n"
           + "FROM\n"
-          + "  hbase.`" + tableName + "` tableName\n"
-          , 1);
+          + "  hbase.`" + tableName + "` tableName\n",
+          1);
     } finally {
       try {
         admin.disableTable(tableName);
@@ -78,8 +78,8 @@ public class TestHBaseQueries extends BaseHBaseTest {
       setColumnWidths(new int[] {8, 15});
       runHBaseSQLVerifyCount("SELECT row_key, count(*)\n"
           + "FROM\n"
-          + "  hbase.`" + tableName + "` tableName GROUP BY row_key\n"
-          , 0);
+          + "  hbase.`" + tableName + "` tableName GROUP BY row_key\n",
+          0);
     } finally {
       try {
         admin.disableTable(tableName);
@@ -96,7 +96,7 @@ public class TestHBaseQueries extends BaseHBaseTest {
         List<QueryDataBatch> resultList = runHBaseSQLlWithResults("SELECT row_key,\n"
             + " CAST(t.f.c1 as INT) c1, CAST(t.f.c2 as BIGINT) c2, CAST(t.f.c3 as INT) c3,\n"
             + " CAST(t.f.c4 as INT) c4 FROM hbase.TestTableNullStr t where row_key='a1'");
-        printResult(resultList);
+        logResult(resultList);
     }
     finally {
         test("alter system reset `drill.exec.functions.cast_empty_string_to_null`;");

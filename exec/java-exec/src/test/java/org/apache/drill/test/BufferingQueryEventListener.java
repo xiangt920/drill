@@ -26,7 +26,7 @@ import org.apache.drill.exec.rpc.ConnectionThrottle;
 import org.apache.drill.exec.rpc.user.QueryDataBatch;
 import org.apache.drill.exec.rpc.user.UserResultsListener;
 
-import com.google.common.collect.Queues;
+import org.apache.drill.shaded.guava.com.google.common.collect.Queues;
 
 /**
  * Drill query event listener that buffers rows into a producer-consumer
@@ -39,6 +39,8 @@ import com.google.common.collect.Queues;
 
 public class BufferingQueryEventListener implements UserResultsListener
 {
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BufferingQueryEventListener.class);
+
   public static class QueryEvent
   {
     public enum Type { QUERY_ID, BATCH, EOF, ERROR }
@@ -96,8 +98,7 @@ public class BufferingQueryEventListener implements UserResultsListener
     try {
       queue.put(event);
     } catch (InterruptedException e) {
-      // What to do, what to do...
-      e.printStackTrace();
+      logger.error("Exception:", e);
     }
   }
 

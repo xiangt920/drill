@@ -29,7 +29,7 @@ import org.apache.drill.exec.physical.base.PhysicalOperator;
 import org.apache.drill.exec.server.options.OptionManager;
 import org.apache.drill.exec.server.options.OptionSet;
 
-import com.google.common.annotations.VisibleForTesting;
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
 
 public class MemoryAllocationUtilities {
 
@@ -68,7 +68,7 @@ public class MemoryAllocationUtilities {
     // look for external sorts
     final List<PhysicalOperator> bufferedOpList = new LinkedList<>();
     for (final PhysicalOperator op : plan.getSortedOperators()) {
-      if (op.isBufferedOperator()) {
+      if (op.isBufferedOperator(queryContext)) {
         bufferedOpList.add(op);
       }
     }

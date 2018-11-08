@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <boost/assign.hpp>
 #include "drill/userProperties.hpp"
 
@@ -36,6 +35,7 @@ const std::map<std::string, uint32_t>  DrillUserProperties::USER_PROPERTIES=boos
     ( USERPROP_DISABLE_HOSTVERIFICATION,    USERPROP_FLAGS_BOOLEAN|USERPROP_FLAGS_SSLPROP)
     ( USERPROP_DISABLE_CERTVERIFICATION,    USERPROP_FLAGS_BOOLEAN|USERPROP_FLAGS_SSLPROP)
     ( USERPROP_USESYSTEMTRUSTSTORE,    USERPROP_FLAGS_BOOLEAN|USERPROP_FLAGS_SSLPROP)
+    ( USERPROP_CUSTOM_SSLCTXOPTIONS,   USERPROP_FLAGS_STRING|USERPROP_FLAGS_SSLPROP)
     ( USERPROP_SASL_ENCRYPT,  USERPROP_FLAGS_STRING)
 ;
 

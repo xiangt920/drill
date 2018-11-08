@@ -17,24 +17,28 @@
  */
 package org.apache.drill.exec.expr.fn.registry;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import org.apache.drill.exec.store.sys.store.DataChangeVersion;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableMap;
+import org.apache.drill.shaded.guava.com.google.common.collect.ListMultimap;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.drill.common.scanner.persistence.AnnotatedClassDescriptor;
 import org.apache.drill.common.scanner.persistence.ScanResult;
 import org.apache.drill.exec.exception.FunctionValidationException;
 import org.apache.drill.exec.exception.JarValidationException;
+import org.apache.drill.exec.expr.annotations.FunctionTemplate;
 import org.apache.drill.exec.expr.fn.DrillFuncHolder;
 import org.apache.drill.exec.expr.fn.FunctionConverter;
 import org.apache.drill.exec.planner.logical.DrillConstExecutor;
@@ -43,7 +47,7 @@ import org.apache.drill.exec.planner.sql.DrillSqlAggOperator;
 import org.apache.drill.exec.planner.sql.DrillSqlAggOperatorWithoutInference;
 import org.apache.drill.exec.planner.sql.DrillSqlOperator;
 
-import com.google.common.collect.ArrayListMultimap;
+import org.apache.drill.shaded.guava.com.google.common.collect.ArrayListMultimap;
 import org.apache.drill.exec.planner.sql.DrillSqlOperatorWithoutInference;
 
 /**
@@ -74,13 +78,16 @@ public class LocalFunctionRegistry {
   private final FunctionRegistryHolder registryHolder;
 
   /**
-   * Registers all functions present in Drill classpath on start-up. All functions will be marked as built-in.
-   * Built-in functions are not allowed to be unregistered. Initially sync registry version will be set to 0.
+   * Registers all functions present in Drill classpath on start-up.
+   * All functions will be marked as built-in. Built-in functions are not allowed to be unregistered.
+   * Since local function registry version is based on remote function registry version,
+   * initially sync version will be set to {@link DataChangeVersion#UNDEFINED}
+   * to ensure that upon first check both registries would be synchronized.
    */
   public LocalFunctionRegistry(ScanResult classpathScan) {
     registryHolder = new FunctionRegistryHolder();
     validate(BUILT_IN, classpathScan);
-    register(Lists.newArrayList(new JarScan(BUILT_IN, classpathScan, this.getClass().getClassLoader())), 0);
+    register(Lists.newArrayList(new JarScan(BUILT_IN, classpathScan, this.getClass().getClassLoader())), DataChangeVersion.UNDEFINED);
     if (logger.isTraceEnabled()) {
       StringBuilder allFunctions = new StringBuilder();
       for (DrillFuncHolder method: registryHolder.getAllFunctionsWithHolders().values()) {
@@ -93,7 +100,7 @@ public class LocalFunctionRegistry {
   /**
    * @return remote function registry version number with which local function registry is synced
    */
-  public long getVersion() {
+  public int getVersion() {
     return registryHolder.getVersion();
   }
 
@@ -112,7 +119,7 @@ public class LocalFunctionRegistry {
   public List<String> validate(String jarName, ScanResult scanResult) {
     List<String> functions = Lists.newArrayList();
     FunctionConverter converter = new FunctionConverter();
-    List<AnnotatedClassDescriptor> providerClasses = scanResult.getAnnotatedClasses();
+    List<AnnotatedClassDescriptor> providerClasses = scanResult.getAnnotatedClasses(FunctionTemplate.class.getName());
 
     if (registryHolder.containsJar(jarName)) {
       throw new JarValidationException(String.format("Jar with %s name has been already registered", jarName));
@@ -157,12 +164,12 @@ public class LocalFunctionRegistry {
    * @param jars list of jars to be registered
    * @param version remote function registry version number with which local function registry is synced
    */
-  public void register(List<JarScan> jars, long version) {
-    Map<String, List<FunctionHolder>> newJars = Maps.newHashMap();
+  public void register(List<JarScan> jars, int version) {
+    Map<String, List<FunctionHolder>> newJars = new HashMap<>();
     for (JarScan jarScan : jars) {
       FunctionConverter converter = new FunctionConverter();
-      List<AnnotatedClassDescriptor> providerClasses = jarScan.getScanResult().getAnnotatedClasses();
-      List<FunctionHolder> functions = Lists.newArrayList();
+      List<AnnotatedClassDescriptor> providerClasses = jarScan.getScanResult().getAnnotatedClasses(FunctionTemplate.class.getName());
+      List<FunctionHolder> functions = new ArrayList<>();
       newJars.put(jarScan.getJarName(), functions);
       for (AnnotatedClassDescriptor func : providerClasses) {
         DrillFuncHolder holder = converter.getHolder(func, jarScan.getClassLoader());
@@ -216,7 +223,7 @@ public class LocalFunctionRegistry {
    * @param name function name
    * @return all function holders associated with the function name. Function name is case insensitive.
    */
-  public List<DrillFuncHolder> getMethods(String name, AtomicLong version) {
+  public List<DrillFuncHolder> getMethods(String name, AtomicInteger version) {
     return registryHolder.getHoldersByFunctionName(name.toLowerCase(), version);
   }
 
@@ -229,13 +236,21 @@ public class LocalFunctionRegistry {
   }
 
   /**
+   * Returns a map of all function holders mapped by source jars
+   * @return all functions organized by source jars
+   */
+  public Map<String, List<FunctionHolder>> getAllJarsWithFunctionsHolders() {
+    return registryHolder.getAllJarsWithFunctionHolders();
+  }
+
+  /**
    * Registers all functions present in {@link DrillOperatorTable},
    * also sets sync registry version used at the moment of function registration.
    *
    * @param operatorTable drill operator table
    */
   public void register(DrillOperatorTable operatorTable) {
-    AtomicLong versionHolder = new AtomicLong();
+    AtomicInteger versionHolder = new AtomicInteger();
     final Map<String, Collection<DrillFuncHolder>> registeredFunctions =
         registryHolder.getAllFunctionsWithHolders(versionHolder).asMap();
     operatorTable.setFunctionRegistryVersion(versionHolder.get());

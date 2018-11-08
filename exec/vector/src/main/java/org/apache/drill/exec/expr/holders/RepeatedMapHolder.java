@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -19,10 +19,8 @@ package org.apache.drill.exec.expr.holders;
 
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.Types;
-import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.vector.complex.MapVector;
-
-import java.util.LinkedHashSet;
+import org.apache.drill.exec.vector.complex.reader.FieldReader;
 
 public final class RepeatedMapHolder implements ValueHolder{
 
@@ -40,5 +38,7 @@ public final class RepeatedMapHolder implements ValueHolder{
 
     /** The Vector holding the actual values. **/
     public MapVector vector;
+
+    public FieldReader reader;
 
 }

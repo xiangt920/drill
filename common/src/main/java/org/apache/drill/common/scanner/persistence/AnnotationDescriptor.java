@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -30,7 +30,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.ImmutableMap;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableMap;
 
 /**
  * a class annotation
@@ -148,6 +148,8 @@ public final class AnnotationDescriptor {
           return enumValue;
         } else if (c.equals(boolean.class)) {
           return Boolean.valueOf(value);
+        } else if (c.equals(int.class)) {
+          return Integer.valueOf(value);
         }
         throw new UnsupportedOperationException(c.toString());
       }

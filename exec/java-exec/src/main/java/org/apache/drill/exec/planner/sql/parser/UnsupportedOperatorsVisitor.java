@@ -44,7 +44,7 @@ import org.apache.calcite.sql.SqlDataTypeSpec;
 
 import java.util.List;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 public class UnsupportedOperatorsVisitor extends SqlShuttle {
   private QueryContext context;
@@ -262,6 +262,15 @@ public class UnsupportedOperatorsVisitor extends SqlShuttle {
         unsupportedOperatorCollector.setException(SqlUnsupportedException.ExceptionType.RELATIONAL,
             "CROSS JOIN is not supported\n" +
             "See Apache Drill JIRA: DRILL-1921");
+        throw new UnsupportedOperationException();
+      }
+    }
+
+    //Disable UNNEST if the configuration disable it
+    if (sqlCall.getKind() == SqlKind.UNNEST) {
+      if (!context.getPlannerSettings().isUnnestLateralEnabled()) {
+        unsupportedOperatorCollector.setException(SqlUnsupportedException.ExceptionType.RELATIONAL,
+            "Unnest is not enabled per configuration");
         throw new UnsupportedOperationException();
       }
     }

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -70,5 +70,12 @@ public class Sort extends AbstractSingle{
   @Override
   public int getOperatorType() {
     return CoreOperatorType.OLD_SORT_VALUE;
+  }
+
+  @Override
+  public String toString() {
+    return "Sort[orderings=" + orderings
+        + ", reverse=" + reverse
+        + "]";
   }
 }

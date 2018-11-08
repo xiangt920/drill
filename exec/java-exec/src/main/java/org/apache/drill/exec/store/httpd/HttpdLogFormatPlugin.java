@@ -34,6 +34,7 @@ import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.ops.OperatorContext;
 import org.apache.drill.exec.physical.impl.OutputMutator;
+import org.apache.drill.exec.proto.UserBitShared.CoreOperatorType;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.store.AbstractRecordReader;
 import org.apache.drill.exec.store.RecordWriter;
@@ -54,8 +55,8 @@ import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapred.TextInputFormat;
 
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
 import java.util.Map;
 import org.apache.drill.exec.store.RecordReader;
 import org.slf4j.Logger;
@@ -241,6 +242,14 @@ public class HttpdLogFormatPlugin extends EasyFormatPlugin<HttpdLogFormatPlugin.
       }
     }
 
+    @Override
+    public String toString() {
+      return "HttpdLogRecordReader[Path=" + work.getPath()
+          + ", Start=" + work.getStart()
+          + ", Length=" + work.getLength()
+          + ", Line=" + lineNumber.get()
+          + "]";
+    }
   }
 
   /**
@@ -266,11 +275,11 @@ public class HttpdLogFormatPlugin extends EasyFormatPlugin<HttpdLogFormatPlugin.
 
   @Override
   public int getReaderOperatorType() {
-    return -1;
+    return CoreOperatorType.HTPPD_LOG_SUB_SCAN_VALUE;
   }
 
   @Override
   public int getWriterOperatorType() {
-    return -1;
+    throw new UnsupportedOperationException();
   }
 }

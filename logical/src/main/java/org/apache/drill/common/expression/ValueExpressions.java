@@ -18,18 +18,16 @@
 package org.apache.drill.common.expression;
 
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.GregorianCalendar;
 import java.util.Iterator;
 
-import com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
 import org.apache.drill.common.expression.visitors.ExprVisitor;
 import org.apache.drill.common.types.TypeProtos.DataMode;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.common.types.Types;
-import org.apache.drill.common.util.CoreDecimalUtility;
-
-import com.google.common.collect.Iterators;
 
 public class ValueExpressions {
 
@@ -93,20 +91,8 @@ public class ValueExpressions {
       return new IntervalDayExpression(intervalInMillis);
   }
 
-  public static LogicalExpression getDecimal9(BigDecimal i) {
-    return new Decimal9Expression(i, ExpressionPosition.UNKNOWN);
-  }
-
-  public static LogicalExpression getDecimal18(BigDecimal i) {
-    return new Decimal18Expression(i, ExpressionPosition.UNKNOWN);
-  }
-
-  public static LogicalExpression getDecimal28(BigDecimal i) {
-    return new Decimal28Expression(i, ExpressionPosition.UNKNOWN);
-  }
-
-  public static LogicalExpression getDecimal38(BigDecimal i) {
-      return new Decimal38Expression(i, ExpressionPosition.UNKNOWN);
+  public static LogicalExpression getVarDecimal(BigDecimal input, int precision, int scale) {
+    return new VarDecimalExpression(input, precision, scale, ExpressionPosition.UNKNOWN);
   }
 
   public static LogicalExpression getNumericExpression(String sign, String s, ExpressionPosition ep) {
@@ -152,7 +138,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
   }
 
@@ -213,7 +199,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
@@ -245,7 +231,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
@@ -260,7 +246,7 @@ public class ValueExpressions {
       super(pos);
       this.scale = input.scale();
       this.precision = input.precision();
-      this.decimal = CoreDecimalUtility.getDecimal9FromBigDecimal(input, scale, precision);
+      this.decimal = input.setScale(scale, BigDecimal.ROUND_HALF_UP).intValue();
     }
 
 
@@ -288,7 +274,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
   }
 
@@ -302,7 +288,7 @@ public class ValueExpressions {
       super(pos);
       this.scale = input.scale();
       this.precision = input.precision();
-      this.decimal = CoreDecimalUtility.getDecimal18FromBigDecimal(input, scale, precision);
+      this.decimal = input.setScale(scale, BigDecimal.ROUND_HALF_UP).longValue();
     }
 
 
@@ -330,7 +316,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
@@ -361,7 +347,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
@@ -391,11 +377,49 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
 
+  public static class VarDecimalExpression extends LogicalExpressionBase {
+
+    private final BigDecimal bigDecimal;
+    private final int precision;
+    private final int scale;
+
+    public VarDecimalExpression(BigDecimal input, int precision, int scale, ExpressionPosition pos) {
+      super(pos);
+      this.bigDecimal = input;
+      this.precision = precision;
+      this.scale = scale;
+    }
+
+    public BigDecimal getBigDecimal() {
+      return bigDecimal;
+    }
+
+    @Override
+    public MajorType getMajorType() {
+      return MajorType
+          .newBuilder()
+          .setMinorType(MinorType.VARDECIMAL)
+          .setScale(scale)
+          .setPrecision(precision)
+          .setMode(DataMode.REQUIRED)
+          .build();
+    }
+
+    @Override
+    public <T, V, E extends Exception> T accept(ExprVisitor<T, V, E> visitor, V value) throws E {
+      return visitor.visitVarDecimalConstant(this, value);
+    }
+
+    @Override
+    public Iterator<LogicalExpression> iterator() {
+      return Collections.emptyIterator();
+    }
+  }
 
   public static class DoubleExpression extends LogicalExpressionBase {
     private double d;
@@ -423,7 +447,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
@@ -459,7 +483,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
@@ -496,7 +520,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
@@ -533,7 +557,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
@@ -569,7 +593,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
@@ -605,7 +629,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }
@@ -648,7 +672,7 @@ public class ValueExpressions {
 
     @Override
     public Iterator<LogicalExpression> iterator() {
-      return Iterators.emptyIterator();
+      return Collections.emptyIterator();
     }
 
   }

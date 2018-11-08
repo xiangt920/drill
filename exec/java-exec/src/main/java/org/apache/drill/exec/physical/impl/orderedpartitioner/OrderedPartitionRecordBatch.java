@@ -71,8 +71,8 @@ import org.apache.drill.exec.vector.IntVector;
 import org.apache.drill.exec.vector.ValueVector;
 import org.apache.calcite.rel.RelFieldCollation.Direction;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JExpr;
 
@@ -101,11 +101,11 @@ public class OrderedPartitionRecordBatch extends AbstractRecordBatch<OrderedPart
       .mode(SerializationMode.DRILL_SERIALIZIABLE) //
       .build();
 
-  public final MappingSet mainMapping = new MappingSet( (String) null, null, ClassGenerator.DEFAULT_CONSTANT_MAP,
+  private final MappingSet mainMapping = new MappingSet( (String) null, null, ClassGenerator.DEFAULT_CONSTANT_MAP,
       ClassGenerator.DEFAULT_SCALAR_MAP);
-  public final MappingSet incomingMapping = new MappingSet("inIndex", null, "incoming", null,
+  private final MappingSet incomingMapping = new MappingSet("inIndex", null, "incoming", null,
       ClassGenerator.DEFAULT_CONSTANT_MAP, ClassGenerator.DEFAULT_SCALAR_MAP);
-  public final MappingSet partitionMapping = new MappingSet("partitionIndex", null, "partitionVectors", null,
+  private final MappingSet partitionMapping = new MappingSet("partitionIndex", null, "partitionVectors", null,
       ClassGenerator.DEFAULT_CONSTANT_MAP, ClassGenerator.DEFAULT_SCALAR_MAP);
 
   private final int recordsToSample; // How many records must be received before analyzing
@@ -646,4 +646,10 @@ public class OrderedPartitionRecordBatch extends AbstractRecordBatch<OrderedPart
     }
   }
 
+  @Override
+  public void dump() {
+    logger.error("OrderedPartitionRecordBatch[container={}, popConfig={}, partitionVectors={}, partitions={}, " +
+            "recordsSampled={}, recordCount={}]",
+        container, popConfig, partitionVectors, partitions, recordsSampled, recordCount);
+  }
 }

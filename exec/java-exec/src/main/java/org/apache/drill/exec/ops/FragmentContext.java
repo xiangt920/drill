@@ -21,7 +21,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
-import com.google.common.annotations.VisibleForTesting;
+import org.apache.drill.exec.work.filter.RuntimeFilterSink;
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.exec.compile.CodeCompiler;
@@ -36,18 +37,11 @@ import org.apache.drill.exec.server.options.OptionManager;
 import org.apache.drill.exec.testing.ExecutionControls;
 
 import io.netty.buffer.DrillBuf;
+import org.apache.drill.exec.work.filter.RuntimeFilterWritable;
 
 /**
- * Fragment context interface: separates implementation from definition.
- * Allows unit testing by mocking or reimplementing services with
- * test-time versions. The name is awkward, chosen to avoid renaming
- * the implementation class which is used in many places in legacy code.
- * New code should use this interface, and the names should eventually
- * be swapped with {@link FragmentContextImpl} becoming
- * <tt>FragmentContextImpl</tt> and this interface becoming
- * {@link FragmentContextImpl}.
+ * Provides the resources required by a non-exchange operator to execute.
  */
-
 public interface FragmentContext extends UdfUtilities, AutoCloseable {
   /**
    * Returns the UDF registry.
@@ -158,12 +152,24 @@ public interface FragmentContext extends UdfUtilities, AutoCloseable {
 
   DrillBuf replace(DrillBuf old, int newSize);
 
+  @Override
   DrillBuf getManagedBuffer();
 
   DrillBuf getManagedBuffer(int size);
 
   @Override
   void close();
+
+  /**
+   * @return
+   */
+  RuntimeFilterSink getRuntimeFilterSink();
+
+  /**
+   * add a RuntimeFilter when the RuntimeFilter receiver belongs to the same MinorFragment
+   * @param runtimeFilter
+   */
+  public void addRuntimeFilter(RuntimeFilterWritable runtimeFilter);
 
   interface ExecutorState {
     /**

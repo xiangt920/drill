@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,7 +17,6 @@
  */
 package org.apache.drill.jdbc.impl;
 
-import java.sql.ResultSet;
 import java.sql.SQLException;
 
 import org.apache.calcite.avatica.util.Cursor.Accessor;

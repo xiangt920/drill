@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 package org.apache.drill.exec;
-
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
@@ -36,11 +35,13 @@ import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.server.RemoteServiceSet;
 import org.apache.drill.exec.vector.ValueVector;
 
-import com.google.common.base.Charsets;
-import com.google.common.base.Stopwatch;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 
 public class RunRootExec {
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(RunRootExec.class);
+
   public static DrillConfig c = DrillConfig.create();
 
   public static void main(String args[]) throws Exception {
@@ -50,13 +51,13 @@ public class RunRootExec {
     bit.run();
     DrillbitContext bitContext = bit.getContext();
     PhysicalPlanReader reader = bitContext.getPlanReader();
-    PhysicalPlan plan = reader.readPhysicalPlan(Files.toString(new File(path), Charsets.UTF_8));
+    PhysicalPlan plan = reader.readPhysicalPlan(Files.asCharSource(new File(path), Charsets.UTF_8).read());
     FunctionImplementationRegistry registry = bitContext.getFunctionImplementationRegistry();
     FragmentContextImpl context = new FragmentContextImpl(bitContext, PlanFragment.getDefaultInstance(), null, registry);
     SimpleRootExec exec;
-    for (int i = 0; i < iterations; i ++) {
+    for (int i = 0; i < iterations; i++) {
       Stopwatch w = Stopwatch.createStarted();
-      System.out.println("STARTITER:" + i);
+      logger.info("STARTITER: {}", i);
       exec = new SimpleRootExec(ImplCreator.getExec(context, (FragmentRoot) plan.getSortedOperators(false).iterator().next()));
 
       while (exec.next()) {
@@ -64,8 +65,8 @@ public class RunRootExec {
           v.clear();
         }
       }
-      System.out.println("ENDITER: " + i);
-      System.out.println("TIME: " + w.elapsed(TimeUnit.MILLISECONDS) + "ms");
+      logger.info("ENDITER: {}", i);
+      logger.info("TIME: {}ms", w.elapsed(TimeUnit.MILLISECONDS));
       exec.close();
     }
     context.close();

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -32,7 +32,6 @@ import org.apache.drill.common.scanner.ClassPathScanner;
 import org.apache.drill.common.scanner.persistence.ScanResult;
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.TypeProtos.MajorType;
-import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.expr.fn.impl.hive.ObjectInspectorHelper;
 import org.apache.drill.exec.planner.sql.DrillOperatorTable;
@@ -46,8 +45,8 @@ import org.apache.hadoop.hive.ql.udf.generic.GenericUDF;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDFBridge;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.collect.ArrayListMultimap;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 
 public class HiveFunctionRegistry implements PluggableFunctionRegistry{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(HiveFunctionRegistry.class);
@@ -267,9 +266,9 @@ public class HiveFunctionRegistry implements PluggableFunctionRegistry{
             .build(logger);
       }
 
-      return TypeInferenceUtils.createCalciteTypeWithNullability(
+      return TypeInferenceUtils.convertToCalciteType(
           opBinding.getTypeFactory(),
-          TypeInferenceUtils.getCalciteTypeFromDrillType(hiveFuncHolder.getReturnType().getMinorType()),
+          hiveFuncHolder.getReturnType(),
           hiveFuncHolder.getReturnType().getMode() != TypeProtos.DataMode.REQUIRED);
     }
   }

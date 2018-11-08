@@ -41,7 +41,7 @@ import org.apache.drill.test.rowSet.RowSetReader;
 import org.apache.drill.test.rowSet.schema.SchemaBuilder;
 import org.junit.Test;
 
-import com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
 
 /**
  * Runs a worst-case scenario test that combines aspects of all
@@ -65,6 +65,7 @@ import com.google.common.base.Charsets;
  */
 
 public class TestResultSetLoaderTorture extends SubOperatorTest {
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TestResultSetLoaderTorture.class);
 
   private static class TestSetup {
     int n1Cycle = 5;
@@ -130,15 +131,11 @@ public class TestResultSetLoaderTorture extends SubOperatorTest {
       // Write until overflow
 
       writeRowCount = rootWriter.rowCount();
-      //System.out.println("Start count: " + writeRowCount);
       while (! rootWriter.isFull()) {
         lastRowDiscarded = false;
         writeRow();
         rowId++;
       }
-//      System.out.println("End of batch: rowId: " + rowId +
-//          ", count: " + writeRowCount +
-//          ", writer count:" + rootWriter.rowCount());
     }
 
     private void writeRow() {
@@ -166,12 +163,6 @@ public class TestResultSetLoaderTorture extends SubOperatorTest {
         writeRowCount++;
       } else {
         lastRowDiscarded = true;
-//        System.out.println("Skip row ID: " + rowId +
-//            ", count: " + writeRowCount +
-//            ", row set: " + rootWriter.rowCount());
-      }
-      if (rowId >= startPrint &&  rowId <= endPrint) {
-        System.out.println();
       }
     }
 
@@ -228,10 +219,7 @@ public class TestResultSetLoaderTorture extends SubOperatorTest {
 
     public void print(String label, Object value) {
       if (rowId >= startPrint &&  rowId <= endPrint) {
-        System.out.print(label);
-        System.out.print(" = ");
-        System.out.print(value);
-        System.out.print(" ");
+        logger.info("{} = {}", label, value);
       }
     }
 
@@ -262,7 +250,7 @@ public class TestResultSetLoaderTorture extends SubOperatorTest {
     public BatchReader(TestSetup setup, RowSetReader reader, ReadState readState) {
       this.setup = setup;
       this.rootReader = reader;
-      this.readState = readState;;
+      this.readState = readState;
 
       TupleReader m1Reader = rootReader.tuple("m1");
       n1Reader = m1Reader.scalar("n1");
@@ -278,7 +266,6 @@ public class TestResultSetLoaderTorture extends SubOperatorTest {
 
     public void verify() {
       while (rootReader.next()) {
-//        System.out.println(readState.rowId);
         verifyRow();
         readState.rowId++;
       }
@@ -364,12 +351,11 @@ public class TestResultSetLoaderTorture extends SubOperatorTest {
 
   @Test
   public void tortureTest() {
-    LogFixtureBuilder logBuilder = new LogFixtureBuilder()
+    LogFixtureBuilder logBuilder = new LogFixtureBuilder();
 
         // Enable to get detailed tracing when things go wrong.
 
 //        .logger("org.apache.drill.exec.physical.rowSet", Level.TRACE)
-        ;
     try (LogFixture logFixture = logBuilder.build()) {
       doTortureTest();
     }

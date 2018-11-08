@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -33,7 +33,7 @@ import org.apache.drill.exec.record.selection.SelectionVector2;
 import org.apache.drill.exec.record.selection.SelectionVector4;
 import org.apache.drill.exec.vector.ValueVector;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 @Deprecated
 public class SimpleRootExec implements RootExec, Iterable<ValueVector> {
@@ -103,6 +103,11 @@ public class SimpleRootExec implements RootExec, Iterable<ValueVector> {
     default:
       return true;
     }
+  }
+
+  @Override
+  public void dumpBatches() {
+    screenRoot.dumpBatches();
   }
 
   @Override

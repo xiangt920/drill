@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -20,7 +20,6 @@ package org.apache.drill.exec.pop;
 import java.io.IOException;
 import java.util.Properties;
 
-import org.apache.drill.test.QueryTestUtil;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.util.DrillFileUtils;
 import org.apache.drill.exec.ExecConstants;
@@ -36,8 +35,8 @@ import org.apache.drill.exec.server.Drillbit;
 import org.apache.drill.exec.work.foreman.ForemanSetupException;
 import org.junit.BeforeClass;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 
 public abstract class PopUnitTestBase  extends ExecTest{
 //  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(PopUnitTestBase.class);
@@ -54,7 +53,6 @@ public abstract class PopUnitTestBase  extends ExecTest{
     props.put(ExecConstants.SYS_STORE_PROVIDER_LOCAL_ENABLE_WRITE, "false");
     props.put(ExecConstants.HTTP_ENABLE, "false");
     props.put(Drillbit.SYSTEM_OPTIONS_NAME, "org.apache.drill.exec.compile.ClassTransformer.scalar_replacement=on");
-    props.put(QueryTestUtil.TEST_QUERY_PRINTING_SILENT, "true");
     props.put("drill.catastrophic_to_standard_out", "true");
     CONFIG = DrillConfig.create(props);
   }
@@ -70,7 +68,7 @@ public abstract class PopUnitTestBase  extends ExecTest{
 
   public static Fragment getRootFragment(PhysicalPlanReader reader, String file) throws FragmentSetupException,
       IOException, ForemanSetupException {
-    return getRootFragmentFromPlanString(reader, Files.toString(DrillFileUtils.getResourceAsFile(file), Charsets.UTF_8));
+    return getRootFragmentFromPlanString(reader, Files.asCharSource(DrillFileUtils.getResourceAsFile(file), Charsets.UTF_8).read());
   }
 
 

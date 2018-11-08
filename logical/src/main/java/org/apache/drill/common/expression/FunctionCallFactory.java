@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -25,7 +25,7 @@ import java.util.Map;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 public class FunctionCallFactory {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FunctionCallFactory.class);
@@ -83,6 +83,14 @@ public class FunctionCallFactory {
 
   public static LogicalExpression createConvert(String function, String conversionType, LogicalExpression expr, ExpressionPosition ep) {
     return new ConvertExpression(function, conversionType, expr, ep);
+  }
+
+  public static LogicalExpression createAnyValue(ExpressionPosition ep, LogicalExpression expr) {
+    return new AnyValueExpression(expr, ep);
+  }
+
+  public static LogicalExpression createAnyValue(String functionName, List<LogicalExpression> args) {
+    return createExpression(functionName, args);
   }
 
   public static LogicalExpression createExpression(String functionName, List<LogicalExpression> args){

@@ -199,9 +199,7 @@ logBaseMathFunction : [
       {input: "UInt1"},
       {input: "UInt2"},
       {input: "UInt4"},
-      {input: "UInt8"},
-      {input: "Decimal9"},
-      {input: "Decimal18"}
+      {input: "UInt8"}
     ]
    }
 ],
@@ -216,9 +214,7 @@ extendedUnaryMathFunctions : [
       {input: "UInt1"},
       {input: "UInt2"},
       {input: "UInt4"},
-      {input: "UInt8"},
-      {input: "Decimal9"},
-      {input: "Decimal18"}
+      {input: "UInt8"}
     ]
    },
 
@@ -232,9 +228,7 @@ extendedUnaryMathFunctions : [
       {input: "UInt1"},
       {input: "UInt2"},
       {input: "UInt4"},
-      {input: "UInt8"},
-      {input: "Decimal9"},
-      {input: "Decimal18"}
+      {input: "UInt8"}
     ]
    },
 
@@ -248,11 +242,23 @@ extendedUnaryMathFunctions : [
       {input: "UInt1"},
       {input: "UInt2"},
       {input: "UInt4"},
-      {input: "UInt8"},
-      {input: "Decimal9"},
-      {input: "Decimal18"}
+      {input: "UInt8"}
     ]
    },
+
+   {className: "Log10", funcName: "log10", javaFunc : "java.lang.Math.log10", outputType: "Float8", types: [
+      {input: "Int"},
+      {input: "BigInt"},
+      {input: "Float4"},
+      {input: "Float8"},
+      {input: "SmallInt"},
+      {input: "TinyInt"},
+      {input: "UInt1"},
+      {input: "UInt2"},
+      {input: "UInt4"},
+      {input: "UInt8"}
+    ]
+   }
 
 {className: "Degrees", funcName: "degrees", javaFunc : "java.lang.Math.toDegrees", outputType: "Float8", types: [
       {input: "Int"},
@@ -264,9 +270,7 @@ extendedUnaryMathFunctions : [
       {input: "UInt1"},
       {input: "UInt2"},
       {input: "UInt4"},
-      {input: "UInt8"},
-      {input: "Decimal9"},
-      {input: "Decimal18"}
+      {input: "UInt8"}
     ]
    },
 
@@ -280,9 +284,7 @@ extendedUnaryMathFunctions : [
       {input: "UInt1"},
       {input: "UInt2"},
       {input: "UInt4"},
-      {input: "UInt8"},
-      {input: "Decimal9"},
-      {input: "Decimal18"}
+      {input: "UInt8"}
     ]
    }
 ],

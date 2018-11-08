@@ -35,11 +35,12 @@ import org.apache.drill.common.expression.ValueExpressions.LongExpression;
 import org.apache.drill.common.expression.ValueExpressions.QuotedString;
 import org.apache.drill.common.expression.ValueExpressions.TimeExpression;
 import org.apache.drill.common.expression.ValueExpressions.TimeStampExpression;
+import org.apache.drill.common.expression.ValueExpressions.VarDecimalExpression;
 import org.apache.drill.common.expression.visitors.AbstractExprVisitor;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.joda.time.Period;
 
-import com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
 
 public class ExpressionStringBuilder extends AbstractExprVisitor<Void, StringBuilder, RuntimeException>{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ExpressionStringBuilder.class);
@@ -217,6 +218,12 @@ public class ExpressionStringBuilder extends AbstractExprVisitor<Void, StringBui
   }
 
   @Override
+  public Void visitVarDecimalConstant(VarDecimalExpression decExpr, StringBuilder sb) throws RuntimeException {
+    sb.append(decExpr.getBigDecimal().toString());
+    return null;
+  }
+
+  @Override
   public Void visitDoubleConstant(DoubleExpression dExpr, StringBuilder sb) throws RuntimeException {
     sb.append(dExpr.getDouble());
     return null;
@@ -241,6 +248,14 @@ public class ExpressionStringBuilder extends AbstractExprVisitor<Void, StringBui
     sb.append(e.getConvertFunction()).append("(");
     e.getInput().accept(this, sb);
     sb.append(", '").append(e.getEncodingType()).append("')");
+    return null;
+  }
+
+  @Override
+  public Void visitAnyValueExpression(AnyValueExpression e, StringBuilder sb) throws RuntimeException {
+    sb.append("any(");
+    e.getInput().accept(this, sb);
+    sb.append(")");
     return null;
   }
 
@@ -292,7 +307,7 @@ public class ExpressionStringBuilder extends AbstractExprVisitor<Void, StringBui
     case DECIMAL28SPARSE:
     case DECIMAL38DENSE:
     case DECIMAL38SPARSE:
-
+    case VARDECIMAL:
       // add scale and precision
       sb.append("(");
       sb.append(mt.getPrecision());

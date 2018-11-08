@@ -78,12 +78,15 @@ public abstract class ColumnReader<V extends ValueVector> {
   int currDefLevel;
 
   // variables for a single read pass
-  long readStartInBytes = 0, readLength = 0, readLengthInBits = 0, recordsReadInThisIteration = 0;
+  long readStartInBytes = 0;
+  long readLength = 0;
+  long readLengthInBits = 0;
+  long recordsReadInThisIteration = 0;
   private ExecutorService threadPool;
 
   volatile boolean isShuttingDown; //Indicate to not submit any new AsyncPageReader Tasks during clear()
 
-  protected ColumnReader(ParquetRecordReader parentReader, int allocateSize, ColumnDescriptor descriptor,
+  protected ColumnReader(ParquetRecordReader parentReader, ColumnDescriptor descriptor,
       ColumnChunkMetaData columnChunkMetaData, boolean fixedLength, V v, SchemaElement schemaElement) throws ExecutionSetupException {
     this.parentReader = parentReader;
     this.columnDescriptor = descriptor;
@@ -205,6 +208,10 @@ public abstract class ColumnReader<V extends ValueVector> {
       readField(i);
     }
     pageReader.valuesRead += recordsToRead;
+  }
+
+  protected int readRecordsInBulk(int recordsToReadInThisPass) throws IOException {
+      throw new UnsupportedOperationException();
   }
 
   protected boolean processPageData(int recordsToReadInThisPass) throws IOException {

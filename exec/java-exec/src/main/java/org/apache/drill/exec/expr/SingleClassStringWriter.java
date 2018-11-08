@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -22,7 +22,7 @@ import java.io.OutputStream;
 import java.io.StringWriter;
 import java.io.Writer;
 
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 import com.sun.codemodel.CodeWriter;
 import com.sun.codemodel.JPackage;
 

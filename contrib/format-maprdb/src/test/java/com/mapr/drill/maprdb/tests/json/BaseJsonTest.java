@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -29,6 +29,19 @@ import org.junit.BeforeClass;
 import com.mapr.drill.maprdb.tests.MaprDBTestsSuite;
 
 public class BaseJsonTest extends BaseTestQuery {
+  protected static final String SCHEMA = "hbase.root";
+  
+  protected String format(final String sql) {
+    return String.format(sql, SCHEMA, getTablePath());
+  }
+
+  protected String getTablePath() {
+    throw new RuntimeException("unimplemented");
+  }
+
+  public static String format(final String sql, final String tablePath) {
+    return String.format(sql, SCHEMA, tablePath);
+  }
 
   @BeforeClass
   public static void setupDefaultTestCluster() throws Exception {
@@ -50,20 +63,18 @@ public class BaseJsonTest extends BaseTestQuery {
 
 
   protected List<QueryDataBatch> runHBaseSQLlWithResults(String sql) throws Exception {
-    System.out.println("Running query:\n" + sql);
     return testSqlWithResults(sql);
   }
 
   protected void runSQLAndVerifyCount(String sql, int expectedRowCount) throws Exception{
     List<QueryDataBatch> results = runHBaseSQLlWithResults(sql);
-    printResultAndVerifyRowCount(results, expectedRowCount);
+    logResultAndVerifyRowCount(results, expectedRowCount);
   }
 
-  private void printResultAndVerifyRowCount(List<QueryDataBatch> results, int expectedRowCount) throws SchemaChangeException {
-    int rowCount = printResult(results);
+  private void logResultAndVerifyRowCount(List<QueryDataBatch> results, int expectedRowCount) throws SchemaChangeException {
+    int rowCount = logResult(results);
     if (expectedRowCount != -1) {
       Assert.assertEquals(expectedRowCount, rowCount);
     }
   }
-
 }

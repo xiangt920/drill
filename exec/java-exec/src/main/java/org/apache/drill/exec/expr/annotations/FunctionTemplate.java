@@ -20,10 +20,11 @@ package org.apache.drill.exec.expr.annotations;
 import org.apache.drill.common.expression.LogicalExpression;
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.exec.expr.fn.FunctionAttributes;
-import org.apache.drill.exec.expr.fn.FunctionInitializer;
 import org.apache.drill.exec.expr.fn.output.ConcatReturnTypeInference;
 import org.apache.drill.exec.expr.fn.output.DecimalReturnTypeInference;
 import org.apache.drill.exec.expr.fn.output.DefaultReturnTypeInference;
+import org.apache.drill.exec.expr.fn.output.OutputWidthCalculator;
+import org.apache.drill.exec.expr.fn.output.OutputWidthCalculators;
 import org.apache.drill.exec.expr.fn.output.PadReturnTypeInference;
 import org.apache.drill.exec.expr.fn.output.ReturnTypeInference;
 import org.apache.drill.exec.expr.fn.output.SameInOutLengthReturnTypeInference;
@@ -89,7 +90,44 @@ public @interface FunctionTemplate {
   boolean isNiladic() default false;
   boolean checkPrecisionRange() default false;
 
-  public enum NullHandling {
+  /**
+   * Defines if a function is internal and not intended for public use [e.g. castEmptyStringNullableVarBinaryToNullableVarDecimal(..) ]
+   */
+  boolean isInternal() default false;
+
+  /**
+   * This enum will be used to estimate the average size of the output
+   * produced by a function that produces variable length output
+   */
+  enum OutputWidthCalculatorType {
+    DEFAULT(OutputWidthCalculators.DefaultOutputWidthCalculator.INSTANCE),
+    CLONE(OutputWidthCalculators.CloneOutputWidthCalculator.INSTANCE),
+    CONCAT(OutputWidthCalculators.ConcatOutputWidthCalculator.INSTANCE),
+    // Custom calculator is required for functions that don't fall into any predefined
+    // calculator categories - like replace and lpad
+    // place holder markers on functions until support
+    // for CUSTOM calculators is implemented
+    // CUSTOM_FIXED_WIDTH_DEFAULT will default to a fixed size - for functions like
+    // lpad() where the ouput size does not easily map to the input size
+    CUSTOM_FIXED_WIDTH_DEFAULT(OutputWidthCalculators.DefaultOutputWidthCalculator.INSTANCE),
+    // CUSTOM CLONE will default to CLONE - for functions like replace() where the output
+    // size  does not easily map to the input size but is likely to be at most the size of the input.
+    CUSTOM_CLONE_DEFAULT(OutputWidthCalculators.CloneOutputWidthCalculator.INSTANCE);
+    OutputWidthCalculator outputWidthCalculator;
+
+    OutputWidthCalculatorType(OutputWidthCalculator outputWidthCalculator) {
+      this.outputWidthCalculator = outputWidthCalculator;
+    }
+
+    public OutputWidthCalculator getOutputWidthCalculator() { return outputWidthCalculator; }
+  }
+
+  OutputWidthCalculatorType outputWidthCalculatorType() default OutputWidthCalculatorType.DEFAULT;
+
+  int OUTPUT_SIZE_ESTIMATE_DEFAULT = -1;
+  int outputSizeEstimate() default OUTPUT_SIZE_ESTIMATE_DEFAULT;
+
+  enum NullHandling {
     /**
      * Method handles nulls.
      */
@@ -100,6 +138,9 @@ public @interface FunctionTemplate {
      * Indicates that a method's associated logical operation returns NULL if
      * either input is NULL, and therefore that the method must not be called
      * with null inputs.  (The calling framework must handle NULLs.)
+     *
+     * <p>Not Supported for aggregate functions and for functions with {@link Output} of type
+     * {@link org.apache.drill.exec.vector.complex.writer.BaseWriter.ComplexWriter}.</p>
      */
     NULL_IF_NULL
   }
@@ -108,7 +149,7 @@ public @interface FunctionTemplate {
    * Function scope is used to indicate function output rows relation:
    * simple / scalar (1 -> 1) or aggregate (n -> 1).
    */
-  public enum FunctionScope {
+  enum FunctionScope {
     SIMPLE,
     POINT_AGGREGATE,
     HOLISTIC_AGGREGATE,
@@ -119,7 +160,7 @@ public @interface FunctionTemplate {
    * Return type enum is used to indicate which return type calculation logic
    * should be used for functions.
    */
-  public enum ReturnType {
+  enum ReturnType {
     DEFAULT(DefaultReturnTypeInference.INSTANCE),
 
     STRING_CAST(StringCastReturnTypeInference.INSTANCE),
@@ -129,6 +170,7 @@ public @interface FunctionTemplate {
 
     DECIMAL_AGGREGATE(DecimalReturnTypeInference.DecimalAggReturnTypeInference.INSTANCE),
     DECIMAL_SUM_AGGREGATE(DecimalReturnTypeInference.DecimalSumAggReturnTypeInference.INSTANCE),
+    DECIMAL_AVG_AGGREGATE(DecimalReturnTypeInference.DecimalAvgAggReturnTypeInference.INSTANCE),
     DECIMAL_MAX_SCALE(DecimalReturnTypeInference.DecimalMaxScaleReturnTypeInference.INSTANCE),
     DECIMAL_SUM_SCALE(DecimalReturnTypeInference.DecimalSumScaleReturnTypeInference.INSTANCE),
     DECIMAL_CAST(DecimalReturnTypeInference.DecimalCastReturnTypeInference.INSTANCE),
@@ -150,7 +192,7 @@ public @interface FunctionTemplate {
 
   }
 
-  public enum FunctionCostCategory {
+  enum FunctionCostCategory {
     SIMPLE(1), MEDIUM(20), COMPLEX(50);
 
     private final int value;

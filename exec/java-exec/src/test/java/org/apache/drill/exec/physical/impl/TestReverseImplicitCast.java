@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -34,8 +34,8 @@ import org.apache.drill.exec.server.RemoteServiceSet;
 import org.apache.drill.exec.vector.ValueVector;
 import org.junit.Test;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 
 public class TestReverseImplicitCast extends PopUnitTestBase {
 
@@ -51,7 +51,7 @@ public class TestReverseImplicitCast extends PopUnitTestBase {
       bit.run();
       client.connect();
       List<QueryDataBatch> results = client.runQuery(org.apache.drill.exec.proto.UserBitShared.QueryType.PHYSICAL,
-          Files.toString(DrillFileUtils.getResourceAsFile("/functions/cast/two_way_implicit_cast.json"), Charsets.UTF_8));
+          Files.asCharSource(DrillFileUtils.getResourceAsFile("/functions/cast/two_way_implicit_cast.json"), Charsets.UTF_8).read());
 
       RecordBatchLoader batchLoader = new RecordBatchLoader(bit.getContext().getAllocator());
 
@@ -64,9 +64,7 @@ public class TestReverseImplicitCast extends PopUnitTestBase {
       ValueVector.Accessor varcharAccessor1 = itr.next().getValueVector().getAccessor();
 
       for (int i = 0; i < intAccessor1.getValueCount(); i++) {
-        System.out.println(intAccessor1.getObject(i));
         assertEquals(intAccessor1.getObject(i), 10);
-        System.out.println(varcharAccessor1.getObject(i));
         assertEquals(varcharAccessor1.getObject(i).toString(), "101");
       }
 

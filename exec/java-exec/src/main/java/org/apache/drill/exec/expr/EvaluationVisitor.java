@@ -24,6 +24,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 
+import io.netty.buffer.DrillBuf;
+import org.apache.calcite.util.Pair;
+import org.apache.drill.common.expression.AnyValueExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -53,27 +56,30 @@ import org.apache.drill.common.expression.ValueExpressions.LongExpression;
 import org.apache.drill.common.expression.ValueExpressions.QuotedString;
 import org.apache.drill.common.expression.ValueExpressions.TimeExpression;
 import org.apache.drill.common.expression.ValueExpressions.TimeStampExpression;
+import org.apache.drill.common.expression.ValueExpressions.VarDecimalExpression;
 import org.apache.drill.common.expression.visitors.AbstractExprVisitor;
+import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.TypeProtos.MajorType;
-import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.compile.sig.ConstantExpressionIdentifier;
 import org.apache.drill.exec.compile.sig.GeneratorMapping;
 import org.apache.drill.exec.compile.sig.MappingSet;
-import org.apache.drill.exec.expr.ClassGenerator.BlockType;
 import org.apache.drill.exec.expr.ClassGenerator.HoldingContainer;
 import org.apache.drill.exec.expr.fn.AbstractFuncHolder;
+import org.apache.drill.exec.expr.holders.ValueHolder;
 import org.apache.drill.exec.physical.impl.filter.ReturnValueExpression;
 import org.apache.drill.exec.vector.ValueHolderHelper;
 import org.apache.drill.exec.vector.complex.reader.FieldReader;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.base.Function;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JLabel;
 import com.sun.codemodel.JType;
@@ -180,7 +186,7 @@ public class EvaluationVisitor {
 
       AbstractFuncHolder holder = (AbstractFuncHolder) holderExpr.getHolder();
 
-      JVar[] workspaceVars = holder.renderStart(generator, null);
+      JVar[] workspaceVars = holder.renderStart(generator, null, holderExpr.getFieldReference());
 
       if (holder.isNested()) {
         generator.getMappingSet().enterChild();
@@ -263,72 +269,94 @@ public class EvaluationVisitor {
       throw new UnsupportedOperationException("All schema paths should have been replaced with ValueVectorExpressions.");
     }
 
+    private HoldingContainer getHoldingContainer(ClassGenerator<?> generator,
+                                                 MajorType majorType,
+                                                 Function<DrillBuf, ? extends ValueHolder> function) {
+      JType holderType = generator.getHolderType(majorType);
+      Pair<Integer, JVar> depthVar = generator.declareClassConstField("const", holderType, function);
+      JFieldRef outputSet = null;
+      JVar var = depthVar.getValue();
+      if (majorType.getMode() == TypeProtos.DataMode.OPTIONAL) {
+        outputSet = var.ref("isSet");
+      }
+      return new HoldingContainer(majorType, var, var.ref("value"), outputSet);
+    }
+
     @Override
     public HoldingContainer visitLongConstant(LongExpression e, ClassGenerator<?> generator) throws RuntimeException {
-      HoldingContainer out = generator.declare(e.getMajorType());
-      generator.getEvalBlock().assign(out.getValue(), JExpr.lit(e.getLong()));
-      return out;
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getBigIntHolder(e.getLong()));
     }
 
     @Override
     public HoldingContainer visitIntConstant(IntExpression e, ClassGenerator<?> generator) throws RuntimeException {
-      HoldingContainer out = generator.declare(e.getMajorType());
-      generator.getEvalBlock().assign(out.getValue(), JExpr.lit(e.getInt()));
-      return out;
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getIntHolder(e.getInt()));
     }
 
     @Override
     public HoldingContainer visitDateConstant(DateExpression e, ClassGenerator<?> generator) throws RuntimeException {
-      HoldingContainer out = generator.declare(e.getMajorType());
-      generator.getEvalBlock().assign(out.getValue(), JExpr.lit(e.getDate()));
-      return out;
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getDateHolder(e.getDate()));
     }
 
     @Override
     public HoldingContainer visitTimeConstant(TimeExpression e, ClassGenerator<?> generator) throws RuntimeException {
-      HoldingContainer out = generator.declare(e.getMajorType());
-      generator.getEvalBlock().assign(out.getValue(), JExpr.lit(e.getTime()));
-      return out;
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getTimeHolder(e.getTime()));
     }
 
     @Override
     public HoldingContainer visitIntervalYearConstant(IntervalYearExpression e, ClassGenerator<?> generator)
         throws RuntimeException {
-      HoldingContainer out = generator.declare(e.getMajorType());
-      generator.getEvalBlock().assign(out.getValue(), JExpr.lit(e.getIntervalYear()));
-      return out;
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getIntervalYearHolder(e.getIntervalYear()));
     }
 
     @Override
     public HoldingContainer visitTimeStampConstant(TimeStampExpression e, ClassGenerator<?> generator)
         throws RuntimeException {
-      HoldingContainer out = generator.declare(e.getMajorType());
-      generator.getEvalBlock().assign(out.getValue(), JExpr.lit(e.getTimeStamp()));
-      return out;
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getTimeStampHolder(e.getTimeStamp()));
     }
 
     @Override
     public HoldingContainer visitFloatConstant(FloatExpression e, ClassGenerator<?> generator)
         throws RuntimeException {
-      HoldingContainer out = generator.declare(e.getMajorType());
-      generator.getEvalBlock().assign(out.getValue(), JExpr.lit(e.getFloat()));
-      return out;
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getFloat4Holder(e.getFloat()));
     }
 
     @Override
     public HoldingContainer visitDoubleConstant(DoubleExpression e, ClassGenerator<?> generator)
         throws RuntimeException {
-      HoldingContainer out = generator.declare(e.getMajorType());
-      generator.getEvalBlock().assign(out.getValue(), JExpr.lit(e.getDouble()));
-      return out;
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getFloat8Holder(e.getDouble()));
     }
 
     @Override
     public HoldingContainer visitBooleanConstant(BooleanExpression e, ClassGenerator<?> generator)
         throws RuntimeException {
-      HoldingContainer out = generator.declare(e.getMajorType());
-      generator.getEvalBlock().assign(out.getValue(), JExpr.lit(e.getBoolean() ? 1 : 0));
-      return out;
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getBitHolder(e.getBoolean() ? 1 : 0));
     }
 
     @Override
@@ -342,7 +370,7 @@ public class EvaluationVisitor {
       } else if (e instanceof HoldingContainerExpression) {
         return ((HoldingContainerExpression) e).getContainer();
       } else if (e instanceof NullExpression) {
-        return generator.declare(Types.optional(MinorType.INT));
+        return generator.declare(e.getMajorType());
       } else if (e instanceof TypedNullConstant) {
         return generator.declare(e.getMajorType());
       } else {
@@ -455,8 +483,7 @@ public class EvaluationVisitor {
         generator.getEvalBlock().add(eval);
 
       } else {
-        JExpression vector = e.isSuperReader() ? vv1.component(componentVariable) : vv1;
-        JExpression expr = vector.invoke("getReader");
+        JExpression expr = vv1.invoke("getReader");
         PathSegment seg = e.getReadPath();
 
         JVar isNull = null;
@@ -588,91 +615,64 @@ public class EvaluationVisitor {
     @Override
     public HoldingContainer visitQuotedStringConstant(QuotedString e, ClassGenerator<?> generator)
         throws RuntimeException {
-      MajorType majorType = e.getMajorType();
-      JBlock setup = generator.getBlock(BlockType.SETUP);
-      JType holderType = generator.getHolderType(majorType);
-      JVar var = generator.declareClassField("string", holderType);
-      JExpression stringLiteral = JExpr.lit(e.value);
-      JExpression buffer = generator.getMappingSet().getIncoming().invoke("getContext").invoke("getManagedBuffer");
-      setup.assign(var,
-          generator.getModel().ref(ValueHolderHelper.class).staticInvoke("getVarCharHolder").arg(buffer).arg(stringLiteral));
-      return new HoldingContainer(majorType, var, null, null);
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getVarCharHolder(buffer, e.getString()));
     }
 
     @Override
     public HoldingContainer visitIntervalDayConstant(IntervalDayExpression e, ClassGenerator<?> generator)
         throws RuntimeException {
-      MajorType majorType = Types.required(MinorType.INTERVALDAY);
-      JBlock setup = generator.getBlock(BlockType.SETUP);
-      JType holderType = generator.getHolderType(majorType);
-      JVar var = generator.declareClassField("intervalday", holderType);
-      JExpression dayLiteral = JExpr.lit(e.getIntervalDay());
-      JExpression millisLiteral = JExpr.lit(e.getIntervalMillis());
-      setup.assign(
-          var,
-          generator.getModel().ref(ValueHolderHelper.class).staticInvoke("getIntervalDayHolder").arg(dayLiteral)
-              .arg(millisLiteral));
-      return new HoldingContainer(majorType, var, null, null);
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getIntervalDayHolder(e.getIntervalDay(), e.getIntervalMillis()));
     }
 
     @Override
     public HoldingContainer visitDecimal9Constant(Decimal9Expression e, ClassGenerator<?> generator)
         throws RuntimeException {
-      MajorType majorType = e.getMajorType();
-      JBlock setup = generator.getBlock(BlockType.SETUP);
-      JType holderType = generator.getHolderType(majorType);
-      JVar var = generator.declareClassField("dec9", holderType);
-      JExpression valueLiteral = JExpr.lit(e.getIntFromDecimal());
-      JExpression scaleLiteral = JExpr.lit(e.getScale());
-      JExpression precisionLiteral = JExpr.lit(e.getPrecision());
-      setup.assign(
-          var,
-          generator.getModel().ref(ValueHolderHelper.class).staticInvoke("getDecimal9Holder").arg(valueLiteral)
-              .arg(scaleLiteral).arg(precisionLiteral));
-      return new HoldingContainer(majorType, var, null, null);
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getDecimal9Holder(e.getIntFromDecimal(), e.getScale(), e.getPrecision()));
     }
 
     @Override
     public HoldingContainer visitDecimal18Constant(Decimal18Expression e, ClassGenerator<?> generator)
         throws RuntimeException {
-      MajorType majorType = e.getMajorType();
-      JBlock setup = generator.getBlock(BlockType.SETUP);
-      JType holderType = generator.getHolderType(majorType);
-      JVar var = generator.declareClassField("dec18", holderType);
-      JExpression valueLiteral = JExpr.lit(e.getLongFromDecimal());
-      JExpression scaleLiteral = JExpr.lit(e.getScale());
-      JExpression precisionLiteral = JExpr.lit(e.getPrecision());
-      setup.assign(
-          var,
-          generator.getModel().ref(ValueHolderHelper.class).staticInvoke("getDecimal18Holder").arg(valueLiteral)
-              .arg(scaleLiteral).arg(precisionLiteral));
-      return new HoldingContainer(majorType, var, null, null);
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getDecimal18Holder(e.getLongFromDecimal(), e.getScale(), e.getPrecision()));
     }
 
     @Override
     public HoldingContainer visitDecimal28Constant(Decimal28Expression e, ClassGenerator<?> generator)
         throws RuntimeException {
-      MajorType majorType = e.getMajorType();
-      JBlock setup = generator.getBlock(BlockType.SETUP);
-      JType holderType = generator.getHolderType(majorType);
-      JVar var = generator.declareClassField("dec28", holderType);
-      JExpression stringLiteral = JExpr.lit(e.getBigDecimal().toString());
-      setup.assign(var,
-          generator.getModel().ref(ValueHolderHelper.class).staticInvoke("getDecimal28Holder").arg(stringLiteral));
-      return new HoldingContainer(majorType, var, null, null);
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getDecimal28Holder(buffer, e.getBigDecimal()));
     }
 
     @Override
     public HoldingContainer visitDecimal38Constant(Decimal38Expression e, ClassGenerator<?> generator)
         throws RuntimeException {
-      MajorType majorType = e.getMajorType();
-      JBlock setup = generator.getBlock(BlockType.SETUP);
-      JType holderType = generator.getHolderType(majorType);
-      JVar var = generator.declareClassField("dec38", holderType);
-      JExpression stringLiteral = JExpr.lit(e.getBigDecimal().toString());
-      setup.assign(var,
-          generator.getModel().ref(ValueHolderHelper.class).staticInvoke("getVarCharHolder").arg(stringLiteral));
-      return new HoldingContainer(majorType, var, null, null);
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getDecimal38Holder(buffer, e.getBigDecimal()));
+    }
+
+    @Override
+    public HoldingContainer visitVarDecimalConstant(VarDecimalExpression e, ClassGenerator<?> generator)
+        throws RuntimeException {
+      return getHoldingContainer(
+        generator,
+        e.getMajorType(),
+        buffer -> ValueHolderHelper.getVarDecimalHolder(buffer, e.getBigDecimal()));
     }
 
     @Override
@@ -690,6 +690,17 @@ public class EvaluationVisitor {
       newArgs.add(e.getInput()); // input_expr
 
       FunctionCall fc = new FunctionCall(convertFunctionName, newArgs, e.getPosition());
+      return fc.accept(this, value);
+    }
+
+    @Override
+    public HoldingContainer visitAnyValueExpression(AnyValueExpression e, ClassGenerator<?> value)
+        throws RuntimeException {
+
+      List<LogicalExpression> newArgs = Lists.newArrayList();
+      newArgs.add(e.getInput()); // input_expr
+
+      FunctionCall fc = new FunctionCall(AnyValueExpression.ANY_VALUE, newArgs, e.getPosition());
       return fc.accept(this, value);
     }
 
@@ -747,7 +758,7 @@ public class EvaluationVisitor {
         setBlock.assign(out.getValue(), JExpr.lit(1));
       } else {
         assert (e == null);
-        eval.assign(out.getValue(), JExpr.lit(1)) ;
+        eval.assign(out.getValue(), JExpr.lit(1));
       }
 
       generator.unNestEvalBlock();     // exit from nested block
@@ -810,7 +821,7 @@ public class EvaluationVisitor {
         setBlock.assign(out.getValue(), JExpr.lit(0));
       } else {
         assert (e == null);
-        eval.assign(out.getValue(), JExpr.lit(0)) ;
+        eval.assign(out.getValue(), JExpr.lit(0));
       }
 
       generator.unNestEvalBlock();   // exit from nested block.
@@ -991,6 +1002,16 @@ public class EvaluationVisitor {
       HoldingContainer hc = getPrevious(decExpr, generator.getMappingSet());
       if (hc == null) {
         hc = super.visitDecimal38Constant(decExpr, generator);
+        put(decExpr, hc, generator.getMappingSet());
+      }
+      return hc;
+    }
+
+    @Override
+    public HoldingContainer visitVarDecimalConstant(VarDecimalExpression decExpr, ClassGenerator<?> generator) throws RuntimeException {
+      HoldingContainer hc = getPrevious(decExpr, generator.getMappingSet());
+      if (hc == null) {
+        hc = super.visitVarDecimalConstant(decExpr, generator);
         put(decExpr, hc, generator.getMappingSet());
       }
       return hc;
@@ -1217,6 +1238,20 @@ public class EvaluationVisitor {
         return super.visitDecimal38Constant(e, generator).setConstant(true);
       } else {
         return super.visitDecimal38Constant(e, generator);
+      }
+    }
+
+    @Override
+    public HoldingContainer visitVarDecimalConstant(VarDecimalExpression e, ClassGenerator<?> generator)
+        throws RuntimeException {
+      if (constantBoundaries.contains(e)) {
+        generator.getMappingSet().enterConstant();
+        HoldingContainer c = super.visitVarDecimalConstant(e, generator);
+        return renderConstantExpression(generator, c);
+      } else if (generator.getMappingSet().isWithinConstant()) {
+        return super.visitVarDecimalConstant(e, generator).setConstant(true);
+      } else {
+        return super.visitVarDecimalConstant(e, generator);
       }
     }
 

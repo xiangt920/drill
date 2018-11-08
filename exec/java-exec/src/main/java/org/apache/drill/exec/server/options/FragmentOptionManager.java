@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,9 +17,8 @@
  */
 package org.apache.drill.exec.server.options;
 
-import com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
 import org.apache.drill.common.map.CaseInsensitiveMap;
-import org.apache.drill.exec.ops.FragmentContextImpl;
 
 import java.util.Map;
 

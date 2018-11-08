@@ -17,23 +17,15 @@
  */
 package org.apache.drill.exec.physical.impl.svremover;
 
-import java.util.List;
-
 import org.apache.drill.exec.exception.OutOfMemoryException;
 import org.apache.drill.exec.exception.SchemaChangeException;
-import org.apache.drill.exec.expr.CodeGenerator;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.physical.config.SelectionVectorRemover;
 import org.apache.drill.exec.record.AbstractSingleRecordBatch;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
 import org.apache.drill.exec.record.RecordBatch;
-import org.apache.drill.exec.record.TransferPair;
-import org.apache.drill.exec.record.VectorContainer;
 import org.apache.drill.exec.record.VectorWrapper;
 import org.apache.drill.exec.record.WritableBatch;
-
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 
 public class RemovingRecordBatch extends AbstractSingleRecordBatch<SelectionVectorRemover>{
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(RemovingRecordBatch.class);
@@ -52,21 +44,15 @@ public class RemovingRecordBatch extends AbstractSingleRecordBatch<SelectionVect
 
   @Override
   protected boolean setupNewSchema() throws SchemaChangeException {
-    container.clear();
-    switch(incoming.getSchema().getSelectionVectorMode()){
-    case NONE:
-      this.copier = getStraightCopier();
-      break;
-    case TWO_BYTE:
-      this.copier = create2Copier();
-      break;
-    case FOUR_BYTE:
-      this.copier = create4Copier();
-      break;
-    default:
-      throw new UnsupportedOperationException();
-    }
+    // Don't clear off container just because an OK_NEW_SCHEMA was received from upstream. For cases when there is just
+    // change in container type but no actual schema change, RemovingRecordBatch should consume OK_NEW_SCHEMA and
+    // send OK to downstream instead. Since the output of RemovingRecordBatch is always going to be a regular container
+    // change in incoming container type is not actual schema change.
+    container.zeroVectors();
+    copier = GenericCopierFactory.createAndSetupCopier(incoming, container, callBack);
 
+    // If there is an actual schema change then below condition will be true and it will send OK_NEW_SCHEMA
+    // downstream too
     if (container.isSchemaChanged()) {
       container.buildSchema(SelectionVectorMode.NONE);
       return true;
@@ -76,15 +62,10 @@ public class RemovingRecordBatch extends AbstractSingleRecordBatch<SelectionVect
   }
 
   @Override
-  public IterOutcome innerNext() {
-    return super.innerNext();
-  }
-
-  @Override
   protected IterOutcome doWork() {
     try {
       copier.copyRecords(0, incoming.getRecordCount());
-    } catch (SchemaChangeException e) {
+    } catch (Exception e) {
       throw new IllegalStateException(e);
     } finally {
       if (incoming.getSchema().getSelectionVectorMode() != SelectionVectorMode.FOUR_BYTE) {
@@ -99,7 +80,7 @@ public class RemovingRecordBatch extends AbstractSingleRecordBatch<SelectionVect
 
     logger.debug("doWork(): {} records copied out of {}, incoming schema {} ",
       container.getRecordCount(), container.getRecordCount(), incoming.getSchema());
-    return IterOutcome.OK;
+    return getFinalOutcome(false);
   }
 
   @Override
@@ -107,65 +88,13 @@ public class RemovingRecordBatch extends AbstractSingleRecordBatch<SelectionVect
     super.close();
   }
 
-  private class StraightCopier implements Copier{
-
-    private List<TransferPair> pairs = Lists.newArrayList();
-
-    @Override
-    public void setup(RecordBatch incoming, VectorContainer outgoing){
-      for(VectorWrapper<?> vv : incoming){
-        TransferPair tp = vv.getValueVector().makeTransferPair(container.addOrGet(vv.getField(), callBack));
-        pairs.add(tp);
-      }
-    }
-
-    @Override
-    public int copyRecords(int index, int recordCount) {
-      assert index == 0 && recordCount == incoming.getRecordCount() : "Straight copier cannot split batch";
-      for(TransferPair tp : pairs){
-        tp.transfer();
-      }
-
-      container.setRecordCount(incoming.getRecordCount());
-      return recordCount;
-    }
-
-    @Override
-    public int appendRecord(int index) throws SchemaChangeException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int appendRecords(int index, int recordCount) throws SchemaChangeException {
-      throw new UnsupportedOperationException();
-    }
-  }
-
-  private Copier getStraightCopier(){
-    StraightCopier copier = new StraightCopier();
-    copier.setup(incoming, container);
-    return copier;
-  }
-
-  private Copier create2Copier() throws SchemaChangeException {
-    Preconditions.checkArgument(incoming.getSchema().getSelectionVectorMode() == SelectionVectorMode.TWO_BYTE);
-
-    for(VectorWrapper<?> vv : incoming){
-      vv.getValueVector().makeTransferPair(container.addOrGet(vv.getField(), callBack));
-    }
-
-    Copier copier = new GenericSV2Copier();
-    copier.setup(incoming, container);
-    return copier;
-  }
-
-  private Copier create4Copier() throws SchemaChangeException {
-    Preconditions.checkArgument(incoming.getSchema().getSelectionVectorMode() == SelectionVectorMode.FOUR_BYTE);
-    return GenericSV4Copier.createCopier(incoming, container, callBack);
-  }
-
   @Override
   public WritableBatch getWritableBatch() {
     return WritableBatch.get(this);
+  }
+
+  @Override
+  public void dump() {
+    logger.error("RemovingRecordBatch[container={}, state={}, copier={}]", container, state, copier);
   }
 }

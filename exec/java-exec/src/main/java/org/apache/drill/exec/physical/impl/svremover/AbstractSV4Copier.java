@@ -17,37 +17,37 @@
  */
 package org.apache.drill.exec.physical.impl.svremover;
 
-import org.apache.drill.exec.exception.SchemaChangeException;
-import org.apache.drill.exec.record.RecordBatch;
+import org.apache.drill.exec.record.VectorAccessible;
 import org.apache.drill.exec.record.VectorContainer;
 import org.apache.drill.exec.record.VectorWrapper;
 import org.apache.drill.exec.record.selection.SelectionVector4;
-import org.apache.drill.exec.vector.ValueVector;
 
 public abstract class AbstractSV4Copier extends AbstractCopier {
-  protected ValueVector[][] vvIn;
+  // Storing VectorWrapper reference instead of ValueVector[]. With EMIT outcome support underlying operator
+  // operator can generate multiple output batches with no schema changes which will change the ValueVector[]
+  // reference but not VectorWrapper reference.
+  protected VectorWrapper<?>[] vvIn;
   private SelectionVector4 sv4;
 
   @Override
-  public void setup(RecordBatch incoming, VectorContainer outgoing) throws SchemaChangeException{
+  public void setup(VectorAccessible incoming, VectorContainer outgoing) {
     super.setup(incoming, outgoing);
     this.sv4 = incoming.getSelectionVector4();
 
     final int count = outgoing.getNumberOfColumns();
-
-    vvIn = new ValueVector[count][];
+    vvIn = new VectorWrapper[count];
 
     {
       int index = 0;
 
       for (VectorWrapper vectorWrapper: incoming) {
-        vvIn[index] = vectorWrapper.getValueVectors();
+        vvIn[index] = vectorWrapper;
         index++;
       }
     }
   }
 
-  public void copyEntryIndirect(int inIndex, int outIndex) throws SchemaChangeException {
+  public void copyEntryIndirect(int inIndex, int outIndex) {
     copyEntry(sv4.get(inIndex), outIndex);
   }
 }

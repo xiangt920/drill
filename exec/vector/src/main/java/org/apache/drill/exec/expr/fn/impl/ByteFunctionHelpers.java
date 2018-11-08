@@ -1,5 +1,4 @@
-/*******************************************************************************
-
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,7 +14,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ */
 package org.apache.drill.exec.expr.fn.impl;
 
 import io.netty.buffer.DrillBuf;
@@ -23,7 +22,7 @@ import io.netty.util.internal.PlatformDependent;
 
 import org.apache.drill.exec.util.DecimalUtility;
 
-import com.google.common.primitives.UnsignedLongs;
+import org.apache.drill.shaded.guava.com.google.common.primitives.UnsignedLongs;
 
 import static org.apache.drill.exec.memory.BoundsChecking.rangeCheck;
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -220,7 +220,6 @@ public class TestFileGenerator {
           for (int i = 0; i < valsPerPage; i++) {
             repLevels.writeInteger(0);
             defLevels.writeInteger(1);
-            //System.out.print(i + ", " + (i % 25 == 0 ? "\n gen " + fieldInfo.name + ": " : ""));
             if (fieldInfo.values[0] instanceof Boolean) {
 
               bytes[currentBooleanByte] |= bitFields[booleanBitCounter.val]

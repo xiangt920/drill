@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -68,4 +68,9 @@ public interface OutputMutator {
    * @return the CallBack object for this mutator
    */
   public CallBack getCallBack();
+
+  /**
+   * Clear this mutator i.e. reset it to pristine condition
+   */
+  public void clear();
 }

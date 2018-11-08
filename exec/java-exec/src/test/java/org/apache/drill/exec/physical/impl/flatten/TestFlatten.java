@@ -14,7 +14,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ */
 package org.apache.drill.exec.physical.impl.flatten;
 
 import static org.apache.drill.test.TestBuilder.listOf;
@@ -42,7 +42,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 @Category(OperatorTest.class)
 public class TestFlatten extends BaseTestQuery {
@@ -336,7 +336,7 @@ public class TestFlatten extends BaseTestQuery {
     // currently runs
     // TODO - re-verify results by hand
     if(RUN_ADVANCED_TESTS){
-      test("select flatten(kvgen(visited_cellid_counts)) as mytb from dfs.`tmp/mapkv.json`") ;
+      test("select flatten(kvgen(visited_cellid_counts)) as mytb from dfs.`tmp/mapkv.json`");
     }
   }
 

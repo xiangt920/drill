@@ -30,7 +30,7 @@ import org.apache.drill.exec.proto.UserBitShared.CoreOperatorType;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 @JsonTypeName("OrderedPartitionSender")
 public class OrderedPartitionSender extends AbstractSender {
@@ -105,5 +105,16 @@ public class OrderedPartitionSender extends AbstractSender {
   @Override
   public int getOperatorType() {
     return CoreOperatorType.ORDERED_PARTITION_SENDER_VALUE;
+  }
+
+  @Override
+  public String toString() {
+    return "OrderedPartitionSender[orderings=" + orderings
+        + ", ref=" + ref
+        + ", sendingWidth=" + sendingWidth
+        + ", recordsToSample=" + recordsToSample
+        + ", samplingFactor=" + samplingFactor
+        + ", completionFactor=" + completionFactor
+        + "]";
   }
 }

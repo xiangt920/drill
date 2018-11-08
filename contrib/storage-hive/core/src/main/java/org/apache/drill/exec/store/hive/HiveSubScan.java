@@ -22,9 +22,10 @@ import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JacksonInject;
-import com.google.common.collect.ImmutableSet;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.SchemaPath;
@@ -41,8 +42,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.google.common.io.ByteArrayDataInput;
-import com.google.common.io.ByteStreams;
+import org.apache.drill.shaded.guava.com.google.common.io.ByteArrayDataInput;
+import org.apache.drill.shaded.guava.com.google.common.io.ByteStreams;
 
 @JsonTypeName("hive-sub-scan")
 public class HiveSubScan extends AbstractBase implements SubScan {
@@ -55,6 +56,7 @@ public class HiveSubScan extends AbstractBase implements SubScan {
   private final HiveTableWithColumnCache table;
   private final List<HivePartition> partitions;
   private final List<SchemaPath> columns;
+  private final Map<String, String> confProperties;
 
   @JsonCreator
   public HiveSubScan(@JacksonInject StoragePluginRegistry registry,
@@ -63,22 +65,24 @@ public class HiveSubScan extends AbstractBase implements SubScan {
                      @JsonProperty("hiveReadEntry") HiveReadEntry hiveReadEntry,
                      @JsonProperty("splitClasses") List<String> splitClasses,
                      @JsonProperty("columns") List<SchemaPath> columns,
-                     @JsonProperty("hiveStoragePluginConfig") HiveStoragePluginConfig hiveStoragePluginConfig)
+                     @JsonProperty("hiveStoragePluginConfig") HiveStoragePluginConfig hiveStoragePluginConfig,
+                     @JsonProperty("confProperties") Map<String, String> confProperties)
       throws IOException, ExecutionSetupException, ReflectiveOperationException {
     this(userName,
         splits,
         hiveReadEntry,
         splitClasses,
         columns,
-        (HiveStoragePlugin) registry.getPlugin(hiveStoragePluginConfig));
+        (HiveStoragePlugin) registry.getPlugin(hiveStoragePluginConfig), confProperties);
   }
 
   public HiveSubScan(final String userName,
                      final List<List<String>> splits,
                      final HiveReadEntry hiveReadEntry,
-                      final List<String> splitClasses,
+                     final List<String> splitClasses,
                      final List<SchemaPath> columns,
-                     final HiveStoragePlugin hiveStoragePlugin)
+                     final HiveStoragePlugin hiveStoragePlugin,
+                     final Map<String, String> confProperties)
     throws IOException, ReflectiveOperationException {
     super(userName);
     this.hiveReadEntry = hiveReadEntry;
@@ -88,6 +92,7 @@ public class HiveSubScan extends AbstractBase implements SubScan {
     this.splitClasses = splitClasses;
     this.columns = columns;
     this.hiveStoragePlugin = hiveStoragePlugin;
+    this.confProperties = confProperties;
 
     for (int i = 0; i < splits.size(); i++) {
       inputSplits.add(deserializeInputSplit(splits.get(i), splitClasses.get(i)));
@@ -119,6 +124,11 @@ public class HiveSubScan extends AbstractBase implements SubScan {
     return hiveStoragePlugin.getConfig();
   }
 
+  @JsonProperty
+  public Map<String, String> getConfProperties() {
+    return confProperties;
+  }
+
   @JsonIgnore
   public HiveTableWithColumnCache getTable() {
     return table;
@@ -141,7 +151,7 @@ public class HiveSubScan extends AbstractBase implements SubScan {
 
   @JsonIgnore
   public HiveConf getHiveConf() {
-    return hiveStoragePlugin.getHiveConf();
+    return HiveUtilities.generateHiveConf(hiveStoragePlugin.getHiveConf(), confProperties);
   }
 
   @Override
@@ -152,7 +162,7 @@ public class HiveSubScan extends AbstractBase implements SubScan {
   @Override
   public PhysicalOperator getNewWithChildren(List<PhysicalOperator> children) throws ExecutionSetupException {
     try {
-      return new HiveSubScan(getUserName(), splits, hiveReadEntry, splitClasses, columns, hiveStoragePlugin);
+      return new HiveSubScan(getUserName(), splits, hiveReadEntry, splitClasses, columns, hiveStoragePlugin, confProperties);
     } catch (IOException | ReflectiveOperationException e) {
       throw new ExecutionSetupException(e);
     }

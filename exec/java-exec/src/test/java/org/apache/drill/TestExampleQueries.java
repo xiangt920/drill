@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -1164,5 +1164,38 @@ public class TestExampleQueries extends BaseTestQuery {
         .baselineValues("1930-01-08")
         .build()
         .run();
+  }
+
+  @Test
+  public void testComparisonWithSingleValueSubQuery() throws Exception {
+    String query = "select n_name from cp.`tpch/nation.parquet` " +
+        "where n_nationkey = " +
+        "(select r_regionkey from cp.`tpch/region.parquet` " +
+        "where r_regionkey = 1)";
+    PlanTestBase.testPlanMatchingPatterns(query,
+        new String[]{"agg.*SINGLE_VALUE", "Filter.*=\\(\\$0, 1\\)"});
+
+    testBuilder()
+        .sqlQuery(query)
+        .unOrdered()
+        .baselineColumns("n_name")
+        .baselineValues("ARGENTINA")
+        .go();
+  }
+
+  @Test
+  public void testMultipleComparisonWithSingleValueSubQuery() throws Exception {
+    String query = "select a.last_name, b.n_name " +
+        "from cp.`employee.json` a, cp.`tpch/nation.parquet` b " +
+        "where b.n_nationkey = " +
+        "(select r_regionkey from cp.`tpch/region.parquet` " +
+        "where r_regionkey = 1) limit 1";
+
+    testBuilder()
+        .sqlQuery(query)
+        .unOrdered()
+        .baselineColumns("last_name", "n_name")
+        .baselineValues("Nowmer", "ARGENTINA")
+        .go();
   }
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.store.sys;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -95,13 +94,13 @@ public class TestPStoreProviders extends TestWithZookeeper {
          ClientFixture client = cluster.clientFixture()) {
       String parquetPushdown = client.queryBuilder().
         sql("SELECT val FROM sys.%s where name='%s'",
-          SystemTable.OPTION_VAL.getTableName(),
+          SystemTable.OPTIONS.getTableName(),
           PlannerSettings.PARQUET_ROWGROUP_FILTER_PUSHDOWN_PLANNING_THRESHOLD_KEY).
         singletonString();
 
       String plannerWidth = client.queryBuilder().
         sql("SELECT val FROM sys.%s where name='%s'",
-          SystemTable.OPTION_VAL.getTableName(),
+          SystemTable.OPTIONS.getTableName(),
           ExecConstants.MAX_WIDTH_GLOBAL_KEY).
         singletonString();
 

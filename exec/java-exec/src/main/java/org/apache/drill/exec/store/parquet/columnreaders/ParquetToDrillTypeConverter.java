@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -14,13 +14,13 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ */
 package org.apache.drill.exec.store.parquet.columnreaders;
 
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.TypeProtos.MinorType;
 
-import org.apache.drill.common.util.CoreDecimalUtility;
+import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.server.options.OptionManager;
 import org.apache.drill.exec.store.parquet.ParquetReaderUtility;
@@ -28,19 +28,12 @@ import org.apache.parquet.format.ConvertedType;
 import org.apache.parquet.format.SchemaElement;
 import org.apache.parquet.schema.PrimitiveType;
 
-import static com.google.common.base.Preconditions.checkArgument;
+import static org.apache.drill.shaded.guava.com.google.common.base.Preconditions.checkArgument;
 
 public class ParquetToDrillTypeConverter {
 
-
-  private static TypeProtos.MinorType getDecimalType(int precision) {
-    return precision <= 28 ? TypeProtos.MinorType.DECIMAL28SPARSE : MinorType.DECIMAL38SPARSE;
-  }
-
   private static TypeProtos.MinorType getMinorType(PrimitiveType.PrimitiveTypeName primitiveTypeName, int length,
-                                                   ConvertedType convertedType, int precision, OptionManager options) {
-
-
+      ConvertedType convertedType, OptionManager options) {
     switch (primitiveTypeName) {
       case BINARY:
         if (convertedType == null) {
@@ -52,7 +45,7 @@ public class ParquetToDrillTypeConverter {
             return (TypeProtos.MinorType.VARCHAR);
           case DECIMAL:
             ParquetReaderUtility.checkDecimalTypeEnabled(options);
-            return (getDecimalType(precision));
+            return TypeProtos.MinorType.VARDECIMAL;
           default:
             return (TypeProtos.MinorType.VARBINARY);
         }
@@ -61,16 +54,15 @@ public class ParquetToDrillTypeConverter {
           return (TypeProtos.MinorType.BIGINT);
         }
         switch(convertedType) {
+          // DRILL-6670: handle TIMESTAMP_MICROS as INT64 with no logical type
           case INT_64:
+          case TIMESTAMP_MICROS:
             return TypeProtos.MinorType.BIGINT;
           case UINT_64:
             return TypeProtos.MinorType.UINT8;
           case DECIMAL:
             ParquetReaderUtility.checkDecimalTypeEnabled(options);
-            return TypeProtos.MinorType.DECIMAL18;
-          // TODO - add this back if it is decided to be added upstream, was removed form our pull request July 2014
-//              case TIME_MICROS:
-//                throw new UnsupportedOperationException();
+            return TypeProtos.MinorType.VARDECIMAL;
           case TIMESTAMP_MILLIS:
             return TypeProtos.MinorType.TIMESTAMP;
           default:
@@ -91,7 +83,7 @@ public class ParquetToDrillTypeConverter {
             return TypeProtos.MinorType.INT;
           case DECIMAL:
             ParquetReaderUtility.checkDecimalTypeEnabled(options);
-            return TypeProtos.MinorType.DECIMAL9;
+            return TypeProtos.MinorType.VARDECIMAL;
           case DATE:
             return TypeProtos.MinorType.DATE;
           case TIME_MILLIS:
@@ -119,7 +111,7 @@ public class ParquetToDrillTypeConverter {
           return TypeProtos.MinorType.VARBINARY;
         } else if (convertedType == ConvertedType.DECIMAL) {
           ParquetReaderUtility.checkDecimalTypeEnabled(options);
-          return getDecimalType(precision);
+          return TypeProtos.MinorType.VARDECIMAL;
         } else if (convertedType == ConvertedType.INTERVAL) {
           return TypeProtos.MinorType.INTERVAL;
         }
@@ -131,17 +123,14 @@ public class ParquetToDrillTypeConverter {
   public static TypeProtos.MajorType toMajorType(PrimitiveType.PrimitiveTypeName primitiveTypeName, int length,
                                           TypeProtos.DataMode mode, SchemaElement schemaElement,
                                           OptionManager options) {
-    return toMajorType(primitiveTypeName, length, mode, schemaElement.getConverted_type(),
-        schemaElement.getPrecision(), schemaElement.getScale(), options);
-  }
-
-  public static TypeProtos.MajorType toMajorType(PrimitiveType.PrimitiveTypeName primitiveTypeName, int length,
-      TypeProtos.DataMode mode, ConvertedType convertedType, int precision, int scale,
-      OptionManager options) {
-    MinorType minorType = getMinorType(primitiveTypeName, length, convertedType, precision, options);
+    ConvertedType convertedType = schemaElement.getConverted_type();
+    MinorType minorType = getMinorType(primitiveTypeName, length, convertedType, options);
     TypeProtos.MajorType.Builder typeBuilder = TypeProtos.MajorType.newBuilder().setMinorType(minorType).setMode(mode);
 
-    if (CoreDecimalUtility.isDecimalType(minorType)) {
+    if (Types.isDecimalType(minorType)) {
+      int precision = schemaElement.getPrecision();
+      int scale = schemaElement.getScale();
+
       typeBuilder.setPrecision(precision).setScale(scale);
     }
     return typeBuilder.build();

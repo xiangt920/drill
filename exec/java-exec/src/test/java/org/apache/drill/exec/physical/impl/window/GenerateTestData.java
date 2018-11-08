@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -30,6 +30,8 @@ import java.util.Collections;
 import java.util.List;
 
 public class GenerateTestData {
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(GenerateTestData.class);
+
   private static final int BATCH_SIZE = 20;
 
   private static class Builder {
@@ -306,7 +308,6 @@ public class GenerateTestData {
       }
       emp_idx++;
       if ((emp_idx % BATCH_SIZE)==0 && emp_idx < total) {
-        System.out.printf("total: %d, emp_idx: %d, fileID: %d%n", total, emp_idx, fileId);
         dataStream.close();
         fileId++;
         dataStream = new PrintStream(path + "/" + fileId + ".data.json");
@@ -357,14 +358,14 @@ public class GenerateTestData {
   private static void generateData(final String tableName, final Partition[] pby_data, final Partition[] nopby_data,
       final boolean addLineNo) throws FileNotFoundException {
     final Path path = TestTools.WORKING_PATH
-      .resolve(TestTools.TEST_RESOURCES)
+      .resolve(TestTools.TEST_RESOURCES_REL)
       .resolve(Paths.get("window", tableName));
 
     final File pathFolder = path.toFile();
 
     if (!pathFolder.exists()) {
       if (!pathFolder.mkdirs()) {
-        System.err.printf("Couldn't create folder %s, exiting%n", path);
+        logger.error("Couldn't create folder {}, exiting", path);
       }
     }
 

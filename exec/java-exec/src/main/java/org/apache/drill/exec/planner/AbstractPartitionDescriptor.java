@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -31,7 +31,7 @@ public abstract class AbstractPartitionDescriptor implements PartitionDescriptor
 
   /**
    * A sequence of sublists of partition locations combined into a single super list.
-   * The size of each sublist is at most {@link PartitionDescriptor.PARTITION_BATCH_SIZE}
+   * The size of each sublist is at most {@link PartitionDescriptor#PARTITION_BATCH_SIZE}
    * For example if the size is 3, the complete list could be: {(a, b, c), {d, e, f), (g, h)}
    */
   protected List<List<PartitionLocation>> locationSuperList;
@@ -42,9 +42,9 @@ public abstract class AbstractPartitionDescriptor implements PartitionDescriptor
 
   /**
    * Create sublists of the partition locations, each sublist of size
-   * at most {@link PartitionDescriptor.PARTITION_BATCH_SIZE}
+   * at most {@link PartitionDescriptor#PARTITION_BATCH_SIZE}
    */
-  protected abstract void createPartitionSublists() ;
+  protected abstract void createPartitionSublists();
 
   /**
    * Iterator that traverses over the super list of partition locations and

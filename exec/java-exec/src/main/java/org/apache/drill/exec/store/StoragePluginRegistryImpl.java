@@ -17,15 +17,17 @@
  */
 package org.apache.drill.exec.store;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.drill.shaded.guava.com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -34,79 +36,62 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.drill.common.config.LogicalPlanPersistence;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.logical.FormatPluginConfig;
 import org.apache.drill.common.logical.StoragePluginConfig;
+import org.apache.drill.common.map.CaseInsensitiveMap;
 import org.apache.drill.common.scanner.ClassPathScanner;
+import org.apache.drill.common.scanner.persistence.AnnotatedClassDescriptor;
 import org.apache.drill.common.scanner.persistence.ScanResult;
 import org.apache.drill.exec.ExecConstants;
-import org.apache.drill.exec.exception.DrillbitStartupException;
 import org.apache.drill.exec.exception.StoreException;
 import org.apache.drill.exec.planner.logical.StoragePlugins;
 import org.apache.drill.exec.server.DrillbitContext;
-import org.apache.drill.exec.store.dfs.FileSystemPlugin;
 import org.apache.drill.exec.store.dfs.FormatPlugin;
-import org.apache.drill.exec.store.ischema.InfoSchemaConfig;
-import org.apache.drill.exec.store.ischema.InfoSchemaStoragePlugin;
+import org.apache.drill.exec.store.sys.CaseInsensitivePersistentStore;
 import org.apache.drill.exec.store.sys.PersistentStore;
 import org.apache.drill.exec.store.sys.PersistentStoreConfig;
-import org.apache.drill.exec.store.sys.SystemTablePlugin;
-import org.apache.drill.exec.store.sys.SystemTablePluginConfig;
 
-import com.google.common.base.Charsets;
-import com.google.common.base.Joiner;
-import com.google.common.base.Stopwatch;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-import com.google.common.io.Resources;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.base.Joiner;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.cache.CacheBuilder;
+import org.apache.drill.shaded.guava.com.google.common.cache.CacheLoader;
+import org.apache.drill.shaded.guava.com.google.common.cache.LoadingCache;
+import org.apache.drill.shaded.guava.com.google.common.cache.RemovalListener;
+import org.apache.drill.shaded.guava.com.google.common.io.Resources;
 
 public class StoragePluginRegistryImpl implements StoragePluginRegistry {
+
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StoragePluginRegistryImpl.class);
 
-  private Map<Object, Constructor<? extends StoragePlugin>> availablePlugins = Collections.emptyMap();
-  private final StoragePluginMap plugins = new StoragePluginMap();
-
-  private DrillbitContext context;
-  private final DrillSchemaFactory schemaFactory = new DrillSchemaFactory();
-  private final PersistentStore<StoragePluginConfig> pluginSystemTable;
+  private final StoragePluginMap enabledPlugins;
+  private final DrillSchemaFactory schemaFactory;
+  private final DrillbitContext context;
   private final LogicalPlanPersistence lpPersistence;
   private final ScanResult classpathScan;
+  private final PersistentStore<StoragePluginConfig> pluginSystemTable;
   private final LoadingCache<StoragePluginConfig, StoragePlugin> ephemeralPlugins;
 
+  private Map<Object, Constructor<? extends StoragePlugin>> availablePlugins = Collections.emptyMap();
+  private Map<String, StoragePlugin> systemPlugins = Collections.emptyMap();
+
   public StoragePluginRegistryImpl(DrillbitContext context) {
+    this.enabledPlugins = new StoragePluginMap();
+    this.schemaFactory = new DrillSchemaFactory(null);
     this.context = checkNotNull(context);
     this.lpPersistence = checkNotNull(context.getLpPersistence());
     this.classpathScan = checkNotNull(context.getClasspathScan());
-    try {
-      this.pluginSystemTable = context //
-          .getStoreProvider() //
-          .getOrCreateStore(PersistentStoreConfig //
-              .newJacksonBuilder(lpPersistence.getMapper(), StoragePluginConfig.class) //
-              .name(PSTORE_NAME) //
-              .build());
-    } catch (StoreException | RuntimeException e) {
-      logger.error("Failure while loading storage plugin registry.", e);
-      throw new RuntimeException("Failure while reading and loading storage plugin configuration.", e);
-    }
-
-    ephemeralPlugins = CacheBuilder.newBuilder()
+    this.pluginSystemTable = initPluginsSystemTable(context, lpPersistence);
+    this.ephemeralPlugins = CacheBuilder.newBuilder()
         .expireAfterAccess(24, TimeUnit.HOURS)
         .maximumSize(250)
-        .removalListener(new RemovalListener<StoragePluginConfig, StoragePlugin>() {
-          @Override
-          public void onRemoval(RemovalNotification<StoragePluginConfig, StoragePlugin> notification) {
-            closePlugin(notification.getValue());
-          }
-        })
+        .removalListener(
+            (RemovalListener<StoragePluginConfig, StoragePlugin>) notification -> closePlugin(notification.getValue()))
         .build(new CacheLoader<StoragePluginConfig, StoragePlugin>() {
           @Override
           public StoragePlugin load(StoragePluginConfig config) throws Exception {
@@ -116,139 +101,47 @@ public class StoragePluginRegistryImpl implements StoragePluginRegistry {
   }
 
   @Override
-  public PersistentStore<StoragePluginConfig> getStore() {
-    return pluginSystemTable;
-  }
-
-  @Override
-  public void init() throws DrillbitStartupException {
+  public void init() {
     availablePlugins = findAvailablePlugins(classpathScan);
-
-    // create registered plugins defined in "storage-plugins.json"
-    plugins.putAll(createPlugins());
-  }
-
-  @SuppressWarnings("resource")
-  private Map<String, StoragePlugin> createPlugins() throws DrillbitStartupException {
+    systemPlugins = initSystemPlugins(classpathScan, context);
     try {
-      /*
-       * Check if the storage plugins system table has any entries. If not, load the boostrap-storage-plugin file into
-       * the system table.
-       */
-      if (!pluginSystemTable.getAll().hasNext()) {
-        // bootstrap load the config since no plugins are stored.
-        logger.info("No storage plugin instances configured in persistent store, loading bootstrap configuration.");
-        Collection<URL> urls = ClassPathScanner.forResource(ExecConstants.BOOTSTRAP_STORAGE_PLUGINS_FILE, false);
-        if (urls != null && !urls.isEmpty()) {
-          logger.info("Loading the storage plugin configs from URLs {}.", urls);
-          Map<String, URL> pluginURLMap = Maps.newHashMap();
-          for (URL url : urls) {
-            String pluginsData = Resources.toString(url, Charsets.UTF_8);
-            StoragePlugins plugins = lpPersistence.getMapper().readValue(pluginsData, StoragePlugins.class);
-            for (Map.Entry<String, StoragePluginConfig> config : plugins) {
-              if (!definePluginConfig(config.getKey(), config.getValue())) {
-                logger.warn("Duplicate plugin instance '{}' defined in [{}, {}], ignoring the later one.",
-                    config.getKey(), pluginURLMap.get(config.getKey()), url);
-                continue;
-              }
-              pluginURLMap.put(config.getKey(), url);
-            }
-          }
-        } else {
-          throw new IOException("Failure finding " + ExecConstants.BOOTSTRAP_STORAGE_PLUGINS_FILE);
-        }
-      }
+      StoragePlugins bootstrapPlugins = pluginSystemTable.getAll().hasNext() ? null : loadBootstrapPlugins(lpPersistence);
 
-      Map<String, StoragePlugin> activePlugins = new HashMap<String, StoragePlugin>();
-      for (Map.Entry<String, StoragePluginConfig> entry : Lists.newArrayList(pluginSystemTable.getAll())) {
-        String name = entry.getKey();
-        StoragePluginConfig config = entry.getValue();
-        if (config.isEnabled()) {
-          try {
-            StoragePlugin plugin = create(name, config);
-            activePlugins.put(name, plugin);
-          } catch (ExecutionSetupException e) {
-            logger.error("Failure while setting up StoragePlugin with name: '{}', disabling.", name, e);
-            config.setEnabled(false);
-            pluginSystemTable.put(name, config);
-          }
-        }
-      }
+      StoragePluginsHandler storagePluginsHandler = new StoragePluginsHandlerService(context);
+      storagePluginsHandler.loadPlugins(pluginSystemTable, bootstrapPlugins);
 
-      activePlugins.put(INFORMATION_SCHEMA_PLUGIN, new InfoSchemaStoragePlugin(new InfoSchemaConfig(), context,
-          INFORMATION_SCHEMA_PLUGIN));
-      activePlugins.put(SYS_PLUGIN, new SystemTablePlugin(SystemTablePluginConfig.INSTANCE, context, SYS_PLUGIN));
-
-      return activePlugins;
+      defineEnabledPlugins();
     } catch (IOException e) {
-      logger.error("Failure setting up storage plugins.  Drillbit exiting.", e);
+      logger.error("Failure setting up storage enabledPlugins.  Drillbit exiting.", e);
       throw new IllegalStateException(e);
     }
   }
 
-  /**
-   * Add a plugin and configuration. Assumes neither exists. Primarily
-   * for testing.
-   *
-   * @param name plugin name
-   * @param config plugin config
-   * @param plugin plugin implementation
-   */
-
-  public void definePlugin(String name, StoragePluginConfig config, StoragePlugin plugin) {
-    addPlugin(name, plugin);
-    definePluginConfig(name, config);
-  }
-
-  private boolean definePluginConfig(String name, StoragePluginConfig config) {
-    return pluginSystemTable.putIfAbsent(name, config);
-  }
-
-  @Override
-  public void addPlugin(String name, StoragePlugin plugin) {
-    plugins.put(name, plugin);
-  }
-
   @Override
   public void deletePlugin(String name) {
-    @SuppressWarnings("resource")
-    StoragePlugin plugin = plugins.remove(name);
+    StoragePlugin plugin = enabledPlugins.remove(name);
     closePlugin(plugin);
     pluginSystemTable.delete(name);
   }
 
-  private void closePlugin(StoragePlugin plugin) {
-    if (plugin == null) {
-      return;
-    }
-
-    try {
-      plugin.close();
-    } catch (Exception e) {
-      logger.warn("Exception while shutting down storage plugin.");
-    }
-  }
-
-  @SuppressWarnings("resource")
   @Override
-  public StoragePlugin createOrUpdate(String name, StoragePluginConfig config, boolean persist)
-      throws ExecutionSetupException {
+  public StoragePlugin createOrUpdate(String name, StoragePluginConfig config, boolean persist) throws ExecutionSetupException {
     for (;;) {
-      final StoragePlugin oldPlugin = plugins.get(name);
-      final StoragePlugin newPlugin = create(name, config);
+      StoragePlugin oldPlugin = enabledPlugins.get(name);
+      StoragePlugin newPlugin = create(name, config);
       boolean done = false;
       try {
         if (oldPlugin != null) {
           if (config.isEnabled()) {
-            done = plugins.replace(name, oldPlugin, newPlugin);
+            done = enabledPlugins.replace(name, oldPlugin, newPlugin);
           } else {
-            done = plugins.remove(name, oldPlugin);
+            done = enabledPlugins.remove(name, oldPlugin);
           }
           if (done) {
             closePlugin(oldPlugin);
           }
         } else if (config.isEnabled()) {
-          done = (null == plugins.putIfAbsent(name, newPlugin));
+          done = (null == enabledPlugins.putIfAbsent(name, newPlugin));
         } else {
           done = true;
         }
@@ -270,16 +163,16 @@ public class StoragePluginRegistryImpl implements StoragePluginRegistry {
 
   @Override
   public StoragePlugin getPlugin(String name) throws ExecutionSetupException {
-    StoragePlugin plugin = plugins.get(name);
-    if (name.equals(SYS_PLUGIN) || name.equals(INFORMATION_SCHEMA_PLUGIN)) {
+    StoragePlugin plugin = enabledPlugins.get(name);
+    if (systemPlugins.get(name) != null) {
       return plugin;
     }
 
     // since we lazily manage the list of plugins per server, we need to update this once we know that it is time.
-    StoragePluginConfig config = this.pluginSystemTable.get(name);
+    StoragePluginConfig config = pluginSystemTable.get(name);
     if (config == null) {
       if (plugin != null) {
-        plugins.remove(name);
+        enabledPlugins.remove(name);
       }
       return null;
     } else {
@@ -292,14 +185,13 @@ public class StoragePluginRegistryImpl implements StoragePluginRegistry {
     }
   }
 
-
   @Override
   public StoragePlugin getPlugin(StoragePluginConfig config) throws ExecutionSetupException {
     if (config instanceof NamedStoragePluginConfig) {
-      return getPlugin(((NamedStoragePluginConfig) config).name);
+      return getPlugin(((NamedStoragePluginConfig) config).getName());
     } else {
       // try to lookup plugin by configuration
-      StoragePlugin plugin = plugins.get(config);
+      StoragePlugin plugin = enabledPlugins.get(config);
       if (plugin != null) {
         return plugin;
       }
@@ -320,22 +212,251 @@ public class StoragePluginRegistryImpl implements StoragePluginRegistry {
     }
   }
 
-  @SuppressWarnings("resource")
   @Override
-  public FormatPlugin getFormatPlugin(StoragePluginConfig storageConfig, FormatPluginConfig formatConfig)
-      throws ExecutionSetupException {
-    StoragePlugin p = getPlugin(storageConfig);
-    if (!(p instanceof FileSystemPlugin)) {
-      throw new ExecutionSetupException(
-          String.format("You tried to request a format plugin for a storage plugin that wasn't of type "
-              + "FileSystemPlugin. The actual type of plugin was %s.", p.getClass().getName()));
+  public void addEnabledPlugin(String name, StoragePlugin plugin) {
+    enabledPlugins.put(name, plugin);
+  }
+
+  @Override
+  public FormatPlugin getFormatPlugin(StoragePluginConfig storageConfig, FormatPluginConfig formatConfig) throws ExecutionSetupException {
+    StoragePlugin storagePlugin = getPlugin(storageConfig);
+    return storagePlugin.getFormatPlugin(formatConfig);
+  }
+
+  @Override
+  public PersistentStore<StoragePluginConfig> getStore() {
+    return pluginSystemTable;
+  }
+
+  @Override
+  public SchemaFactory getSchemaFactory() {
+    return schemaFactory;
+  }
+
+  @Override
+  public Iterator<Entry<String, StoragePlugin>> iterator() {
+    return enabledPlugins.iterator();
+  }
+
+  @Override
+  public synchronized void close() throws Exception {
+    ephemeralPlugins.invalidateAll();
+    enabledPlugins.close();
+    pluginSystemTable.close();
+  }
+
+  /**
+   * Add a plugin and configuration. Assumes neither exists. Primarily for testing.
+   *
+   * @param config plugin config
+   * @param plugin plugin implementation
+   */
+  @VisibleForTesting
+  public void addPluginToPersistentStoreIfAbsent(String name, StoragePluginConfig config, StoragePlugin plugin) {
+    addEnabledPlugin(name, plugin);
+    pluginSystemTable.putIfAbsent(name, config);
+  }
+
+  /**
+   * <ol>
+   *   <li>Initializes persistent store for storage plugins.</li>
+   *   <li>Since storage plugins names are case-insensitive in Drill, to ensure backward compatibility,
+   *   re-writes those not stored in lower case with lower case names, for duplicates issues warning. </li>
+   *   <li>Wraps plugin system table into case insensitive wrapper.</li>
+   * </ol>
+   *
+   * @param context drillbit context
+   * @param lpPersistence deserialization mapper provider
+   * @return persistent store for storage plugins
+   */
+  private PersistentStore<StoragePluginConfig> initPluginsSystemTable(DrillbitContext context, LogicalPlanPersistence lpPersistence) {
+
+    try {
+      PersistentStore<StoragePluginConfig> pluginSystemTable = context
+          .getStoreProvider()
+          .getOrCreateStore(PersistentStoreConfig
+              .newJacksonBuilder(lpPersistence.getMapper(), StoragePluginConfig.class)
+              .name(PSTORE_NAME)
+              .build());
+
+      Iterator<Entry<String, StoragePluginConfig>> storedPlugins = pluginSystemTable.getAll();
+      while (storedPlugins.hasNext()) {
+        Entry<String, StoragePluginConfig> entry = storedPlugins.next();
+        String pluginName = entry.getKey();
+        if (!pluginName.equals(pluginName.toLowerCase())) {
+          logger.debug("Replacing plugin name {} with its lower case equivalent.", pluginName);
+          pluginSystemTable.delete(pluginName);
+          if (!pluginSystemTable.putIfAbsent(pluginName.toLowerCase(), entry.getValue())) {
+            logger.warn("Duplicated storage plugin name [{}] is found. Duplicate is deleted from persistent storage.", pluginName);
+          }
+        }
+      }
+
+      return new CaseInsensitivePersistentStore<>(pluginSystemTable);
+    } catch (StoreException e) {
+      logger.error("Failure while loading storage plugin registry.", e);
+      throw new DrillRuntimeException("Failure while reading and loading storage plugin configuration.", e);
     }
-    FileSystemPlugin storage = (FileSystemPlugin) p;
-    return storage.getFormatPlugin(formatConfig);
+  }
+
+  /**
+   * Read bootstrap storage plugins {@link ExecConstants#BOOTSTRAP_STORAGE_PLUGINS_FILE} files for the first fresh
+   * instantiating of Drill
+   *
+   * @param lpPersistence deserialization mapper provider
+   * @return bootstrap storage plugins
+   * @throws IOException if a read error occurs
+   */
+  private StoragePlugins loadBootstrapPlugins(LogicalPlanPersistence lpPersistence) throws IOException {
+    // bootstrap load the config since no plugins are stored.
+    logger.info("No storage plugin instances configured in persistent store, loading bootstrap configuration.");
+    Set<URL> urls = ClassPathScanner.forResource(ExecConstants.BOOTSTRAP_STORAGE_PLUGINS_FILE, false);
+    if (urls != null && !urls.isEmpty()) {
+      logger.info("Loading the storage plugin configs from URLs {}.", urls);
+      StoragePlugins bootstrapPlugins = new StoragePlugins(new HashMap<>());
+      Map<String, URL> pluginURLMap = new HashMap<>();
+      for (URL url : urls) {
+        String pluginsData = Resources.toString(url, Charsets.UTF_8);
+        StoragePlugins plugins = lpPersistence.getMapper().readValue(pluginsData, StoragePlugins.class);
+        for (Entry<String, StoragePluginConfig> plugin : plugins) {
+          StoragePluginConfig oldPluginConfig = bootstrapPlugins.putIfAbsent(plugin.getKey(), plugin.getValue());
+          if (oldPluginConfig != null) {
+            logger.warn("Duplicate plugin instance '{}' defined in [{}, {}], ignoring the later one.",
+                plugin.getKey(), pluginURLMap.get(plugin.getKey()), url);
+          } else {
+            pluginURLMap.put(plugin.getKey(), url);
+          }
+        }
+      }
+      return bootstrapPlugins;
+    } else {
+      throw new IOException("Failure finding " + ExecConstants.BOOTSTRAP_STORAGE_PLUGINS_FILE);
+    }
+  }
+
+  /**
+   * Dynamically loads system plugins annotated with {@link SystemPlugin}.
+   * Will skip plugin initialization if no matching constructor, incorrect class implementation, name absence are detected.
+   *
+   * @param classpathScan classpath scan result
+   * @param context drillbit context
+   * @return map with system plugins stored by name
+   */
+  private Map<String, StoragePlugin> initSystemPlugins(ScanResult classpathScan, DrillbitContext context) {
+    Map<String, StoragePlugin> plugins = CaseInsensitiveMap.newHashMap();
+    List<AnnotatedClassDescriptor> annotatedClasses = classpathScan.getAnnotatedClasses(SystemPlugin.class.getName());
+    logger.trace("Found {} annotated classes with SystemPlugin annotation: {}.", annotatedClasses.size(), annotatedClasses);
+
+    for (AnnotatedClassDescriptor annotatedClass : annotatedClasses) {
+      try {
+        Class<?> aClass = Class.forName(annotatedClass.getClassName());
+        boolean isPluginInitialized = false;
+
+        for (Constructor<?> constructor : aClass.getConstructors()) {
+          Class<?>[] parameterTypes = constructor.getParameterTypes();
+
+          if (parameterTypes.length != 1 || parameterTypes[0] != DrillbitContext.class) {
+            logger.trace("Not matching constructor for {}. Expecting constructor with one parameter for DrillbitContext class.",
+                annotatedClass.getClassName());
+            continue;
+          }
+
+          Object instance = constructor.newInstance(context);
+          if (!(instance instanceof StoragePlugin)) {
+            logger.debug("Created instance of {} does not implement StoragePlugin interface.", annotatedClass.getClassName());
+            continue;
+          }
+
+          StoragePlugin storagePlugin = (StoragePlugin) instance;
+          String name = storagePlugin.getName();
+          if (name == null) {
+            logger.debug("Storage plugin name {} is not defined. Skipping plugin initialization.", annotatedClass.getClassName());
+            continue;
+          }
+          storagePlugin.getConfig().setEnabled(true);
+          plugins.put(name, storagePlugin);
+          isPluginInitialized = true;
+
+        }
+        if (!isPluginInitialized) {
+          logger.debug("Skipping plugin registration, did not find matching constructor or initialized object of wrong type.");
+        }
+      } catch (ReflectiveOperationException e) {
+        logger.warn("Error during system plugin {} initialization. Plugin initialization will be skipped.", annotatedClass.getClassName(), e);
+      }
+    }
+    logger.trace("The following system plugins have been initialized: {}.", plugins.keySet());
+    return plugins;
+  }
+
+  /**
+   * Get a list of all available storage plugin class constructors.
+   * @param classpathScan A classpath scan to use.
+   * @return A Map of StoragePluginConfig => StoragePlugin.<init>() constructors.
+   */
+  @SuppressWarnings("unchecked")
+  private Map<Object, Constructor<? extends StoragePlugin>> findAvailablePlugins(final ScanResult classpathScan) {
+    Map<Object, Constructor<? extends StoragePlugin>> availablePlugins = new HashMap<>();
+    final Collection<Class<? extends StoragePlugin>> pluginClasses =
+        classpathScan.getImplementations(StoragePlugin.class);
+    final String lineBrokenList =
+        pluginClasses.size() == 0
+            ? "" : "\n\t- " + Joiner.on("\n\t- ").join(pluginClasses);
+    logger.debug("Found {} storage plugin configuration classes: {}.",
+        pluginClasses.size(), lineBrokenList);
+    for (Class<? extends StoragePlugin> plugin : pluginClasses) {
+      int i = 0;
+      for (Constructor<?> c : plugin.getConstructors()) {
+        Class<?>[] params = c.getParameterTypes();
+        if (params.length != 3
+            || params[1] != DrillbitContext.class
+            || !StoragePluginConfig.class.isAssignableFrom(params[0])
+            || params[2] != String.class) {
+          logger.debug("Skipping StoragePlugin constructor {} for plugin class {} since it doesn't implement a "
+              + "[constructor(StoragePluginConfig, DrillbitContext, String)]", c, plugin);
+          continue;
+        }
+        availablePlugins.put(params[0], (Constructor<? extends StoragePlugin>) c);
+        i++;
+      }
+      if (i == 0) {
+        logger.debug("Skipping registration of StoragePlugin {} as it doesn't have a constructor with the parameters "
+            + "of (StorangePluginConfig, Config)", plugin.getCanonicalName());
+      }
+    }
+    return availablePlugins;
+  }
+
+  /**
+   * It initializes {@link #enabledPlugins} with currently enabled plugins
+   */
+  private void defineEnabledPlugins() {
+    Map<String, StoragePlugin> activePlugins = new HashMap<>();
+    Iterator<Entry<String, StoragePluginConfig>> allPlugins = pluginSystemTable.getAll();
+    while (allPlugins.hasNext()) {
+      Entry<String, StoragePluginConfig> plugin = allPlugins.next();
+      String name = plugin.getKey();
+      StoragePluginConfig config = plugin.getValue();
+      if (config.isEnabled()) {
+        try {
+          StoragePlugin storagePlugin = create(name, config);
+          activePlugins.put(name, storagePlugin);
+        } catch (ExecutionSetupException e) {
+          logger.error("Failure while setting up StoragePlugin with name: '{}', disabling.", name, e);
+          config.setEnabled(false);
+          pluginSystemTable.put(name, config);
+        }
+      }
+    }
+
+    activePlugins.putAll(systemPlugins);
+    enabledPlugins.putAll(activePlugins);
   }
 
   private StoragePlugin create(String name, StoragePluginConfig pluginConfig) throws ExecutionSetupException {
-    StoragePlugin plugin = null;
+    // TODO: DRILL-6412: clients for storage plugins shouldn't be created, if storage plugin is disabled
+    // Creating of the StoragePlugin leads to instantiating storage clients
+    StoragePlugin plugin;
     Constructor<? extends StoragePlugin> c = availablePlugins.get(pluginConfig.getClass());
     if (c == null) {
       throw new ExecutionSetupException(String.format("Failure finding StoragePlugin constructor for config %s",
@@ -345,54 +466,59 @@ public class StoragePluginRegistryImpl implements StoragePluginRegistry {
       plugin = c.newInstance(pluginConfig, context, name);
       plugin.start();
       return plugin;
-    } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException
-        | IOException e) {
+    } catch (ReflectiveOperationException | IOException e) {
       Throwable t = e instanceof InvocationTargetException ? ((InvocationTargetException) e).getTargetException() : e;
       if (t instanceof ExecutionSetupException) {
         throw ((ExecutionSetupException) t);
       }
-      throw new ExecutionSetupException(String.format(
-          "Failure setting up new storage plugin configuration for config %s", pluginConfig), t);
+      throw new ExecutionSetupException(String.format("Failure setting up new storage plugin configuration for config %s", pluginConfig), t);
     }
   }
 
-  @Override
-  public Iterator<Entry<String, StoragePlugin>> iterator() {
-    return plugins.iterator();
+  private void closePlugin(StoragePlugin plugin) {
+    if (plugin == null) {
+      return;
+    }
+
+    try {
+      plugin.close();
+    } catch (Exception e) {
+      logger.warn("Exception while shutting down storage plugin.");
+    }
   }
 
-  @Override
-  public SchemaFactory getSchemaFactory() {
-    return schemaFactory;
-  }
+  public class DrillSchemaFactory extends AbstractSchemaFactory {
 
-  public class DrillSchemaFactory implements SchemaFactory {
+    public DrillSchemaFactory(String name) {
+      super(name);
+    }
 
-    @SuppressWarnings("resource")
     @Override
     public void registerSchemas(SchemaConfig schemaConfig, SchemaPlus parent) throws IOException {
       Stopwatch watch = Stopwatch.createStarted();
 
       try {
-        Set<String> currentPluginNames = Sets.newHashSet(plugins.names());
-        // iterate through the plugin instances in the persistence store adding
+        Set<String> currentPluginNames = new HashSet<>(enabledPlugins.getNames());
+        // iterate through the plugin instances in the persistent store adding
         // any new ones and refreshing those whose configuration has changed
-        for (Map.Entry<String, StoragePluginConfig> config : Lists.newArrayList(pluginSystemTable.getAll())) {
-          if (config.getValue().isEnabled()) {
-            getPlugin(config.getKey());
-            currentPluginNames.remove(config.getKey());
+        Iterator<Entry<String, StoragePluginConfig>> allPlugins = pluginSystemTable.getAll();
+        while (allPlugins.hasNext()) {
+          Entry<String, StoragePluginConfig> plugin = allPlugins.next();
+          if (plugin.getValue().isEnabled()) {
+            getPlugin(plugin.getKey());
+            currentPluginNames.remove(plugin.getKey());
           }
         }
         // remove those which are no longer in the registry
         for (String pluginName : currentPluginNames) {
-          if (pluginName.equals(SYS_PLUGIN) || pluginName.equals(INFORMATION_SCHEMA_PLUGIN)) {
+          if (systemPlugins.get(pluginName) != null) {
             continue;
           }
-          plugins.remove(pluginName);
+          enabledPlugins.remove(pluginName);
         }
 
         // finally register schemas with the refreshed plugins
-        for (StoragePlugin plugin : plugins.plugins()) {
+        for (StoragePlugin plugin : enabledPlugins.plugins()) {
           plugin.registerSchemas(schemaConfig, parent);
         }
       } catch (ExecutionSetupException e) {
@@ -424,7 +550,7 @@ public class StoragePluginRegistryImpl implements StoragePluginRegistry {
       // -- "hivedb1"
       // -- "hive.default"
       // -- "hive.hivedb1"
-      List<SchemaPlus> secondLevelSchemas = Lists.newArrayList();
+      List<SchemaPlus> secondLevelSchemas = new ArrayList<>();
       for (String firstLevelSchemaName : parent.getSubSchemaNames()) {
         SchemaPlus firstLevelSchema = parent.getSubSchema(firstLevelSchemaName);
         for (String secondLevelSchemaName : firstLevelSchema.getSubSchemaNames()) {
@@ -447,53 +573,5 @@ public class StoragePluginRegistryImpl implements StoragePluginRegistry {
     }
 
   }
-
-  @Override
-  public synchronized void close() throws Exception {
-    ephemeralPlugins.invalidateAll();
-    plugins.close();
-    pluginSystemTable.close();
-  }
-
-  /**
-   * Get a list of all available storage plugin class constructors.
-   * @param classpathScan
-   *          A classpath scan to use.
-   * @return A Map of StoragePluginConfig => StoragePlugin.<init>() constructors.
-   */
-  @SuppressWarnings("unchecked")
-  public static Map<Object, Constructor<? extends StoragePlugin>> findAvailablePlugins(final ScanResult classpathScan) {
-    Map<Object, Constructor<? extends StoragePlugin>> availablePlugins = new HashMap<Object, Constructor<? extends StoragePlugin>>();
-    final Collection<Class<? extends StoragePlugin>> pluginClasses =
-        classpathScan.getImplementations(StoragePlugin.class);
-    final String lineBrokenList =
-        pluginClasses.size() == 0
-            ? "" : "\n\t- " + Joiner.on("\n\t- ").join(pluginClasses);
-    logger.debug("Found {} storage plugin configuration classes: {}.",
-        pluginClasses.size(), lineBrokenList);
-    for (Class<? extends StoragePlugin> plugin : pluginClasses) {
-      int i = 0;
-      for (Constructor<?> c : plugin.getConstructors()) {
-        Class<?>[] params = c.getParameterTypes();
-        if (params.length != 3
-            || params[1] != DrillbitContext.class
-            || !StoragePluginConfig.class.isAssignableFrom(params[0])
-            || params[2] != String.class) {
-          logger.info("Skipping StoragePlugin constructor {} for plugin class {} since it doesn't implement a "
-              + "[constructor(StoragePluginConfig, DrillbitContext, String)]", c, plugin);
-          continue;
-        }
-        availablePlugins.put(params[0], (Constructor<? extends StoragePlugin>) c);
-        i++;
-      }
-      if (i == 0) {
-        logger.debug("Skipping registration of StoragePlugin {} as it doesn't have a constructor with the parameters "
-            + "of (StorangePluginConfig, Config)", plugin.getCanonicalName());
-      }
-    }
-    return availablePlugins;
-  }
-
-
 
 }

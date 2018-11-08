@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -21,14 +21,13 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import org.apache.drill.common.exceptions.UserException;
-import org.apache.drill.exec.proto.UserBitShared;
 import org.apache.drill.exec.vector.complex.writer.BaseWriter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
 public interface JsonProcessor {
 
-  public static enum ReadState {
+  enum ReadState {
     END_OF_STREAM,
     JSON_RECORD_PARSE_ERROR,
     JSON_RECORD_PARSE_EOF_ERROR,
@@ -42,17 +41,11 @@ public interface JsonProcessor {
 
   void ensureAtLeastOneField(BaseWriter.ComplexWriter writer);
 
-  public UserException.Builder getExceptionWithContext(UserException.Builder exceptionBuilder,
-                                                       String field,
-                                                       String msg,
-                                                       Object... args);
+  UserException.Builder getExceptionWithContext(UserException.Builder exceptionBuilder, String message);
 
-  public UserException.Builder getExceptionWithContext(Throwable exception,
-                                                       String field,
-                                                       String msg,
-                                                       Object... args);
+  UserException.Builder getExceptionWithContext(Throwable exception, String message);
 
-  public boolean ignoreJSONParseError() ;
+  boolean ignoreJSONParseError();
 
-  public void setIgnoreJSONParseErrors(boolean ignoreJSONParseErrors);
+  void setIgnoreJSONParseErrors(boolean ignoreJSONParseErrors);
 }

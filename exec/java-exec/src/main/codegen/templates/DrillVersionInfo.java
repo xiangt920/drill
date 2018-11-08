@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -14,8 +14,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
-
+ */
 <@pp.dropOutputFile />
 
 <@pp.changeOutputFile name="/org/apache/drill/common/util/DrillVersionInfo.java" />
@@ -33,7 +32,7 @@ import org.apache.drill.common.Version;
  * Give access to Drill version as captured during the build
  *
  * <strong>Caution</strong> don't rely on major, minor and patch versions only to compare two 
- * Drill versions. Instead you should use the whole string, and apply the same semver algorithm 
+ * Drill versions. Instead you should use the whole string, and apply the same semver algorithm
  * as Maven (see {@code org.apache.maven.artifact.versioning.ComparableVersion}).
  *
  */

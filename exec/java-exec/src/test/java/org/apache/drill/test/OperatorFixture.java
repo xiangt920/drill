@@ -17,17 +17,27 @@
  */
 package org.apache.drill.test;
 
+import org.apache.drill.exec.work.filter.RuntimeFilterSink;
+import org.apache.drill.shaded.guava.com.google.common.base.Function;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.util.concurrent.ListenableFuture;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 
+import org.apache.drill.shaded.guava.com.google.common.base.Function;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import io.netty.buffer.DrillBuf;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.scanner.ClassPathScanner;
 import org.apache.drill.common.scanner.persistence.ScanResult;
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.exec.ExecConstants;
+import org.apache.drill.exec.compile.ClassBuilder;
 import org.apache.drill.exec.compile.CodeCompiler;
 import org.apache.drill.exec.exception.OutOfMemoryException;
 import org.apache.drill.exec.expr.fn.FunctionImplementationRegistry;
@@ -57,6 +67,7 @@ import org.apache.drill.exec.server.options.SystemOptionManager;
 import org.apache.drill.exec.store.PartitionExplorer;
 import org.apache.drill.exec.store.sys.store.provider.LocalPersistentStoreProvider;
 import org.apache.drill.exec.testing.ExecutionControls;
+import org.apache.drill.exec.work.filter.RuntimeFilterWritable;
 import org.apache.drill.test.ClusterFixtureBuilder.RuntimeOption;
 import org.apache.drill.test.rowSet.DirectRowSet;
 import org.apache.drill.test.rowSet.HyperRowSetImpl;
@@ -66,11 +77,11 @@ import org.apache.drill.test.rowSet.RowSet.ExtendableRowSet;
 import org.apache.drill.test.rowSet.RowSetBuilder;
 import org.apache.hadoop.security.UserGroupInformation;
 
-import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ListenableFuture;
-
-import io.netty.buffer.DrillBuf;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Test fixture for operator and (especially) "sub-operator" tests.
@@ -114,8 +125,17 @@ public class OperatorFixture extends BaseFixture implements AutoCloseable {
     protected ExecutorService scanExecutor;
     protected ExecutorService scanDecoderExecutor;
 
-    public Builder()
+    public Builder(BaseDirTestWatcher dirTestWatcher)
     {
+      // Set defaults for tmp dirs correctly
+
+      if (dirTestWatcher != null) {
+        configBuilder.put(ClassBuilder.CODE_DIR_OPTION, dirTestWatcher.getCodegenDir().getAbsolutePath());
+        configBuilder.put(ExecConstants.DRILL_TMP_DIR, dirTestWatcher.getTmpDir().getAbsolutePath());
+        configBuilder.put(ExecConstants.SYS_STORE_PROVIDER_LOCAL_PATH, dirTestWatcher.getStoreDir().getAbsolutePath());
+        configBuilder.put(ExecConstants.SPILL_DIRS, Lists.newArrayList(dirTestWatcher.getSpillDir().getAbsolutePath()));
+        configBuilder.put(ExecConstants.HASHJOIN_SPILL_DIRS, Lists.newArrayList(dirTestWatcher.getSpillDir().getAbsolutePath()));
+      }
     }
 
     public ConfigBuilder configBuilder() {
@@ -157,9 +177,12 @@ public class OperatorFixture extends BaseFixture implements AutoCloseable {
     private final BufferAllocator allocator;
     private final ExecutorService scanExecutorService;
     private final ExecutorService scanDecodeExecutorService;
+    private final List<OperatorContext> contexts = Lists.newLinkedList();
+
 
     private ExecutorState executorState = new OperatorFixture.MockExecutorState();
     private ExecutionControls controls;
+    private RuntimeFilterSink runtimeFilterSink;
 
     public MockFragmentContext(final DrillConfig config,
                                final OptionManager options,
@@ -175,6 +198,7 @@ public class OperatorFixture extends BaseFixture implements AutoCloseable {
       this.controls = new ExecutionControls(options);
       compiler = new CodeCompiler(config, options);
       bufferManager = new BufferManagerImpl(allocator);
+      this.runtimeFilterSink = new RuntimeFilterSink(allocator, Executors.newCachedThreadPool());
     }
 
     private static FunctionImplementationRegistry newFunctionRegistry(
@@ -251,7 +275,9 @@ public class OperatorFixture extends BaseFixture implements AutoCloseable {
         popConfig.getInitialAllocation(),
         popConfig.getMaxAllocation()
       );
-      return new MockOperatorContext(this, childAllocator, popConfig);
+      OperatorContext context = new MockOperatorContext(this, childAllocator, popConfig);
+      contexts.add(context);
+      return context;
     }
 
     @Override
@@ -286,7 +312,20 @@ public class OperatorFixture extends BaseFixture implements AutoCloseable {
 
     @Override
     public void close() {
+      for(OperatorContext context : contexts) {
+        context.close();
+      }
       bufferManager.close();
+    }
+
+    @Override
+    public RuntimeFilterSink getRuntimeFilterSink() {
+      return runtimeFilterSink;
+    }
+
+    @Override
+    public void addRuntimeFilter(RuntimeFilterWritable runtimeFilter) {
+      runtimeFilterSink.aggregate(runtimeFilter);
     }
 
     @Override
@@ -358,8 +397,8 @@ public class OperatorFixture extends BaseFixture implements AutoCloseable {
     options.close();
   }
 
-  public static Builder builder() {
-    Builder builder = new Builder();
+  public static Builder builder(BaseDirTestWatcher dirTestWatcher) {
+    Builder builder = new Builder(dirTestWatcher);
     builder.configBuilder()
       // Required to avoid Dynamic UDF calls for missing or
       // ambiguous functions.
@@ -367,8 +406,8 @@ public class OperatorFixture extends BaseFixture implements AutoCloseable {
     return builder;
   }
 
-  public static OperatorFixture standardFixture() {
-    return builder().build();
+  public static OperatorFixture standardFixture(BaseDirTestWatcher dirTestWatcher) {
+    return builder(dirTestWatcher).build();
   }
 
   public RowSetBuilder rowSetBuilder(BatchSchema schema) {

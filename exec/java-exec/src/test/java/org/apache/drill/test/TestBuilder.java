@@ -21,7 +21,11 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,12 +34,12 @@ import org.antlr.runtime.ANTLRStringStream;
 import org.antlr.runtime.CommonTokenStream;
 import org.antlr.runtime.RecognitionException;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.drill.test.DrillTestWrapper.TestServices;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.expression.parser.ExprLexer;
 import org.apache.drill.common.expression.parser.ExprParser;
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.Types;
+import org.apache.drill.exec.expr.fn.impl.DateUtility;
 import org.apache.drill.exec.proto.UserBitShared;
 import org.apache.drill.exec.proto.UserBitShared.QueryType;
 import org.apache.drill.exec.proto.UserProtos.PreparedStatementHandle;
@@ -44,15 +48,16 @@ import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.util.JsonStringArrayList;
 import org.apache.drill.exec.util.JsonStringHashMap;
 import org.apache.drill.exec.util.Text;
-
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
+import org.apache.drill.test.DrillTestWrapper.TestServices;
 import org.joda.time.DateTimeZone;
+
+import org.apache.drill.shaded.guava.com.google.common.base.Joiner;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 
 public class TestBuilder {
 
   /**
-   * Test query to rung. Type of object depends on the {@link #queryType}
+   * Test query to run. Type of object depends on the {@link #queryType}
    */
   private Object query;
   // the type of query for the test
@@ -87,6 +92,7 @@ public class TestBuilder {
   private List<Map<String, Object>> baselineRecords;
 
   private int expectedNumBatches = DrillTestWrapper.EXPECTED_BATCH_COUNT_NOT_SET;
+  private int expectedNumRecords = DrillTestWrapper.EXPECTED_NUM_RECORDS_NOT_SET;
 
   public TestBuilder(TestServices services) {
     this.services = services;
@@ -123,12 +129,9 @@ public class TestBuilder {
     return this;
   }
 
-  public DrillTestWrapper build() throws Exception {
-    if ( ! ordered && highPerformanceComparison ) {
-      throw new Exception("High performance comparison only available for ordered checks, to enforce this restriction, ordered() must be called first.");
-    }
+  public DrillTestWrapper build() {
     return new DrillTestWrapper(this, services, query, queryType, baselineOptionSettingQueries, testOptionSettingQueries,
-        getValidationQueryType(), ordered, highPerformanceComparison, baselineColumns, baselineRecords, expectedNumBatches);
+        getValidationQueryType(), ordered, highPerformanceComparison, baselineColumns, baselineRecords, expectedNumBatches, expectedNumRecords);
   }
 
   public List<Pair<SchemaPath, TypeProtos.MajorType>> getExpectedSchema() {
@@ -244,17 +247,8 @@ public class TestBuilder {
     throw new RuntimeException("Must provide some kind of baseline, either a baseline file or another query");
   }
 
-  protected UserBitShared.QueryType getValidationQueryType() throws Exception {
-    if (singleExplicitBaselineRecord()) {
-      return null;
-    }
-
-    if (ordered) {
-      // If there are no base line records or no baseline query then we will check to make sure that the records are in ascending order
-      return null;
-    }
-
-    throw new RuntimeException("Must provide some kind of baseline, either a baseline file or another query");
+  protected UserBitShared.QueryType getValidationQueryType() {
+    return null;
   }
 
   public JSONTestBuilder jsonBaselineFile(String filePath) {
@@ -325,6 +319,12 @@ public class TestBuilder {
     return this;
   }
 
+  public TestBuilder expectsNumRecords(int expectedNumRecords) {
+    this.expectedNumRecords = expectedNumRecords;
+    this.ordered = false;
+    return this;
+  }
+
   /**
    * This method is used to pass in a simple list of values for a single record verification without
    * the need to create a CSV or JSON file to store the baseline.
@@ -335,7 +335,7 @@ public class TestBuilder {
    * @param baselineValues - the baseline values to validate
    * @return the test builder
    */
-  public TestBuilder baselineValues(Object ... baselineValues) {
+  public TestBuilder baselineValues(Object... baselineValues) {
     assert getExpectedSchema() == null : "The expected schema is not needed when baselineValues are provided ";
     if (ordered == null) {
       throw new RuntimeException("Ordering not set, before specifying baseline data you must explicitly call the ordered() or unOrdered() method on the " + this.getClass().getSimpleName());
@@ -351,6 +351,24 @@ public class TestBuilder {
       i++;
     }
     this.baselineRecords.add(ret);
+    return this;
+  }
+
+  /**
+   * This method is used to pass in an array of values for records verification in case if
+   * {@link #baselineColumns(String...)} specifies one column only without
+   * the need to create a CSV or JSON file to store the baseline.
+   *
+   * This can be called repeatedly to pass an array of records to verify. It works for both ordered and unordered
+   * checks.
+   *
+   * @param baselineValues baseline values for a single column to validate
+   * @return {@code this} test builder
+   */
+  public TestBuilder baselineValuesForSingleColumn(Object... baselineValues) {
+    assertEquals("Only one column should be specified", 1, baselineColumns.length);
+    Arrays.stream(baselineValues)
+        .forEach(this::baselineValues);
     return this;
   }
 
@@ -411,7 +429,7 @@ public class TestBuilder {
         baselineTypeMap, baselineOptionSettingQueries, testOptionSettingQueries, highPerformanceComparison, expectedNumBatches);
   }
 
-  public BaselineQueryTestBuilder sqlBaselineQuery(String query, String ...replacements) {
+  public BaselineQueryTestBuilder sqlBaselineQuery(String query, String... replacements) {
     return sqlBaselineQuery(String.format(query, (Object[]) replacements));
   }
 
@@ -433,6 +451,7 @@ public class TestBuilder {
   private String getDecimalPrecisionScaleInfo(TypeProtos.MajorType type) {
     String precision = "";
     switch(type.getMinorType()) {
+      case VARDECIMAL:
       case DECIMAL18:
       case DECIMAL28SPARSE:
       case DECIMAL38SPARSE:
@@ -442,7 +461,7 @@ public class TestBuilder {
         precision = String.format("(%d,%d)", type.getPrecision(), type.getScale());
         break;
       default:
-        ; // do nothing empty string set above
+        // do nothing empty string set above
     }
     return precision;
   }
@@ -471,7 +490,7 @@ public class TestBuilder {
     }
 
     // convenience method to convert minor types to major types if no decimals with precisions are needed
-    public CSVTestBuilder baselineTypes(TypeProtos.MinorType ... baselineTypes) {
+    public CSVTestBuilder baselineTypes(TypeProtos.MinorType... baselineTypes) {
       TypeProtos.MajorType[] majorTypes = new TypeProtos.MajorType[baselineTypes.length];
       int i = 0;
       for(TypeProtos.MinorType minorType : baselineTypes) {
@@ -539,7 +558,7 @@ public class TestBuilder {
     }
 
     @Override
-    protected UserBitShared.QueryType getValidationQueryType() throws Exception {
+    protected UserBitShared.QueryType getValidationQueryType() {
       return UserBitShared.QueryType.SQL;
     }
   }
@@ -572,7 +591,7 @@ public class TestBuilder {
     }
 
     @Override
-    protected UserBitShared.QueryType getValidationQueryType() throws Exception {
+    protected UserBitShared.QueryType getValidationQueryType() {
       return null;
     }
 
@@ -603,7 +622,7 @@ public class TestBuilder {
     }
 
     @Override
-    protected UserBitShared.QueryType getValidationQueryType() throws Exception {
+    protected UserBitShared.QueryType getValidationQueryType() {
       return UserBitShared.QueryType.SQL;
     }
 
@@ -634,7 +653,7 @@ public class TestBuilder {
     }
 
     @Override
-    protected UserBitShared.QueryType getValidationQueryType() throws Exception {
+    protected UserBitShared.QueryType getValidationQueryType() {
       return baselineQueryType;
     }
 
@@ -692,4 +711,15 @@ public class TestBuilder {
     long UTCTimestamp = Timestamp.valueOf(value).getTime();
     return new Timestamp(DateTimeZone.getDefault().convertUTCToLocal(UTCTimestamp));
   }
+
+  /**
+   * Helper method for the timestamp values that depend on the local timezone
+   * @param value expected timestamp value in UTC
+   * @return LocalDateTime value for the local timezone
+   */
+  public static LocalDateTime convertToLocalDateTime(String value) {
+    OffsetDateTime utcDateTime = LocalDateTime.parse(value, DateUtility.getDateTimeFormatter()).atOffset(ZoneOffset.UTC);
+    return utcDateTime.atZoneSameInstant(ZoneOffset.systemDefault()).toLocalDateTime();
+  }
+
 }

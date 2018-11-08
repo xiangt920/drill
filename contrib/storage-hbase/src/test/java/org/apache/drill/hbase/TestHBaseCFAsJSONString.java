@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -55,7 +55,7 @@ public class TestHBaseCFAsJSONString extends BaseHBaseTest {
   public void testColumnFamiliesAsJSONString() throws Exception {
     setColumnWidths(new int[] {112, 12});
     List<QueryDataBatch> resultList = runHBaseSQLlWithResults("SELECT f, f2 FROM hbase.`[TABLE_NAME]` tableName LIMIT 1");
-    printResult(resultList);
+    logResult(resultList);
   }
 
 }

@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.server.options;
 
 import org.junit.Assert;
@@ -53,7 +52,7 @@ public class OptionValueTest {
       "myOption", "3000", OptionValue.OptionScope.SYSTEM);
 
     final OptionValue expectedValue = OptionValue.create(
-      OptionValue.AccessibleScopes.ALL, "myOption", 3000, OptionValue.OptionScope.SYSTEM);
+      OptionValue.AccessibleScopes.ALL, "myOption", 3000l, OptionValue.OptionScope.SYSTEM);
 
     Assert.assertEquals(expectedValue, createdValue);
   }

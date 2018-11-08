@@ -25,11 +25,14 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.drill.test.BaseTestQuery;
-import org.apache.drill.test.QueryTestUtil;
 import org.apache.drill.categories.UnlikelyTest;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.compile.ClassTransformer.ScalarReplacementOption;
@@ -44,16 +47,17 @@ import org.apache.drill.exec.util.ByteBufUtil.HadoopWritables;
 import org.apache.drill.exec.util.VectorUtil;
 import org.apache.drill.exec.vector.ValueVector;
 import org.apache.drill.exec.vector.VarCharVector;
-import org.joda.time.DateTime;
+import org.apache.drill.test.BaseTestQuery;
+import org.apache.drill.test.QueryTestUtil;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Resources;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Resources;
 
 import io.netty.buffer.DrillBuf;
-import org.junit.experimental.categories.Category;
 
 @Category(UnlikelyTest.class)
 public class TestConvertFunctions extends BaseTestQuery {
@@ -66,8 +70,8 @@ public class TestConvertFunctions extends BaseTestQuery {
   private static final String DATE_TIME_BE = "\\x00\\x00\\x00\\x49\\x77\\x85\\x1f\\x8e";
   private static final String DATE_TIME_LE = "\\x8e\\x1f\\x85\\x77\\x49\\x00\\x00\\x00";
 
-  private static DateTime time = DateTime.parse("01:23:45.678", DateUtility.getTimeFormatter());
-  private static DateTime date = DateTime.parse("1980-01-01", DateUtility.getDateTimeFormatter());
+  private static LocalTime time = LocalTime.parse("01:23:45.678", DateUtility.getTimeFormatter());
+  private static LocalDate date = LocalDate.parse("1980-01-01", DateUtility.getDateTimeFormatter());
 
   String textFileContent;
 
@@ -238,6 +242,33 @@ public class TestConvertFunctions extends BaseTestQuery {
         .baselineValues("abc", mapVal1, "xyz")
         .go();
 
+  }
+
+  @Test
+  public void testConvertFromJsonNullableInput() throws Exception {
+    // Contents of the generated file:
+    /*
+      {"k": "{a: 1, b: 2}"}
+      {"k": null}
+      {"k": "{c: 3}"}
+     */
+    try (BufferedWriter writer = new BufferedWriter(new FileWriter(
+        new File(dirTestWatcher.getRootDir(), "nullable_json_strings.json")))) {
+      String[] fieldValue = {"\"{a: 1, b: 2}\"", null, "\"{c: 3}\""};
+      for (String value : fieldValue) {
+        String entry = String.format("{\"k\": %s}\n", value);
+        writer.write(entry);
+      }
+    }
+
+    testBuilder()
+        .sqlQuery("select convert_from(k, 'json') as col from dfs.`nullable_json_strings.json`")
+        .unOrdered()
+        .baselineColumns("col")
+        .baselineValues(mapOf("a", 1L, "b", 2L))
+        .baselineValues(mapOf())
+        .baselineValues(mapOf("c", 3L))
+        .go();
   }
 
   @Test
@@ -517,7 +548,7 @@ public class TestConvertFunctions extends BaseTestQuery {
       count += result.getHeader().getRowCount();
       loader.load(result.getHeader().getDef(), result.getData());
       if (loader.getRecordCount() > 0) {
-        VectorUtil.showVectorAccessibleContent(loader);
+        VectorUtil.logVectorAccessibleContent(loader);
       }
       loader.clear();
       result.release();

@@ -15,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 #ifndef _COMMON_H_
 #define _COMMON_H_
 
@@ -175,7 +173,8 @@ typedef enum{
 #define USERPROP_PASSWORD "password"
 #define USERPROP_SCHEMA   "schema"
 #define USERPROP_USESSL   "enableTLS"
-#define USERPROP_TLSPROTOCOL "TLSProtocol" //TLS version
+#define USERPROP_TLSPROTOCOL "TLSProtocol" //TLS version. The exact TLS version.
+#define USERPROP_CUSTOM_SSLCTXOPTIONS "CustomSSLCtxOptions" // The custom SSL CTX options.
 #define USERPROP_CERTFILEPATH "certFilePath" // pem file path and name
 // TODO: support truststore protected by password. 
 // #define USERPROP_CERTPASSWORD "certPassword" // Password for certificate file. 

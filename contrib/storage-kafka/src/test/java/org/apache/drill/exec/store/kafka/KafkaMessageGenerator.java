@@ -35,13 +35,14 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.io.Resources;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.io.Resources;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -54,14 +55,15 @@ public class KafkaMessageGenerator {
   public KafkaMessageGenerator (final String broker, Class<?> valueSerializer) {
     producerProperties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, broker);
     producerProperties.put(ProducerConfig.ACKS_CONFIG, "all");
-    producerProperties.put(ProducerConfig.RETRIES_CONFIG, 0);
+    producerProperties.put(ProducerConfig.RETRIES_CONFIG, 3);
     producerProperties.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);
     producerProperties.put(ProducerConfig.LINGER_MS_CONFIG, 0);
     producerProperties.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1);
-    producerProperties.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1000);
+    producerProperties.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 5000);
     producerProperties.put(ProducerConfig.CLIENT_ID_CONFIG, "drill-test-kafka-client");
     producerProperties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     producerProperties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
+    producerProperties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true); //So that retries do not cause duplicates
   }
 
   public void populateAvroMsgIntoKafka(String topic, int numMsg) throws IOException {
@@ -120,6 +122,39 @@ public class KafkaMessageGenerator {
         logger.info("Publishing message : {}", message);
         Future<RecordMetadata> future = producer.send(message);
         logger.info("Committed offset of the message : {}", future.get().offset());
+      }
+    } catch (Throwable th) {
+      logger.error(th.getMessage(), th);
+      throw new DrillRuntimeException(th.getMessage(), th);
+    } finally {
+      if (producer != null) {
+        producer.close();
+      }
+    }
+  }
+
+  public void populateJsonMsgWithTimestamps(String topic, int numMsg) {
+    KafkaProducer<String, String> producer = null;
+    Random rand = new Random();
+    try {
+      producer = new KafkaProducer<String, String>(producerProperties);
+      int halfCount = numMsg / 2;
+
+      for(PartitionInfo tpInfo : producer.partitionsFor(topic)) {
+        for (int i = 1; i <= numMsg; ++i) {
+          JsonObject object = new JsonObject();
+          object.addProperty("stringKey", UUID.randomUUID().toString());
+          object.addProperty("intKey", numMsg - i);
+          object.addProperty("boolKey", i % 2 == 0);
+
+          long timestamp = i < halfCount ? (halfCount - i) : i;
+          ProducerRecord<String, String> message =
+              new ProducerRecord<String, String>(tpInfo.topic(), tpInfo.partition(), timestamp, "key"+i, object.toString());
+          logger.info("Publishing message : {}", message);
+          Future<RecordMetadata> future = producer.send(message);
+          logger.info("Committed offset of the message : {}", future.get().offset());
+        }
+
       }
     } catch (Throwable th) {
       logger.error(th.getMessage(), th);

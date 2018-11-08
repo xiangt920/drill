@@ -15,23 +15,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.store.hive;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import com.google.common.collect.Sets;
-import com.google.common.io.Resources;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.io.Resources;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.drill.test.BaseDirTestWatcher;
 import org.apache.drill.test.BaseTestQuery;
 import org.apache.drill.common.exceptions.DrillException;
 import org.apache.drill.exec.store.StoragePluginRegistry;
@@ -41,7 +43,6 @@ import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.session.SessionState;
 
-import com.google.common.collect.Maps;
 import org.apache.hadoop.hive.serde.serdeConstants;
 
 import static org.apache.drill.exec.hive.HiveTestUtilities.executeQuery;
@@ -53,9 +54,11 @@ public class HiveTestDataGenerator {
 
   private final String dbDir;
   private final String whDir;
+  private final BaseDirTestWatcher dirTestWatcher;
   private final Map<String, String> config;
 
-  public static synchronized HiveTestDataGenerator getInstance(File baseDir) throws Exception {
+  public static synchronized HiveTestDataGenerator getInstance(BaseDirTestWatcher dirTestWatcher) throws Exception {
+    File baseDir = dirTestWatcher.getRootDir();
     if (instance == null || !HiveTestDataGenerator.baseDir.equals(baseDir)) {
       HiveTestDataGenerator.baseDir = baseDir;
 
@@ -65,19 +68,20 @@ public class HiveTestDataGenerator {
       final String dbDir = dbDirFile.getAbsolutePath();
       final String whDir = whDirFile.getAbsolutePath();
 
-      instance = new HiveTestDataGenerator(dbDir, whDir);
+      instance = new HiveTestDataGenerator(dbDir, whDir, dirTestWatcher);
       instance.generateTestData();
     }
 
     return instance;
   }
 
-  private HiveTestDataGenerator(final String dbDir, final String whDir) {
+  private HiveTestDataGenerator(final String dbDir, final String whDir, final BaseDirTestWatcher dirTestWatcher) {
     this.dbDir = dbDir;
     this.whDir = whDir;
+    this.dirTestWatcher = dirTestWatcher;
 
-    config = Maps.newHashMap();
-    config.put("hive.metastore.uris", "");
+    config = new HashMap<>();
+    config.put(ConfVars.METASTOREURIS.toString(), "");
     config.put("javax.jdo.option.ConnectionURL", String.format("jdbc:derby:;databaseName=%s;create=true", dbDir));
     config.put("hive.metastore.warehouse.dir", whDir);
     config.put(FileSystem.FS_DEFAULT_NAME_KEY, FileSystem.DEFAULT_FS);
@@ -85,7 +89,9 @@ public class HiveTestDataGenerator {
 
   /**
    * Add Hive test storage plugin to the given plugin registry.
-   * @throws Exception
+   *
+   * @param pluginRegistry storage plugin registry
+   * @throws Exception in case if unable to update Hive storage plugin
    */
   public void addHiveTestPlugin(final StoragePluginRegistry pluginRegistry) throws Exception {
     HiveStoragePluginConfig pluginConfig = new HiveStoragePluginConfig(config);
@@ -97,7 +103,8 @@ public class HiveTestDataGenerator {
   /**
    * Update the current HiveStoragePlugin in given plugin registry with given <i>configOverride</i>.
    *
-   * @param configOverride
+   * @param pluginRegistry storage plugin registry
+   * @param configOverride config properties to be overridden
    * @throws DrillException if fails to update or no Hive plugin currently exists in given plugin registry.
    */
   public void updatePluginConfig(final StoragePluginRegistry pluginRegistry, Map<String, String> configOverride)
@@ -109,7 +116,7 @@ public class HiveTestDataGenerator {
     }
 
     HiveStoragePluginConfig newPluginConfig = storagePlugin.getConfig();
-    newPluginConfig.getHiveConfigOverride().putAll(configOverride);
+    newPluginConfig.getConfigProps().putAll(configOverride);
 
     pluginRegistry.createOrUpdate(HIVE_TEST_PLUGIN_NAME, newPluginConfig, true);
   }
@@ -129,7 +136,7 @@ public class HiveTestDataGenerator {
     try {
       Files.setPosixFilePermissions(dir.toPath(), perms);
     } catch (IOException e) {
-      new RuntimeException(e);
+      throw new RuntimeException(e);
     }
 
     return dir;
@@ -340,7 +347,7 @@ public class HiveTestDataGenerator {
         "charType CHAR(10))"
     );
 
-    /**
+    /*
      * Create a PARQUET table with all supported types.
      */
     executeQuery(hiveDriver,
@@ -495,22 +502,6 @@ public class HiveTestDataGenerator {
     executeQuery(hiveDriver, "INSERT INTO TABLE kv_parquet PARTITION(part1) SELECT key, value, key FROM default.kv");
     executeQuery(hiveDriver, "ALTER TABLE kv_parquet ADD COLUMNS (newcol string)");
 
-    executeQuery(hiveDriver,
-        "CREATE TABLE countStar_Parquet (int_field INT) STORED AS parquet");
-
-    final int numOfRows = 200;
-    final StringBuffer sb = new StringBuffer();
-    sb.append("VALUES ");
-    for(int i = 0; i < numOfRows; ++i) {
-      if(i != 0) {
-        sb.append(",");
-      }
-      sb.append("(").append(i).append(")");
-    }
-
-    executeQuery(hiveDriver, "INSERT INTO TABLE countStar_Parquet \n" +
-        sb.toString());
-
     // Create a StorageHandler based table (DRILL-3739)
     executeQuery(hiveDriver, "CREATE TABLE kv_sh(key INT, value STRING) STORED BY " +
         "'org.apache.hadoop.hive.ql.metadata.DefaultStorageHandler'");
@@ -552,7 +543,71 @@ public class HiveTestDataGenerator {
         Resources.getResource("simple.json") + "' into table default.simple_json";
     executeQuery(hiveDriver, loadData);
 
+    createTestDataForDrillNativeParquetReaderTests(hiveDriver);
+
+    createSubDirTable(hiveDriver, testDataFile);
+
     ss.close();
+  }
+
+  private void createTestDataForDrillNativeParquetReaderTests(Driver hiveDriver) {
+    // Hive managed table that has data qualified for Drill native filter push down
+    executeQuery(hiveDriver, "create table kv_native(key int, sub_key int) stored as parquet");
+    // each insert is created in separate file
+    executeQuery(hiveDriver, "insert into table kv_native values (1, 1), (1, 2)");
+    executeQuery(hiveDriver, "insert into table kv_native values (1, 3), (1, 4)");
+    executeQuery(hiveDriver, "insert into table kv_native values (2, 5), (2, 6)");
+    executeQuery(hiveDriver, "insert into table kv_native values (null, 9), (null, 10)");
+
+    // Hive external table which has three partitions
+
+    // copy external table with data from test resources
+    dirTestWatcher.copyResourceToRoot(Paths.get("external"));
+
+    File external = new File (baseDir, "external");
+    String tableLocation = new File(external, "kv_native_ext").toURI().getPath();
+
+    executeQuery(hiveDriver, String.format("create external table kv_native_ext(key int) " +
+        "partitioned by (part_key int) " +
+        "stored as parquet location '%s'",
+        tableLocation));
+
+    /*
+      DATA:
+      key, part_key
+      1, 1
+      2, 1
+      3, 2
+      4, 2
+     */
+
+    // add partitions
+
+    // partition in the same location as table
+    String firstPartition = new File(tableLocation, "part_key=1").toURI().getPath();
+    executeQuery(hiveDriver, String.format("alter table kv_native_ext add partition (part_key = '1') " +
+      "location '%s'", firstPartition));
+
+    // partition in different location with table
+    String secondPartition = new File(external, "part_key=2").toURI().getPath();
+    executeQuery(hiveDriver, String.format("alter table kv_native_ext add partition (part_key = '2') " +
+      "location '%s'", secondPartition));
+
+    // add empty partition
+    String thirdPartition = new File(dirTestWatcher.makeSubDir(Paths.get("empty_part")), "part_key=3").toURI().getPath();
+    executeQuery(hiveDriver, String.format("alter table kv_native_ext add partition (part_key = '3') " +
+      "location '%s'", thirdPartition));
+  }
+
+  private void createSubDirTable(Driver hiveDriver, String testDataFile) {
+    String tableName = "sub_dir_table";
+    dirTestWatcher.copyResourceToRoot(Paths.get(testDataFile), Paths.get(tableName, "sub_dir", "data.txt"));
+
+    String tableLocation = Paths.get(dirTestWatcher.getRootDir().toURI().getPath(), tableName).toUri().getPath();
+
+    String tableDDL = String.format("create external table sub_dir_table (key int, value string) " +
+        "row format delimited fields terminated by ',' stored as textfile location '%s'", tableLocation);
+    executeQuery(hiveDriver, tableDDL);
   }
 
   private File getTempFile() throws Exception {
@@ -560,38 +615,32 @@ public class HiveTestDataGenerator {
   }
 
   private String generateTestDataFile() throws Exception {
-    final File file = getTempFile();
-    PrintWriter printWriter = new PrintWriter(file);
-    for (int i=1; i<=5; i++) {
-      printWriter.println (String.format("%d, key_%d", i, i));
+    File file = getTempFile();
+    try (PrintWriter printWriter = new PrintWriter(file)) {
+      for (int i = 1; i <= 5; i++) {
+        printWriter.println(String.format("%d, key_%d", i, i));
+      }
     }
-    printWriter.close();
-
     return file.getPath();
   }
 
   private String generateTestDataFileForPartitionInput() throws Exception {
-    final File file = getTempFile();
-
-    PrintWriter printWriter = new PrintWriter(file);
-
-    String partValues[] = {"1", "2", "null"};
-
-    for(int c = 0; c < partValues.length; c++) {
-      for(int d = 0; d < partValues.length; d++) {
-        for(int e = 0; e < partValues.length; e++) {
-          for (int i = 1; i <= 5; i++) {
-            Date date = new Date(System.currentTimeMillis());
-            Timestamp ts = new Timestamp(System.currentTimeMillis());
-            printWriter.printf("%s,%s,%s,%s,%s",
-                date.toString(), ts.toString(), partValues[c], partValues[d], partValues[e]);
-            printWriter.println();
+    File file = getTempFile();
+    try (PrintWriter printWriter = new PrintWriter(file)) {
+      String partValues[] = {"1", "2", "null"};
+      for (String partValue : partValues) {
+        for (String partValue1 : partValues) {
+          for (String partValue2 : partValues) {
+            for (int i = 1; i <= 5; i++) {
+              Date date = new Date(System.currentTimeMillis());
+              Timestamp ts = new Timestamp(System.currentTimeMillis());
+              printWriter.printf("%s,%s,%s,%s,%s", date.toString(), ts.toString(), partValue, partValue1, partValue2);
+              printWriter.println();
+            }
           }
         }
       }
     }
-
-    printWriter.close();
 
     return file.getPath();
   }
@@ -599,12 +648,12 @@ public class HiveTestDataGenerator {
   private String generateAllTypesDataFile() throws Exception {
     File file = getTempFile();
 
-    PrintWriter printWriter = new PrintWriter(file);
-    printWriter.println("YmluYXJ5ZmllbGQ=,false,34,65.99,2347.923,2758725827.9999,29375892739852.7689," +
-        "89853749534593985.7834783,8.345,4.67,123456,234235,3455,stringfield,varcharfield," +
-        "2013-07-05 17:01:00,2013-07-05,charfield");
-    printWriter.println(",,,,,,,,,,,,,,,,");
-    printWriter.close();
+    try (PrintWriter printWriter = new PrintWriter(file)) {
+      printWriter.println("YmluYXJ5ZmllbGQ=,false,34,65.99,2347.923,2758725827.9999,29375892739852.7689,"+
+          "89853749534593985.7834783,8.345,4.67,123456,234235,3455,stringfield,varcharfield,"+
+          "2013-07-05 17:01:00,2013-07-05,charfield");
+      printWriter.println(",,,,,,,,,,,,,,,,");
+    }
 
     return file.getPath();
   }

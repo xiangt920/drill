@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -24,7 +24,6 @@ import java.io.IOException;
 import org.apache.drill.common.exceptions.UserException;
 
 import com.univocity.parsers.common.TextParsingException;
-import com.univocity.parsers.csv.CsvParserSettings;
 
 /*******************************************************************************
  * Portions Copyright 2014 uniVocity Software Pty Ltd
@@ -501,4 +500,12 @@ final class TextReader {
     input.close();
   }
 
+  @Override
+  public String toString() {
+    return "TextReader[Line=" + context.currentLine()
+        + ", Column=" + context.currentChar()
+        + ", Record=" + context.currentRecord()
+        + ", Byte pos=" + getPos()
+        + "]";
+  }
 }

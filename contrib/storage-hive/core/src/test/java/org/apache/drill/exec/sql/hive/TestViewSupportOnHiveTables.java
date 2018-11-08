@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.sql.hive;
 
-import com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
 import org.apache.drill.categories.HiveStorageTest;
 import org.apache.drill.categories.SlowTest;
 import org.apache.drill.exec.sql.TestBaseViewSupport;
@@ -35,7 +35,7 @@ public class TestViewSupportOnHiveTables extends TestBaseViewSupport {
 
   @BeforeClass
   public static void generateHive() throws Exception{
-    hiveTest = HiveTestDataGenerator.getInstance(dirTestWatcher.getRootDir());
+    hiveTest = HiveTestDataGenerator.getInstance(dirTestWatcher);
     hiveTest.addHiveTestPlugin(getDrillbitContext().getStorage());
   }
 

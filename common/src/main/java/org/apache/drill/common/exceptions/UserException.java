@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -771,8 +771,10 @@ public class UserException extends DrillRuntimeException {
    * @return generated user error message
    */
   private String generateMessage(boolean includeErrorIdAndIdentity) {
+    boolean seeLogsMessage = errorType == DrillPBError.ErrorType.INTERNAL_ERROR
+        || errorType == DrillPBError.ErrorType.SYSTEM;
     return errorType + " ERROR: " + super.getMessage() + "\n\n" +
-        context.generateContextMessage(includeErrorIdAndIdentity);
+        context.generateContextMessage(includeErrorIdAndIdentity, seeLogsMessage);
   }
 
 }

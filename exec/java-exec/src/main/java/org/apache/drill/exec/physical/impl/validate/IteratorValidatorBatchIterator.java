@@ -140,6 +140,7 @@ public class IteratorValidatorBatchIterator implements CloseableRecordBatch {
     case OK:
     case OK_NEW_SCHEMA:
     case NONE:
+    case EMIT:
       return;
     default:
       throw new IllegalStateException(
@@ -240,6 +241,7 @@ public class IteratorValidatorBatchIterator implements CloseableRecordBatch {
           validateBatch();
           break;
         case OK:
+        case EMIT:
           // OK is allowed as long as OK_NEW_SCHEMA was seen, except if terminated
           // (checked above).
           if (validationState != ValidationState.HAVE_SCHEMA) {
@@ -305,12 +307,12 @@ public class IteratorValidatorBatchIterator implements CloseableRecordBatch {
         }
         // It's legal for a batch to have zero field. For instance, a relational table could have
         // zero columns. Querying such table requires execution operator to process batch with 0 field.
-        if (incoming.getRecordCount() > MAX_BATCH_SIZE) {
+        if (incoming.getRecordCount() > MAX_BATCH_ROW_COUNT) {
           throw new IllegalStateException(
               String.format(
                   "Incoming batch [#%d, %s] has size %d, which is beyond the"
                   + " limit of %d",
-                  instNum, batchTypeName, incoming.getRecordCount(), MAX_BATCH_SIZE
+                  instNum, batchTypeName, incoming.getRecordCount(), MAX_BATCH_ROW_COUNT
                   ));
         }
 
@@ -320,8 +322,7 @@ public class IteratorValidatorBatchIterator implements CloseableRecordBatch {
       }
 
       return batchState;
-    }
-    catch (RuntimeException | Error e) {
+    } catch (RuntimeException | Error e) {
       exceptionState = e;
       logger.trace("[#{}, on {}]: incoming next() exception: ({} ->) {}",
                    instNum, batchTypeName, prevBatchState, exceptionState,
@@ -357,6 +358,21 @@ public class IteratorValidatorBatchIterator implements CloseableRecordBatch {
                       this.getClass().getCanonicalName()));
   }
 
+  @Override
+  public VectorContainer getContainer() {
+    return incoming.getContainer();
+  }
+
   public RecordBatch getIncoming() { return incoming; }
 
+  @Override
+  public boolean hasFailed() {
+    return exceptionState != null || batchState == STOP;
+  }
+
+  @Override
+  public void dump() {
+    logger.error("IteratorValidatorBatchIterator[container={}, instNum={}, batchTypeName={}, lastSchema={}, "
+           + "lastNewSchema={}]", getContainer(), instNum, batchTypeName, lastSchema, lastNewSchema);
+  }
 }

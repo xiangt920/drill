@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -23,12 +23,11 @@ import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.exec.exception.OutOfMemoryException;
 import org.apache.drill.exec.ops.OperatorContext;
 import org.apache.drill.exec.physical.impl.OutputMutator;
-import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.vector.ValueVector;
 
 public interface RecordReader extends AutoCloseable {
-  public static final long ALLOCATOR_INITIAL_RESERVATION = 1*1024*1024;
-  public static final long ALLOCATOR_MAX_RESERVATION = 20L*1000*1000*1000;
+  long ALLOCATOR_INITIAL_RESERVATION = 1 * 1024 * 1024;
+  long ALLOCATOR_MAX_RESERVATION = 20L * 1000 * 1000 * 1000;
 
   /**
    * Configure the RecordReader with the provided schema and the record batch that should be written to.
@@ -42,6 +41,14 @@ public interface RecordReader extends AutoCloseable {
   void setup(OperatorContext context, OutputMutator output) throws ExecutionSetupException;
 
   void allocate(Map<String, ValueVector> vectorMap) throws OutOfMemoryException;
+
+  /**
+   * Check if the reader may have potentially more data to be read in subsequent iterations. Certain types of readers
+   * such as repeatable readers can be invoked multiple times, so this method will allow ScanBatch to check with
+   * the reader before closing it.
+   * @return return true if there could potentially be more reads, false otherwise
+   */
+  boolean hasNext();
 
   /**
    * Increments this record reader forward, writing via the provided output

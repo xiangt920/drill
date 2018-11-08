@@ -20,8 +20,12 @@ package org.apache.drill.exec.store.dfs;
 import static org.apache.drill.exec.store.dfs.FileSystemSchemaFactory.DEFAULT_WS_NAME;
 
 import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.apache.calcite.schema.SchemaPlus;
@@ -42,10 +46,8 @@ import org.apache.drill.exec.store.StoragePluginOptimizerRule;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSet.Builder;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet.Builder;
 
 /**
  * A Storage engine associated with a Hadoop FileSystem Implementation. Examples include HDFS, MapRFS, QuantacastFileSystem,
@@ -55,6 +57,8 @@ import com.google.common.collect.Maps;
  */
 public class FileSystemPlugin extends AbstractStoragePlugin {
 
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FileSystemPlugin.class);
+
   private final FileSystemSchemaFactory schemaFactory;
   private final FormatCreator formatCreator;
   private final Map<FormatPluginConfig, FormatPlugin> formatPluginsByConfig;
@@ -62,46 +66,75 @@ public class FileSystemPlugin extends AbstractStoragePlugin {
   private final Configuration fsConf;
   private final LogicalPlanPersistence lpPersistance;
 
-  public FileSystemPlugin(FileSystemConfig config, DrillbitContext context, String name) throws ExecutionSetupException{
+  public FileSystemPlugin(FileSystemConfig config, DrillbitContext context, String name) throws ExecutionSetupException {
+    super(context, name);
     this.config = config;
     this.lpPersistance = context.getLpPersistence();
 
     try {
-
       fsConf = new Configuration();
-      if (config.config != null) {
-        for (String s : config.config.keySet()) {
-          fsConf.set(s, config.config.get(s));
-        }
-      }
-      fsConf.set(FileSystem.FS_DEFAULT_NAME_KEY, config.connection);
+      Optional.ofNullable(config.getConfig())
+          .ifPresent(c -> c.forEach(fsConf::set));
+
+      fsConf.set(FileSystem.FS_DEFAULT_NAME_KEY, config.getConnection());
       fsConf.set("fs.classpath.impl", ClassPathFileSystem.class.getName());
       fsConf.set("fs.drill-local.impl", LocalSyncableFileSystem.class.getName());
 
+      if (isS3Connection(fsConf)) {
+        handleS3Credentials(fsConf);
+      }
+
       formatCreator = newFormatCreator(config, context, fsConf);
-      List<FormatMatcher> matchers = Lists.newArrayList();
-      formatPluginsByConfig = Maps.newHashMap();
+      List<FormatMatcher> matchers = new ArrayList<>();
+      formatPluginsByConfig = new HashMap<>();
       for (FormatPlugin p : formatCreator.getConfiguredFormatPlugins()) {
         matchers.add(p.getMatcher());
         formatPluginsByConfig.put(p.getConfig(), p);
       }
 
-      final boolean noWorkspace = config.workspaces == null || config.workspaces.isEmpty();
-      List<WorkspaceSchemaFactory> factories = Lists.newArrayList();
+      boolean noWorkspace = config.getWorkspaces() == null || config.getWorkspaces().isEmpty();
+      List<WorkspaceSchemaFactory> factories = new ArrayList<>();
       if (!noWorkspace) {
-        for (Map.Entry<String, WorkspaceConfig> space : config.workspaces.entrySet()) {
+        for (Map.Entry<String, WorkspaceConfig> space : config.getWorkspaces().entrySet()) {
           factories.add(new WorkspaceSchemaFactory(this, space.getKey(), name, space.getValue(), matchers, context.getLpPersistence(), context.getClasspathScan()));
         }
       }
 
       // if the "default" workspace is not given add one.
-      if (noWorkspace || !config.workspaces.containsKey(DEFAULT_WS_NAME)) {
+      if (noWorkspace || !config.getWorkspaces().containsKey(DEFAULT_WS_NAME)) {
         factories.add(new WorkspaceSchemaFactory(this, DEFAULT_WS_NAME, name, WorkspaceConfig.DEFAULT, matchers, context.getLpPersistence(), context.getClasspathScan()));
       }
 
       this.schemaFactory = new FileSystemSchemaFactory(name, factories);
     } catch (IOException e) {
       throw new ExecutionSetupException("Failure setting up file system plugin.", e);
+    }
+  }
+
+  private boolean isS3Connection(Configuration conf) {
+    URI uri = FileSystem.getDefaultUri(conf);
+    return uri.getScheme().equals("s3a");
+  }
+
+  /**
+   * Retrieve secret and access keys from configured (with
+   * {@link org.apache.hadoop.security.alias.CredentialProviderFactory#CREDENTIAL_PROVIDER_PATH} property)
+   * credential providers and set it into {@code conf}. If provider path is not configured or credential
+   * is absent in providers, it will conditionally fallback to configuration setting. The fallback will occur unless
+   * {@link org.apache.hadoop.security.alias.CredentialProvider#CLEAR_TEXT_FALLBACK} is set to {@code false}.
+   *
+   * @param conf {@code Configuration} which will be updated with credentials from provider
+   * @throws IOException thrown if a credential cannot be retrieved from provider
+   */
+  private void handleS3Credentials(Configuration conf) throws IOException {
+    String[] credentialKeys = {"fs.s3a.secret.key", "fs.s3a.access.key"};
+    for (String key : credentialKeys) {
+      char[] credentialChars = conf.getPassword(key);
+      if (credentialChars == null) {
+        logger.warn(String.format("Property '%s' is absent.", key));
+      } else {
+        conf.set(key, String.valueOf(credentialChars));
+      }
     }
   }
 
@@ -153,6 +186,7 @@ public class FileSystemPlugin extends AbstractStoragePlugin {
    * @param config format plugin configuration
    * @return format plugin for given configuration if found, null otherwise
    */
+  @Override
   public FormatPlugin getFormatPlugin(FormatPluginConfig config) {
     if (config instanceof NamedFormatPluginConfig) {
       return formatCreator.getFormatPluginByName(((NamedFormatPluginConfig) config).name);
@@ -168,9 +202,9 @@ public class FileSystemPlugin extends AbstractStoragePlugin {
   @Override
   public Set<StoragePluginOptimizerRule> getPhysicalOptimizerRules(OptimizerRulesContext optimizerRulesContext) {
     Builder<StoragePluginOptimizerRule> setBuilder = ImmutableSet.builder();
-    for(FormatPlugin plugin : formatCreator.getConfiguredFormatPlugins()){
+    for (FormatPlugin plugin : formatCreator.getConfiguredFormatPlugins()) {
       Set<StoragePluginOptimizerRule> rules = plugin.getOptimizerRules();
-      if(rules != null && rules.size() > 0){
+      if (rules != null && rules.size() > 0) {
         setBuilder.addAll(rules);
       }
     }
@@ -178,6 +212,6 @@ public class FileSystemPlugin extends AbstractStoragePlugin {
   }
 
   public Configuration getFsConf() {
-    return fsConf;
+    return new Configuration(fsConf);
   }
 }

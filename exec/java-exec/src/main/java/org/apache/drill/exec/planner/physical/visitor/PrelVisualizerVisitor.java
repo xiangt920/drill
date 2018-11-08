@@ -24,6 +24,8 @@ import org.apache.drill.exec.planner.physical.ProjectPrel;
 import org.apache.drill.exec.planner.physical.ScanPrel;
 import org.apache.drill.exec.planner.physical.ScreenPrel;
 import org.apache.drill.exec.planner.physical.WriterPrel;
+import org.apache.drill.exec.planner.physical.UnnestPrel;
+import org.apache.drill.exec.planner.physical.LateralJoinPrel;
 
 /**
  * Debug-time class that prints a PRel tree to the console for
@@ -69,7 +71,7 @@ public class PrelVisualizerVisitor
     }
 
     private void indent() {
-      for (int i = 0;  i < level;  i++) {
+      for (int i = 0; i < level; i++) {
         out.append(INDENT);
       }
     }
@@ -87,11 +89,11 @@ public class PrelVisualizerVisitor
 
     }
 
-    public void field(String label, boolean value) {
-      field(label, Boolean.toString(value));
+    public void visitField(String label, boolean value) {
+      visitField(label, Boolean.toString(value));
     }
 
-    private void field(String label, String value) {
+    private void visitField(String label, String value) {
       indent();
       out.append(label)
          .append(" = ")
@@ -99,10 +101,10 @@ public class PrelVisualizerVisitor
          .append("\n");
     }
 
-    public void listField(String label,
+    public void visitField(String label,
         Object[] values) {
       if (values == null) {
-        field(label, "null");
+        visitField(label, "null");
         return;
       }
       StringBuilder buf = new StringBuilder();
@@ -120,7 +122,7 @@ public class PrelVisualizerVisitor
         }
       }
       buf.append("]");
-      field(label, buf.toString());
+      visitField(label, buf.toString());
     }
 
     @Override
@@ -156,8 +158,8 @@ public class PrelVisualizerVisitor
 
   private void visitBasePrel(Prel prel, VisualizationState value) {
     value.startNode(prel);
-    value.listField("encodings", prel.getSupportedEncodings());
-    value.field("needsReorder", prel.needsFinalColumnReordering());
+    value.visitField("encodings", prel.getSupportedEncodings());
+    value.visitField("needsReorder", prel.needsFinalColumnReordering());
   }
 
   private void endNode(Prel prel, VisualizationState value) throws Exception {
@@ -225,4 +227,15 @@ public class PrelVisualizerVisitor
     return null;
   }
 
+  @Override
+  public Void visitUnnest(UnnestPrel prel, VisualizationState value) throws Exception {
+    visitPrel(prel, value);
+    return null;
+  }
+
+  @Override
+  public Void visitLateral(LateralJoinPrel prel, VisualizationState value) throws Exception {
+    visitPrel(prel, value);
+    return null;
+  }
 }

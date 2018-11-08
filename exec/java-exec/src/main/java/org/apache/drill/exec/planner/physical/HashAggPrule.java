@@ -17,7 +17,8 @@
  */
 package org.apache.drill.exec.planner.physical;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.drill.exec.planner.logical.DrillAggregateRel;
 import org.apache.drill.exec.planner.logical.RelOptHelper;
@@ -30,7 +31,7 @@ import org.apache.calcite.plan.RelTrait;
 import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.util.trace.CalciteTrace;
 
-import com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -58,7 +59,8 @@ public class HashAggPrule extends AggPruleBase {
     final DrillAggregateRel aggregate = call.rel(0);
     final RelNode input = call.rel(1);
 
-    if (aggregate.containsDistinctCall() || aggregate.getGroupCount() == 0) {
+    if (aggregate.containsDistinctCall() || aggregate.getGroupCount() == 0
+        || requiresStreamingAgg(aggregate)) {
       // currently, don't use HashAggregate if any of the logical aggrs contains DISTINCT or
       // if there are no grouping keys
       return;
@@ -89,7 +91,7 @@ public class HashAggPrule extends AggPruleBase {
         createTransformRequest(call, aggregate, input, traits);
 
         if (create2PhasePlan(call, aggregate)) {
-          traits = call.getPlanner().emptyTraitSet().plus(Prel.DRILL_PHYSICAL) ;
+          traits = call.getPlanner().emptyTraitSet().plus(Prel.DRILL_PHYSICAL);
 
           RelNode convertedInput = convert(input, traits);
           new TwoPhaseSubset(call, distOnAllKeys).go(aggregate, convertedInput);
@@ -99,6 +101,16 @@ public class HashAggPrule extends AggPruleBase {
     } catch (InvalidRelException e) {
       tracer.warn(e.toString());
     }
+  }
+
+  private boolean requiresStreamingAgg(DrillAggregateRel aggregate) {
+    //If contains ANY_VALUE aggregate, using HashAgg would not work
+    for (AggregateCall agg : aggregate.getAggCallList()) {
+      if (agg.getAggregation().getName().equalsIgnoreCase("any_value")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private class TwoPhaseSubset extends SubsetTransformer<DrillAggregateRel, InvalidRelException> {

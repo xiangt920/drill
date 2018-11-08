@@ -17,6 +17,8 @@
  */
 package org.apache.drill.exec.compile;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 import org.apache.drill.categories.SlowTest;
 import org.apache.drill.test.BaseTestQuery;
 import org.apache.drill.test.TestTools;
@@ -29,7 +31,7 @@ import org.junit.rules.TestRule;
 
 @Category({SlowTest.class})
 public class TestLargeFileCompilation extends BaseTestQuery {
-  @Rule public final TestRule TIMEOUT = TestTools.getTimeoutRule(150000); // 150secs
+  @Rule public final TestRule TIMEOUT = TestTools.getTimeoutRule(200000); // 200 secs
 
   private static final String LARGE_QUERY_GROUP_BY;
 
@@ -38,6 +40,8 @@ public class TestLargeFileCompilation extends BaseTestQuery {
   private static final String LARGE_QUERY_ORDER_BY_WITH_LIMIT;
 
   private static final String LARGE_QUERY_FILTER;
+
+  private static final String HUGE_STRING_CONST_QUERY;
 
   private static final String LARGE_QUERY_WRITER;
 
@@ -49,7 +53,9 @@ public class TestLargeFileCompilation extends BaseTestQuery {
 
   private static final int ITERATION_COUNT = Integer.valueOf(System.getProperty("TestLargeFileCompilation.iteration", "1"));
 
-  private static final int NUM_PROJECT_COLUMNS = 5000;
+  private static final int NUM_PROJECT_COLUMNS = 2500;
+
+  private static final int NUM_PROJECT_TEST_COLUMNS = 5000;
 
   private static final int NUM_ORDERBY_COLUMNS = 500;
 
@@ -77,7 +83,7 @@ public class TestLargeFileCompilation extends BaseTestQuery {
 
   static {
     StringBuilder sb = new StringBuilder("select\n\t");
-    for (int i = 0; i < NUM_PROJECT_COLUMNS; i++) {
+    for (int i = 0; i < NUM_PROJECT_TEST_COLUMNS; i++) {
       sb.append("employee_id+").append(i).append(" as col").append(i).append(", ");
     }
     sb.append("full_name\nfrom cp.`employee.json`\n\n\t");
@@ -105,6 +111,21 @@ public class TestLargeFileCompilation extends BaseTestQuery {
       sb.append(" employee_id+").append(i).append(" < employee_id ").append(i%2==0?"OR":"AND");
     }
     LARGE_QUERY_FILTER = sb.append(" true") .toString();
+  }
+
+  static {
+    final char[] alphabet = "abcdefghijklmnopqrstuvwxyz".toCharArray();
+    int len = 1 << 18;
+    char[] longText = new char[len];
+    for (int j = 0; j < len; ++j) {
+      longText[j] = alphabet[ThreadLocalRandom.current().nextInt(0, alphabet.length)];
+    }
+    StringBuilder sb = new StringBuilder("select *\n")
+      .append("from cp.`employee.json`\n")
+      .append("where last_name ='")
+      .append(longText)
+      .append("'");
+    HUGE_STRING_CONST_QUERY = sb.toString();
   }
 
   static {
@@ -174,6 +195,7 @@ public class TestLargeFileCompilation extends BaseTestQuery {
   public void testHashJoin() throws Exception {
     String tableName = "wide_table_hash_join";
     try {
+      setSessionOption("drill.exec.hashjoin.fallback.enabled", true);
       testNoResult("alter session set `%s`='JDK'", ClassCompilerSelector.JAVA_COMPILER_OPTION);
       testNoResult("alter session set `planner.enable_mergejoin` = false");
       testNoResult("alter session set `planner.enable_nestedloopjoin` = false");
@@ -223,6 +245,26 @@ public class TestLargeFileCompilation extends BaseTestQuery {
       testNoResult("alter session reset `planner.enable_mergejoin`");
       testNoResult("alter session reset `%s`", ClassCompilerSelector.JAVA_COMPILER_OPTION);
       testNoResult("drop table if exists %s", tableName);
+    }
+  }
+
+  @Test
+  public void testJDKHugeStringConstantCompilation() throws Exception {
+    try {
+      setSessionOption(ClassCompilerSelector.JAVA_COMPILER_OPTION, "JDK");
+      testNoResult(ITERATION_COUNT, HUGE_STRING_CONST_QUERY);
+    } finally {
+      resetSessionOption(ClassCompilerSelector.JAVA_COMPILER_OPTION);
+    }
+  }
+
+  @Test
+  public void testJaninoHugeStringConstantCompilation() throws Exception {
+    try {
+      setSessionOption(ClassCompilerSelector.JAVA_COMPILER_OPTION, "JANINO");
+      testNoResult(ITERATION_COUNT, HUGE_STRING_CONST_QUERY);
+    } finally {
+      resetSessionOption(ClassCompilerSelector.JAVA_COMPILER_OPTION);
     }
   }
 }

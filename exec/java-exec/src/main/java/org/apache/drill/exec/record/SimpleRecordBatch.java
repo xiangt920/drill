@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.record;
 
 import org.apache.drill.common.expression.SchemaPath;
@@ -29,6 +28,9 @@ import java.util.Iterator;
  * Wrap a VectorContainer into a record batch.
  */
 public class SimpleRecordBatch implements RecordBatch {
+
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SimpleRecordBatch.class);
+
   private VectorContainer container;
   private FragmentContext context;
 
@@ -94,5 +96,20 @@ public class SimpleRecordBatch implements RecordBatch {
   @Override
   public VectorContainer getOutgoingContainer() {
     throw new UnsupportedOperationException(String.format(" You should not call getOutgoingContainer() for class %s", this.getClass().getCanonicalName()));
+  }
+
+  @Override
+  public VectorContainer getContainer() {
+     return container;
+  }
+
+  @Override
+  public void dump() {
+    logger.error("SimpleRecordBatch[container=" + container + "]");
+  }
+
+  @Override
+  public boolean hasFailed() {
+    return false;
   }
 }

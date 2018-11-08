@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -280,6 +280,8 @@ public class TestPartitionFilter extends PlanTestBase {
   public void testMainQueryFilterRegularColumn() throws Exception {
     String query = "select * from (select dir0, o_custkey from dfs.`multilevel/parquet` where dir0='1994' and o_custkey = 10) t limit 0";
     // with Parquet RG filter pushdown, reduce to 1 file ( o_custkey all > 10).
+    // There is a LIMIT(0) inserted on top of SCAN, so filter push down is not applied.
+    // Since this is a LIMIT 0 query, not pushing down the filter should not cause a perf. regression.
     testIncludeFilter(query, 1, "Filter\\(", 0);
   }
 
@@ -432,5 +434,22 @@ public class TestPartitionFilter extends PlanTestBase {
         .build()
         .run();
 
+  }
+
+  @Test // DRILL-6173
+  public void testDirPruningTransitivePredicates() throws Exception {
+    final String query = "select * from dfs.`multilevel/parquet` t1 join dfs.`multilevel/parquet2` t2 on " +
+        " t1.dir0 = t2.dir0 where t1.dir0 = '1994' and t1.dir1 = 'Q1'";
+
+    String [] expectedPlan = {"1994"};
+    String [] excluded = {"1995", "Filter\\("};
+
+    // verify we get correct count(*).
+    int actualRowCount = testSql(query);
+    int expectedRowCount = 800;
+    assertEquals("Expected and actual row count should match", expectedRowCount, actualRowCount);
+
+    // verify plan that filter is applied in partition pruning.
+    testPlanMatchingPatterns(query, expectedPlan, excluded);
   }
 }

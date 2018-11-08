@@ -33,12 +33,11 @@ import org.apache.hadoop.hbase.client.Connection;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableSet;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet;
 
 public class HBaseStoragePlugin extends AbstractStoragePlugin {
   private static final HBaseConnectionManager hbaseConnectionManager = HBaseConnectionManager.INSTANCE;
 
-  private final DrillbitContext context;
   private final HBaseStoragePluginConfig storeConfig;
   private final HBaseSchemaFactory schemaFactory;
   private final HBaseConnectionKey connectionKey;
@@ -47,15 +46,11 @@ public class HBaseStoragePlugin extends AbstractStoragePlugin {
 
   public HBaseStoragePlugin(HBaseStoragePluginConfig storeConfig, DrillbitContext context, String name)
       throws IOException {
-    this.context = context;
+    super(context, name);
     this.schemaFactory = new HBaseSchemaFactory(this, name);
     this.storeConfig = storeConfig;
     this.name = name;
     this.connectionKey = new HBaseConnectionKey();
-  }
-
-  public DrillbitContext getContext() {
-    return this.context;
   }
 
   @Override

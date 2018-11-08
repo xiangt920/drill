@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,9 +17,9 @@
  */
 package org.apache.drill.exec.physical.impl;
 
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.ArrayListMultimap;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.drill.PlanTestBase;
@@ -46,13 +46,10 @@ import org.apache.drill.exec.work.QueryWorkUnit;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
-import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Paths;
 import java.util.List;
@@ -198,7 +195,6 @@ public class TestLocalExchange extends PlanTestBase {
     final int numOccurrances = NUM_EMPLOYEES/NUM_DEPTS;
 
     final String plan = getPlanInString("EXPLAIN PLAN FOR " + groupByMultipleQuery, JSON_FORMAT);
-    System.out.println("Plan: " + plan);
 
     jsonExchangeOrderChecker(plan, false, 1, "hash32asdouble\\(.*, hash32asdouble\\(.*, hash32asdouble\\(.*\\) \\) \\) ");
 
@@ -273,7 +269,6 @@ public class TestLocalExchange extends PlanTestBase {
     setupHelper(isMuxOn, isDeMuxOn);
 
     String plan = getPlanInString("EXPLAIN PLAN FOR " + query, JSON_FORMAT);
-    System.out.println("Plan: " + plan);
 
     if ( isMuxOn ) {
       // # of hash exchanges should be = # of mux exchanges + # of demux exchanges

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -7,44 +7,38 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.drill.exec.work.fragment;
-
-import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
-import org.apache.drill.exec.rpc.control.Controller;
-import org.apache.drill.exec.rpc.control.WorkEventBus;
-import org.junit.Before;
-import org.junit.Test;
 
 import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.ops.FragmentContextImpl;
 import org.apache.drill.exec.ops.FragmentStats;
 import org.apache.drill.exec.proto.BitControl.FragmentStatus;
+import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
 import org.apache.drill.exec.proto.ExecProtos.FragmentHandle;
 import org.apache.drill.exec.proto.UserBitShared.FragmentState;
 import org.apache.drill.exec.rpc.control.ControlTunnel;
-
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
-import static org.mockito.Mockito.when;
+import org.apache.drill.exec.rpc.control.Controller;
+import org.junit.Before;
+import org.junit.Test;
 
 import static org.apache.drill.exec.proto.UserBitShared.FragmentState.CANCELLATION_REQUESTED;
 import static org.apache.drill.exec.proto.UserBitShared.FragmentState.FAILED;
 import static org.apache.drill.exec.proto.UserBitShared.FragmentState.RUNNING;
+import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.when;
 
 public class FragmentStatusReporterTest {
 
@@ -52,20 +46,15 @@ public class FragmentStatusReporterTest {
 
   private ControlTunnel foremanTunnel;
 
-  private FragmentContextImpl context;
-
   @Before
   public void setUp() throws Exception {
-    context = mock(FragmentContextImpl.class);
+    final FragmentContextImpl context = mock(FragmentContextImpl.class);
     Controller controller = mock(Controller.class);
 
-    // Create 2 different endpoint such that foremanEndpoint is different than
-    // localEndpoint
-    DrillbitEndpoint localEndpoint = DrillbitEndpoint.newBuilder().setAddress("10.0.0.1").build();
+    // Create Foreman Endpoint and it's tunnel
     DrillbitEndpoint foremanEndpoint = DrillbitEndpoint.newBuilder().setAddress("10.0.0.2").build();
     foremanTunnel = mock(ControlTunnel.class);
 
-    when(context.getEndpoint()).thenReturn(localEndpoint);
     when(context.getController()).thenReturn(controller);
     when(controller.getTunnel(foremanEndpoint)).thenReturn(foremanTunnel);
 
@@ -120,50 +109,5 @@ public class FragmentStatusReporterTest {
     statusReporter.close();
     statusReporter.stateChanged(CANCELLATION_REQUESTED);
     verify(foremanTunnel).sendFragmentStatus(any(FragmentStatus.class));
-  }
-
-
-  /**
-   * With LocalEndpoint and Foreman Endpoint being same node, test that status change
-   * message doesn't happen via Control Tunnel instead it happens locally via WorkEventBus
-   *
-   * @throws Exception
-   */
-  @Test
-  public void testStateChangedLocalForeman() throws Exception {
-
-    DrillbitEndpoint localEndpoint = DrillbitEndpoint.newBuilder().setAddress("10.0.0.1").build();
-
-    when(context.getEndpoint()).thenReturn(localEndpoint);
-    when(context.getForemanEndpoint()).thenReturn(localEndpoint);
-    when(context.getWorkEventbus()).thenReturn(mock(WorkEventBus.class));
-
-    statusReporter = new FragmentStatusReporter(context);
-    statusReporter.stateChanged(RUNNING);
-    verifyZeroInteractions(foremanTunnel);
-    verify(context.getWorkEventbus()).statusUpdate(any(FragmentStatus.class));
-  }
-
-  /**
-   * With LocalEndpoint and Foreman Endpoint being same node, test that after close of
-   * FragmentStatusReporter, status update doesn't happen either through Control Tunnel
-   * or through WorkEventBus.
-   *
-   * @throws Exception
-   */
-  @Test
-  public void testCloseLocalForeman() throws Exception {
-    DrillbitEndpoint localEndpoint = DrillbitEndpoint.newBuilder().setAddress("10.0.0.1").build();
-
-    when(context.getEndpoint()).thenReturn(localEndpoint);
-    when(context.getForemanEndpoint()).thenReturn(localEndpoint);
-    when(context.getWorkEventbus()).thenReturn(mock(WorkEventBus.class));
-    statusReporter = new FragmentStatusReporter(context);
-
-    statusReporter.close();
-    assertTrue(statusReporter.foremanDrillbit.get() == null);
-    statusReporter.stateChanged(RUNNING);
-    verifyZeroInteractions(foremanTunnel);
-    verify(context.getWorkEventbus(), never()).statusUpdate(any(FragmentStatus.class));
   }
 }

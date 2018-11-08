@@ -31,7 +31,7 @@ import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.VectorContainer;
 import org.apache.drill.exec.record.VectorInitializer;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 /**
  * Represents the set of spilled batches, including methods to spill and/or
@@ -215,12 +215,10 @@ public class SpilledRuns {
     }
     RuntimeException ex = null;
     try {
-      if (spilledRuns != null) {
-        BatchGroup.closeAll(spilledRuns);
-        spilledRuns.clear();
-      }
+      BatchGroup.closeAll(spilledRuns);
+      spilledRuns.clear();
     } catch (RuntimeException e) {
-      ex = (ex == null) ? e : ex;
+      ex = e;
     }
     try {
       copierHolder.close();

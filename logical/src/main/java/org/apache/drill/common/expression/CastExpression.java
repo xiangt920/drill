@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -23,7 +23,7 @@ import java.util.Iterator;
 import org.apache.drill.common.expression.visitors.ExprVisitor;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.drill.shaded.guava.com.google.common.base.Preconditions.checkNotNull;
 
 public class CastExpression extends LogicalExpressionBase implements Iterable<LogicalExpression>{
 
@@ -41,6 +41,29 @@ public class CastExpression extends LogicalExpressionBase implements Iterable<Lo
   @Override
   public <T, V, E extends Exception> T accept(ExprVisitor<T, V, E> visitor, V value) throws E {
     return visitor.visitCastExpression(this, value);
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+    if (obj == null) {
+      return false;
+    }
+    if (!(obj instanceof CastExpression)) {
+      return false;
+    }
+
+    CastExpression other = (CastExpression) obj;
+
+    return this.input.equals(other.input) && (this.getMajorType().hasMinorType() == other.getMajorType().hasMinorType());
+  }
+
+  @Override
+  public int hashCode() {
+    //for now we ignore type's other attributes
+    return (input.hashCode() << 8) + (0x00ff & type.getMinorType().getNumber());
   }
 
   @Override

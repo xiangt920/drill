@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * <p/>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -73,10 +73,10 @@ import org.apache.drill.exec.store.ischema.Records.Schema;
 import org.apache.drill.exec.store.ischema.Records.Table;
 import org.apache.drill.exec.store.pojo.PojoRecordReader;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ComparisonChain;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Ordering;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.collect.ComparisonChain;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.Ordering;
 
 /**
  * Contains worker {@link Runnable} classes for providing the metadata and related helper methods.
@@ -434,17 +434,35 @@ public class MetadataProvider {
 
   /**
    * Helper method to create a {@link InfoSchemaFilter} that combines the given filters with an AND.
+   *
    * @param catalogNameFilter Optional filter on <code>catalog name</code>
    * @param schemaNameFilter Optional filter on <code>schema name</code>
    * @param tableNameFilter Optional filter on <code>table name</code>
    * @param tableTypeFilter Optional filter on <code>table type</code>
    * @param columnNameFilter Optional filter on <code>column name</code>
-   * @return
+   * @return information schema filter
    */
-  private static InfoSchemaFilter createInfoSchemaFilter(final LikeFilter catalogNameFilter,
-      final LikeFilter schemaNameFilter, final LikeFilter tableNameFilter, List<String> tableTypeFilter, final LikeFilter columnNameFilter) {
+  private static InfoSchemaFilter createInfoSchemaFilter(LikeFilter catalogNameFilter,
+                                                         LikeFilter schemaNameFilter,
+                                                         LikeFilter tableNameFilter,
+                                                         List<String> tableTypeFilter,
+                                                         LikeFilter columnNameFilter) {
 
     FunctionExprNode exprNode = createLikeFunctionExprNode(CATS_COL_CATALOG_NAME,  catalogNameFilter);
+
+    // schema names are case insensitive in Drill and stored in lower case
+    // convert like filter condition elements to lower case
+    if (schemaNameFilter != null) {
+      LikeFilter.Builder builder = LikeFilter.newBuilder();
+      if (schemaNameFilter.hasPattern()) {
+        builder.setPattern(schemaNameFilter.getPattern().toLowerCase());
+      }
+
+      if (schemaNameFilter.hasEscape()) {
+        builder.setEscape(schemaNameFilter.getEscape().toLowerCase());
+      }
+      schemaNameFilter = builder.build();
+    }
 
     exprNode = combineFunctions(AND_FUNCTION,
         exprNode,

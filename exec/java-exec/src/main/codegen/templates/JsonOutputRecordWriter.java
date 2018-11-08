@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 <@pp.dropOutputFile />
 <@pp.changeOutputFile name="org/apache/drill/exec/store/JSONOutputRecordWriter.java" />
 <#include "/@includes/license.ftl" />
@@ -94,6 +93,7 @@ public abstract class JSONOutputRecordWriter extends AbstractRecordWriter implem
   <#case "Decimal28Dense">
   <#case "Decimal38Dense">
   <#case "Decimal38Sparse">
+  <#case "VarDecimal">
     <#assign typeName = "Decimal">
     <#break>
   <#case "Float4">

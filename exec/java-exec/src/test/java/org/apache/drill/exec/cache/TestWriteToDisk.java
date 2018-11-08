@@ -20,7 +20,7 @@ package org.apache.drill.exec.cache;
 import java.io.File;
 import java.util.List;
 
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.Types;
@@ -28,9 +28,7 @@ import org.apache.drill.test.TestTools;
 import org.apache.drill.exec.ExecTest;
 import org.apache.drill.exec.expr.TypeHelper;
 import org.apache.drill.exec.record.MaterializedField;
-import org.apache.drill.exec.record.VectorAccessible;
 import org.apache.drill.exec.record.VectorContainer;
-import org.apache.drill.exec.record.VectorWrapper;
 import org.apache.drill.exec.record.WritableBatch;
 import org.apache.drill.exec.server.Drillbit;
 import org.apache.drill.exec.server.DrillbitContext;
@@ -46,7 +44,7 @@ import org.apache.hadoop.fs.Path;
 import org.junit.Rule;
 import org.junit.Test;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.junit.rules.TestRule;
 
 public class TestWriteToDisk extends ExecTest {
@@ -108,20 +106,7 @@ public class TestWriteToDisk extends ExecTest {
           }
         }
 
-        final VectorAccessible newContainer = newWrap.get();
-        for (VectorWrapper<?> w : newContainer) {
-          try (ValueVector vv = w.getValueVector()) {
-            int values = vv.getAccessor().getValueCount();
-            for (int i = 0; i < values; i++) {
-              final Object o = vv.getAccessor().getObject(i);
-              if (o instanceof byte[]) {
-                System.out.println(new String((byte[]) o));
-              } else {
-                System.out.println(o);
-              }
-            }
-          }
-        }
+        newWrap.get();
       }
     }
   }

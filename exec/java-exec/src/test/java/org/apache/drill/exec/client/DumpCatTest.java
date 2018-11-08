@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -43,8 +43,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 
 import org.mockito.Mockito;
 
@@ -63,7 +63,7 @@ public class DumpCatTest  extends ExecTest {
       final UserClientConnection connection = Mockito.mock(UserClientConnection.class);
 
       final PhysicalPlanReader reader = defaultPhysicalPlanReader(c);
-      final PhysicalPlan plan = reader.readPhysicalPlan(Files.toString(DrillFileUtils.getResourceAsFile("/trace/simple_trace.json"), Charsets.UTF_8));
+      final PhysicalPlan plan = reader.readPhysicalPlan(Files.asCharSource(DrillFileUtils.getResourceAsFile("/trace/simple_trace.json"), Charsets.UTF_8).read());
       final FunctionImplementationRegistry registry = new FunctionImplementationRegistry(c);
       final FragmentContextImpl context = new FragmentContextImpl(bitContext, PlanFragment.getDefaultInstance(), connection, registry);
       final SimpleRootExec exec = new SimpleRootExec(ImplCreator.getExec(context, (FragmentRoot) plan.getSortedOperators(false).iterator().next()));
@@ -87,12 +87,7 @@ public class DumpCatTest  extends ExecTest {
       final int minorFragmentId = handle.getMinorFragmentId();
 
       final String logLocation = c.getString(ExecConstants.TRACE_DUMP_DIRECTORY);
-
-      System.out.println("Found log location: " + logLocation);
-
       final String filename = String.format("%s//%s_%d_%d_mock-scan", logLocation, qid, majorFragmentId, minorFragmentId);
-
-      System.out.println("File Name: " + filename);
 
       final Configuration conf = new Configuration();
       conf.set(FileSystem.FS_DEFAULT_NAME_KEY, c.getString(ExecConstants.TRACE_DUMP_FILESYSTEM));

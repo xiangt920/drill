@@ -36,27 +36,22 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.io.Closer;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet;
+import org.apache.drill.shaded.guava.com.google.common.io.Closer;
 
 public class KafkaStoragePlugin extends AbstractStoragePlugin {
 
   private static final Logger logger = LoggerFactory.getLogger(KafkaStoragePlugin.class);
   private final KafkaSchemaFactory kafkaSchemaFactory;
   private final KafkaStoragePluginConfig config;
-  private final DrillbitContext context;
   private final Closer closer = Closer.create();
 
   public KafkaStoragePlugin(KafkaStoragePluginConfig config, DrillbitContext context, String name)
       throws ExecutionSetupException {
+    super(context, name);
     logger.debug("Initializing {}", KafkaStoragePlugin.class.getName());
     this.config = config;
-    this.context = context;
     this.kafkaSchemaFactory = new KafkaSchemaFactory(this, name);
-  }
-
-  public DrillbitContext getContext() {
-    return this.context;
   }
 
   @Override
@@ -76,7 +71,7 @@ public class KafkaStoragePlugin extends AbstractStoragePlugin {
 
   @Override
   public Set<StoragePluginOptimizerRule> getPhysicalOptimizerRules(OptimizerRulesContext optimizerRulesContext) {
-    return ImmutableSet.of();
+    return ImmutableSet.of(KafkaPushDownFilterIntoScan.INSTANCE);
   }
 
   @Override

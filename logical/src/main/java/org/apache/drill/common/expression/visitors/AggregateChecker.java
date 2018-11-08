@@ -17,6 +17,7 @@
  */
 package org.apache.drill.common.expression.visitors;
 
+import org.apache.drill.common.expression.AnyValueExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -46,6 +47,7 @@ import org.apache.drill.common.expression.ValueExpressions.LongExpression;
 import org.apache.drill.common.expression.ValueExpressions.QuotedString;
 import org.apache.drill.common.expression.ValueExpressions.TimeExpression;
 import org.apache.drill.common.expression.ValueExpressions.TimeStampExpression;
+import org.apache.drill.common.expression.ValueExpressions.VarDecimalExpression;
 
 public final class AggregateChecker implements ExprVisitor<Boolean, ErrorCollector, RuntimeException>{
 
@@ -151,6 +153,11 @@ public final class AggregateChecker implements ExprVisitor<Boolean, ErrorCollect
   }
 
   @Override
+  public Boolean visitVarDecimalConstant(VarDecimalExpression decExpr, ErrorCollector errors) {
+    return false;
+  }
+
+  @Override
   public Boolean visitQuotedStringConstant(QuotedString e, ErrorCollector errors) {
     return false;
   }
@@ -167,6 +174,11 @@ public final class AggregateChecker implements ExprVisitor<Boolean, ErrorCollect
 
   @Override
   public Boolean visitConvertExpression(ConvertExpression e, ErrorCollector errors) throws RuntimeException {
+    return e.getInput().accept(this, errors);
+  }
+
+  @Override
+  public Boolean visitAnyValueExpression(AnyValueExpression e, ErrorCollector errors) throws RuntimeException {
     return e.getInput().accept(this, errors);
   }
 

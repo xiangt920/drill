@@ -17,6 +17,7 @@
  */
 package org.apache.drill.common.expression.visitors;
 
+import org.apache.drill.common.expression.AnyValueExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -44,6 +45,7 @@ import org.apache.drill.common.expression.ValueExpressions.LongExpression;
 import org.apache.drill.common.expression.ValueExpressions.QuotedString;
 import org.apache.drill.common.expression.ValueExpressions.TimeExpression;
 import org.apache.drill.common.expression.ValueExpressions.TimeStampExpression;
+import org.apache.drill.common.expression.ValueExpressions.VarDecimalExpression;
 import org.apache.drill.common.types.TypeProtos.DataMode;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
@@ -167,6 +169,11 @@ public class ExpressionValidator implements ExprVisitor<Void, ErrorCollector, Ru
   }
 
   @Override
+  public Void visitVarDecimalConstant(VarDecimalExpression decExpr, ErrorCollector errors) throws RuntimeException {
+    return null;
+  }
+
+  @Override
   public Void visitDateConstant(DateExpression intExpr, ErrorCollector errors) throws RuntimeException {
     return null;
   }
@@ -228,6 +235,12 @@ public class ExpressionValidator implements ExprVisitor<Void, ErrorCollector, Ru
 
   @Override
   public Void visitConvertExpression(ConvertExpression e, ErrorCollector value)
+      throws RuntimeException {
+    return e.getInput().accept(this, value);
+  }
+
+  @Override
+  public Void visitAnyValueExpression(AnyValueExpression e, ErrorCollector value)
       throws RuntimeException {
     return e.getInput().accept(this, value);
   }

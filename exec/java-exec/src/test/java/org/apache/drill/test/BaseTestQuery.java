@@ -35,8 +35,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.drill.exec.compile.ClassBuilder;
-import org.apache.drill.exec.compile.CodeCompiler;
 import org.apache.drill.test.DrillTestWrapper.TestServices;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.config.DrillProperties;
@@ -67,15 +65,17 @@ import org.apache.drill.exec.util.StoragePluginTestUtils;
 import org.apache.drill.exec.util.VectorUtil;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import com.google.common.base.Charsets;
-import com.google.common.base.Preconditions;
-import com.google.common.io.Resources;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.io.Resources;
 
 import org.apache.drill.exec.record.VectorWrapper;
 import org.apache.drill.exec.vector.ValueVector;
-import org.apache.drill.test.ClusterFixture;
-import org.junit.ClassRule;
 
+/**
+ * @deprecated Use {@link ClusterTest} instead.
+ */
+@Deprecated
 public class BaseTestQuery extends ExecTest {
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BaseTestQuery.class);
 
@@ -284,6 +284,7 @@ public class BaseTestQuery extends ExecTest {
   public static void closeClient() throws Exception {
     if (client != null) {
       client.close();
+      client = null;
     }
 
     if (bits != null) {
@@ -292,13 +293,16 @@ public class BaseTestQuery extends ExecTest {
           bit.close();
         }
       }
+      bits = null;
     }
 
-    if(serviceSet != null) {
+    if (serviceSet != null) {
       serviceSet.close();
+      serviceSet = null;
     }
     if (allocator != null) {
       allocator.close();
+      allocator = null;
     }
   }
 
@@ -343,7 +347,7 @@ public class BaseTestQuery extends ExecTest {
   }
 
   public static int testRunAndPrint(final QueryType type, final String query) throws Exception {
-    return QueryTestUtil.testRunAndPrint(client, type, query);
+    return QueryTestUtil.testRunAndLog(client, type, query);
   }
 
   protected static void testWithListener(QueryType type, String query, UserResultsListener resultListener) {
@@ -385,11 +389,11 @@ public class BaseTestQuery extends ExecTest {
   }
 
   public static void test(String query, Object... args) throws Exception {
-    QueryTestUtil.test(client, String.format(query, args));
+    QueryTestUtil.testRunAndLog(client, String.format(query, args));
   }
 
   public static void test(final String query) throws Exception {
-    QueryTestUtil.test(client, query);
+    QueryTestUtil.testRunAndLog(client, query);
   }
 
   protected static int testPhysical(String query) throws Exception{
@@ -476,6 +480,7 @@ public class BaseTestQuery extends ExecTest {
 
   public static class SilentListener implements UserResultsListener {
     private final AtomicInteger count = new AtomicInteger();
+    private QueryId queryId;
 
     @Override
     public void submissionFailed(UserException ex) {
@@ -497,8 +502,17 @@ public class BaseTestQuery extends ExecTest {
     }
 
     @Override
-    public void queryIdArrived(QueryId queryId) {}
+    public void queryIdArrived(QueryId queryId) {
+      this.queryId = queryId;
+    }
 
+    public QueryId getQueryId() {
+      return queryId;
+    }
+
+    public int getRowCount() {
+      return count.get();
+    }
   }
 
   protected void setColumnWidth(int columnWidth) {
@@ -509,7 +523,7 @@ public class BaseTestQuery extends ExecTest {
     this.columnWidths = columnWidths;
   }
 
-  protected int printResult(List<QueryDataBatch> results) throws SchemaChangeException {
+  protected int logResult(List<QueryDataBatch> results) throws SchemaChangeException {
     int rowCount = 0;
     final RecordBatchLoader loader = new RecordBatchLoader(getAllocator());
     for(final QueryDataBatch result : results) {
@@ -517,12 +531,16 @@ public class BaseTestQuery extends ExecTest {
       loader.load(result.getHeader().getDef(), result.getData());
       // TODO:  Clean:  DRILL-2933:  That load(...) no longer throws
       // SchemaChangeException, so check/clean throw clause above.
-      VectorUtil.showVectorAccessibleContent(loader, columnWidths);
+      VectorUtil.logVectorAccessibleContent(loader, columnWidths);
       loader.clear();
       result.release();
     }
-    System.out.println("Total record count: " + rowCount);
     return rowCount;
+  }
+
+  protected int printResult(final List<QueryDataBatch> results) throws SchemaChangeException {
+    int result = PrintingUtils.printAndThrow(() -> logResult(results));
+    return result;
   }
 
   protected static String getResultString(List<QueryDataBatch> results, String delimiter)

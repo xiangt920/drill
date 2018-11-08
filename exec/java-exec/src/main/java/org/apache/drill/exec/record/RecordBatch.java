@@ -38,8 +38,8 @@ import org.apache.drill.exec.vector.ValueVector;
  */
 public interface RecordBatch extends VectorAccessible {
 
-  /** max batch size, limited by 2-byte length in SV2: 65536 = 2^16 */
-  int MAX_BATCH_SIZE = ValueVector.MAX_ROW_COUNT;
+  /** max num of rows in a batch, limited by 2-byte length in SV2: 65536 = 2^16 */
+  int MAX_BATCH_ROW_COUNT = ValueVector.MAX_ROW_COUNT;
 
   /**
    * Describes the outcome of incrementing RecordBatch forward by a call to
@@ -115,8 +115,16 @@ public interface RecordBatch extends VectorAccessible {
      *   This value will be returned only after {@link #OK_NEW_SCHEMA} has been
      *   returned at least once (not necessarily <em>immediately</em> after).
      * </p>
+     * <p>
+     *   Also after a RecordBatch returns NONE a RecordBatch should:
+     *   <ul>
+     *     <li>Contain the last valid schema seen by the operator.</li>
+     *     <li>Contain a VectorContainer with empty columns corresponding to the last valid schema.</li>
+     *     <li>Return a record count of 0.</li>
+     *   </ul>
+     * </p>
      */
-    NONE,
+    NONE(false),
 
     /**
      * Zero or more records with same schema.
@@ -134,7 +142,7 @@ public interface RecordBatch extends VectorAccessible {
      *   returned at least once (not necessarily <em>immediately</em> after).
      * </p>
      */
-    OK,
+    OK(false),
 
     /**
      * New schema, maybe with records.
@@ -147,7 +155,7 @@ public interface RecordBatch extends VectorAccessible {
      *     ({@code next()} should be called again.)
      * </p>
      */
-    OK_NEW_SCHEMA,
+    OK_NEW_SCHEMA(false),
 
     /**
      * Non-completion (abnormal) termination.
@@ -162,7 +170,7 @@ public interface RecordBatch extends VectorAccessible {
      *   of things.
      * </p>
      */
-    STOP,
+    STOP(true),
 
     /**
      * No data yet.
@@ -184,7 +192,7 @@ public interface RecordBatch extends VectorAccessible {
      *   Used by batches that haven't received incoming data yet.
      * </p>
      */
-    NOT_YET,
+    NOT_YET(false),
 
     /**
      * Out of memory (not fatal).
@@ -198,7 +206,42 @@ public interface RecordBatch extends VectorAccessible {
      *     {@code OUT_OF_MEMORY} to its caller) and call {@code next()} again.
      * </p>
      */
-    OUT_OF_MEMORY
+    OUT_OF_MEMORY(true),
+
+    /**
+     * Emit record to produce output batches.
+     * <p>
+     *   The call to {@link #next()},
+     *   read zero or more records with no change in schema as compared to last
+     *   time. It is an indication from upstream operator to unblock and
+     *   produce an output batch based on all the records current operator
+     *   possess. The caller should return this outcome to it's downstream
+     *   operators except LateralJoinRecordBatch, which will consume any EMIT
+     *   from right branch but will pass through EMIT from left branch.
+     * </p>
+     * <p>
+     *   Caller should produce one or more output record batch based on all the
+     *   current data and restart fresh for any new input. If there are multiple
+     *   output batches then caller should send EMIT only with last batch and OK
+     *   with all previous batches.
+     *   For example: Hash Join when received EMIT on build side will stop build
+     *   side and call next() on probe side until it sees EMIT. On seeing EMIT
+     *   from probe side, it should perform JOIN and produce output batches.
+     *   Later it should clear all the data on both build and probe side of
+     *   input and again start from build side.
+     * </p>
+     */
+    EMIT(false);
+
+    private boolean error;
+
+    IterOutcome(boolean error) {
+      this.error = error;
+    }
+
+    public boolean isError() {
+      return error;
+    }
   }
 
   /**
@@ -228,6 +271,13 @@ public interface RecordBatch extends VectorAccessible {
   void kill(boolean sendUpstream);
 
   VectorContainer getOutgoingContainer();
+
+  /**
+   *  Return the internal vector container
+   *
+   * @return The internal vector container
+   */
+  VectorContainer getContainer();
 
   /**
    * Gets the value vector type and ID for the given schema path.  The
@@ -270,4 +320,19 @@ public interface RecordBatch extends VectorAccessible {
    * buffers.
    */
   WritableBatch getWritableBatch();
+
+  /**
+   * Perform dump of this batch's state to logs.
+   */
+  void dump();
+
+  /**
+   * Use this method to see if the batch has failed. Currently used when logging {@code RecordBatch}'s
+   * state using {@link #dump()} method.
+   *
+   * @return {@code true} if either {@link org.apache.drill.exec.record.RecordBatch.IterOutcome#STOP}
+   * was returned by its or child's {@link #next()} invocation or there was an {@code Exception} thrown
+   * during execution of the batch; {@code false} otherwise
+   */
+  boolean hasFailed();
 }

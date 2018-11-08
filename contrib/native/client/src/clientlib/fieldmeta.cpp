@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "drill/common.hpp"
 #include "drill/fieldmeta.hpp"
 #include "../protobuf/UserBitShared.pb.h"
@@ -72,6 +71,7 @@ static const std::string& getSQLType(common::MinorType type, common::DataMode mo
     case common::DECIMAL28DENSE:
     case common::DECIMAL28SPARSE:
     case common::DECIMAL38DENSE:
+    case common::VARDECIMAL:
     case common::DECIMAL38SPARSE: return SQLDecimal;
 
     case common::VARCHAR:         return SQLVarchar;
@@ -134,6 +134,7 @@ static bool isSigned(common::MinorType type, common::DataMode mode) {
     case common::DECIMAL28DENSE:
     case common::DECIMAL38DENSE:
     case common::DECIMAL38SPARSE:
+    case common::VARDECIMAL:
 
     case common::INTERVALYEAR:
     case common::INTERVALDAY:
@@ -305,6 +306,7 @@ static uint32_t getDisplaySize(const ::common::MajorType& type) {
     case ::common::DECIMAL28SPARSE:
     case ::common::DECIMAL38DENSE:
     case ::common::DECIMAL38SPARSE:
+    case ::common::VARDECIMAL:
     case ::common::MONEY:           return 2 + precision; // precision of the column plus a sign and a decimal point
 
     case ::common::VARCHAR:

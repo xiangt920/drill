@@ -17,7 +17,7 @@
  */
 package org.apache.drill;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -826,7 +826,9 @@ public class TestUnionDistinct extends BaseTestQuery {
 
   @Test
   public void testUnionBothEmptyDirs() throws Exception {
-    final BatchSchema expectedSchema = new SchemaBuilder().build();
+    final BatchSchema expectedSchema = new SchemaBuilder()
+        .addNullable("key", TypeProtos.MinorType.INT)
+        .build();
 
     testBuilder()
         .sqlQuery("SELECT key FROM dfs.tmp.`%1$s` UNION SELECT key FROM dfs.tmp.`%1$s`", EMPTY_DIR_NAME)

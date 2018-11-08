@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -35,8 +35,8 @@ import org.apache.drill.exec.server.RemoteServiceSet;
 import org.apache.drill.exec.vector.ValueVector;
 import org.junit.Test;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 import org.junit.experimental.categories.Category;
 
 @Category(OperatorTest.class)
@@ -55,8 +55,8 @@ public class TestNewAggregateFunctions extends PopUnitTestBase {
       client.connect();
       List<QueryDataBatch> results = client.runQuery(
           QueryType.PHYSICAL,
-          Files.toString(DrillFileUtils.getResourceAsFile(physicalPlan),
-              Charsets.UTF_8).replace("#{TEST_FILE}",
+          Files.asCharSource(DrillFileUtils.getResourceAsFile(physicalPlan),
+              Charsets.UTF_8).read().replace("#{TEST_FILE}",
               inputDataFile));
 
       RecordBatchLoader batchLoader = new RecordBatchLoader(bit
@@ -69,7 +69,6 @@ public class TestNewAggregateFunctions extends PopUnitTestBase {
       int i = 0;
       for (VectorWrapper<?> v : batchLoader) {
         ValueVector.Accessor accessor = v.getValueVector().getAccessor();
-        System.out.println((accessor.getObject(0)));
         assertEquals(expected[i++], (accessor.getObject(0)));
       }
 

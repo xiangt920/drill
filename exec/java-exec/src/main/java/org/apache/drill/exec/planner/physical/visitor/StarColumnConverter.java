@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.planner.physical.visitor;
 
 import java.util.Collections;
@@ -31,6 +30,7 @@ import org.apache.drill.exec.planner.physical.ProjectPrel;
 import org.apache.drill.exec.planner.physical.ScanPrel;
 import org.apache.drill.exec.planner.physical.ScreenPrel;
 import org.apache.drill.exec.planner.physical.WriterPrel;
+import org.apache.drill.exec.planner.physical.UnnestPrel;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -39,7 +39,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.util.Pair;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 public class StarColumnConverter extends BasePrelVisitor<Prel, Void, RuntimeException> {
 
@@ -76,12 +76,12 @@ public class StarColumnConverter extends BasePrelVisitor<Prel, Void, RuntimeExce
     Prel child = ((Prel) prel.getInput(0)).accept(this, null);
 
     if (prefixedForStar) {
-      if (!prefixedForWriter) {
+      if (prefixedForWriter) {
+        // Prefix is added under CTAS Writer. We need create a new Screen with the converted child.
+        return prel.copy(prel.getTraitSet(), Collections.singletonList(child));
+      } else {
         // Prefix is added for SELECT only, not for CTAS writer.
         return insertProjUnderScreenOrWriter(prel, prel.getInput().getRowType(), child);
-      } else {
-        // Prefix is added under CTAS Writer. We need create a new Screen with the converted child.
-        return prel.copy(prel.getTraitSet(), Collections.<RelNode>singletonList(child));
       }
     } else {
       // No prefix is
@@ -118,13 +118,23 @@ public class StarColumnConverter extends BasePrelVisitor<Prel, Void, RuntimeExce
     RelDataType newRowType = RexUtil.createStructType(child.getCluster().getTypeFactory(),
         exprs, origRowType.getFieldNames(), null);
 
-    int fieldCount = prel.getRowType().isStruct()? prel.getRowType().getFieldCount():1;
+    int fieldCount = prel.getRowType().isStruct() ? prel.getRowType().getFieldCount() : 1;
 
     // Insert PUS/PUW : remove the prefix and keep the original field name.
-    if (fieldCount > 1) { // // no point in allowing duplicates if we only have one column
-      proj = new ProjectAllowDupPrel(child.getCluster(), child.getTraitSet(), child, exprs, newRowType);
+    if (fieldCount > 1) { // no point in allowing duplicates if we only have one column
+      proj = new ProjectAllowDupPrel(child.getCluster(),
+          child.getTraitSet(),
+          child,
+          exprs,
+          newRowType,
+          true); //outputProj = true : will allow to build the schema for PUS Project, see ProjectRecordBatch#handleNullInput()
     } else {
-      proj = new ProjectPrel(child.getCluster(), child.getTraitSet(), child, exprs, newRowType);
+      proj = new ProjectPrel(child.getCluster(),
+          child.getTraitSet(),
+          child,
+          exprs,
+          newRowType,
+          true); //outputProj = true : will allow to build the schema for PUS Project, see ProjectRecordBatch#handleNullInput()
     }
 
     children.add(proj);
@@ -190,14 +200,13 @@ public class StarColumnConverter extends BasePrelVisitor<Prel, Void, RuntimeExce
     return (Prel) prel.copy(prel.getTraitSet(), children);
   }
 
-  @Override
-  public Prel visitScan(ScanPrel scanPrel, Void value) throws RuntimeException {
-    if (StarColumnHelper.containsStarColumn(scanPrel.getRowType()) && prefixedForStar) {
+  private Prel prefixTabNameToStar(Prel prel, Void value) throws RuntimeException {
+    if (StarColumnHelper.containsStarColumn(prel.getRowType()) && prefixedForStar) {
 
       List<RexNode> exprs = Lists.newArrayList();
 
-      for (RelDataTypeField field : scanPrel.getRowType().getFieldList()) {
-        RexNode expr = scanPrel.getCluster().getRexBuilder().makeInputRef(field.getType(), field.getIndex());
+      for (RelDataTypeField field : prel.getRowType().getFieldList()) {
+        RexNode expr = prel.getCluster().getRexBuilder().makeInputRef(field.getType(), field.getIndex());
         exprs.add(expr);
       }
 
@@ -205,23 +214,33 @@ public class StarColumnConverter extends BasePrelVisitor<Prel, Void, RuntimeExce
 
       long tableId = tableNumber.getAndIncrement();
 
-      for (String name : scanPrel.getRowType().getFieldNames()) {
+      for (String name : prel.getRowType().getFieldNames()) {
         if (StarColumnHelper.isNonPrefixedStarColumn(name)) {
           fieldNames.add("T" +  tableId + StarColumnHelper.PREFIX_DELIMITER + name);  // Add prefix to * column.
         } else {
           fieldNames.add(name);  // Keep regular column as it is.
         }
       }
-      RelDataType rowType = RexUtil.createStructType(scanPrel.getCluster().getTypeFactory(),
+      RelDataType rowType = RexUtil.createStructType(prel.getCluster().getTypeFactory(),
           exprs, fieldNames, null);
 
       // insert a PAS.
-      ProjectPrel proj = new ProjectPrel(scanPrel.getCluster(), scanPrel.getTraitSet(), scanPrel, exprs, rowType);
+      ProjectPrel proj = new ProjectPrel(prel.getCluster(), prel.getTraitSet(), prel, exprs, rowType);
 
       return proj;
     } else {
-      return visitPrel(scanPrel, value);
+      return visitPrel(prel, value);
     }
+  }
+
+  @Override
+  public Prel visitScan(ScanPrel scanPrel, Void value) throws RuntimeException {
+    return prefixTabNameToStar(scanPrel, value);
+  }
+
+  @Override
+  public Prel visitUnnest(UnnestPrel unnestPrel, Void value) throws RuntimeException {
+    return prefixTabNameToStar(unnestPrel, value);
   }
 
   private List<String> makeUniqueNames(List<String> names) {
@@ -239,7 +258,7 @@ public class StarColumnConverter extends BasePrelVisitor<Prel, Void, RuntimeExce
 
     for (String s : names) {
       if (uniqueNames.contains(s)) {
-        for (int i = 0; ; i++ ) {
+        for (int i = 0;; i++) {
           s = s + i;
           if (! origNames.contains(s) && ! uniqueNames.contains(s)) {
             break;

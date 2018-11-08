@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 import java.security.PrivilegedExceptionAction;
 
-import com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.expression.SchemaPath;
@@ -162,5 +162,20 @@ public class SequenceFileRecordReader extends AbstractRecordReader {
     } catch (IOException e) {
       logger.warn("Exception closing reader: {}", e);
     }
+  }
+
+  @Override
+  public String toString() {
+    long position = -1L;
+    try {
+      if (reader != null) {
+        position = reader.getPos();
+      }
+    } catch (IOException e) {
+      logger.trace("Unable to obtain reader position.", e);
+    }
+    return "SequenceFileRecordReader[File=" + split.getPath()
+        + ", Position=" + position
+        + "]";
   }
 }

@@ -50,7 +50,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.drill.shaded.guava.com.google.common.base.Preconditions.checkNotNull;
 
 public class DrillbitContext implements AutoCloseable {
 //  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DrillbitContext.class);
@@ -261,7 +261,9 @@ public class DrillbitContext implements AutoCloseable {
     return classpathScan;
   }
 
-  public RemoteFunctionRegistry getRemoteFunctionRegistry() { return functionRegistry.getRemoteFunctionRegistry(); }
+  public RemoteFunctionRegistry getRemoteFunctionRegistry() {
+    return functionRegistry.getRemoteFunctionRegistry();
+  }
 
   /**
    * Use the operator table built during startup when "exec.udf.use_dynamic" option

@@ -17,6 +17,8 @@
  */
 package org.apache.drill.exec.store.sys;
 
+import static org.junit.Assert.assertEquals;
+
 import org.apache.drill.PlanTestBase;
 import org.apache.drill.categories.UnlikelyTest;
 import org.apache.drill.exec.ExecConstants;
@@ -35,16 +37,16 @@ public class TestSystemTable extends PlanTestBase {
   public void alterSessionOption() throws Exception {
 
     newTest() //
-      .sqlQuery("select bool_val as bool from sys.options where name = '%s' order by accessibleScopes desc", ExecConstants.JSON_ALL_TEXT_MODE)
+      .sqlQuery("select val as bool from sys.options where name = '%s' order by accessibleScopes desc", ExecConstants.JSON_ALL_TEXT_MODE)
       .baselineColumns("bool")
       .ordered()
-      .baselineValues(false)
+      .baselineValues(String.valueOf(false))
       .go();
 
     test("alter session set `%s` = true", ExecConstants.JSON_ALL_TEXT_MODE);
 
-    newTest() //
-      .sqlQuery("select bool_val as bool from sys.options where name = '%s' order by accessibleScopes desc ", ExecConstants.JSON_ALL_TEXT_MODE)
+    newTest() //Using old table to detect both optionScopes: BOOT & SESSION
+      .sqlQuery("select bool_val as bool from sys.options_old where name = '%s' order by accessibleScopes desc ", ExecConstants.JSON_ALL_TEXT_MODE)
       .baselineColumns("bool")
       .ordered()
       .baselineValues(false)
@@ -75,6 +77,18 @@ public class TestSystemTable extends PlanTestBase {
   }
 
   @Test
+  public void functionsTable() throws Exception {
+    test("select * from sys.functions");
+  }
+
+  @Test
+  public void testInternalFunctionsTable() throws Exception {
+    String query = "select internal, count(*) from sys.functions group by internal";
+    //Testing a mix of public and internal functions defined in FunctionTemplate
+    assertEquals(2, testSql(query));
+  }
+
+  @Test
   public void profilesTable() throws Exception {
     test("select * from sys.profiles");
   }
@@ -89,5 +103,12 @@ public class TestSystemTable extends PlanTestBase {
     String query = "select * from sys.profiles limit 10";
     String numFilesPattern = "maxRecordsToRead=10";
     testPlanMatchingPatterns(query, new String[] {numFilesPattern}, new String[] {});
+  }
+
+  @Test
+  public void testColumnNullability() throws Exception {
+    String query = "select distinct is_nullable, count(*) from INFORMATION_SCHEMA.`COLUMNS` where table_schema = 'sys' group by is_nullable";
+    //Asserting a mix of nullable and non-nullable columns (pre-DRILL-6588, all columns were Not Nullable)
+    assertEquals(2, testSql(query));
   }
 }

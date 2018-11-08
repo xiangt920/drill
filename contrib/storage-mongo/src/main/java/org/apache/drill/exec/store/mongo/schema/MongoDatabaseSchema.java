@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -20,9 +20,8 @@ package org.apache.drill.exec.store.mongo.schema;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentMap;
 
-import com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
 import org.apache.calcite.schema.Table;
 
 import org.apache.drill.exec.planner.logical.DrillTable;
@@ -30,7 +29,7 @@ import org.apache.drill.exec.store.AbstractSchema;
 import org.apache.drill.exec.store.mongo.MongoStoragePluginConfig;
 import org.apache.drill.exec.store.mongo.schema.MongoSchemaFactory.MongoSchema;
 
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 
 public class MongoDatabaseSchema extends AbstractSchema {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory

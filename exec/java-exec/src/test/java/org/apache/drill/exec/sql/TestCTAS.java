@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.sql;
 
-import com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
 import org.apache.drill.test.BaseTestQuery;
 import org.apache.drill.categories.SqlTest;
 import org.apache.drill.categories.UnlikelyTest;
@@ -310,6 +310,16 @@ public class TestCTAS extends BaseTestQuery {
 
       test(ctasQuery);
 
+    } finally {
+      test("DROP TABLE IF EXISTS %s.%s", DFS_TMP_SCHEMA, newTblName);
+    }
+  }
+
+  @Test
+  public void testCTASWithEmptyJson() throws Exception {
+    final String newTblName = "tbl4444";
+    try {
+      test(String.format("CREATE TABLE %s.%s AS SELECT * FROM cp.`project/pushdown/empty.json`", DFS_TMP_SCHEMA, newTblName));
     } finally {
       test("DROP TABLE IF EXISTS %s.%s", DFS_TMP_SCHEMA, newTblName);
     }

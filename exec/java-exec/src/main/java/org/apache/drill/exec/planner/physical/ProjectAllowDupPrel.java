@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.planner.physical;
 
 import java.io.IOException;
@@ -35,18 +34,23 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.util.Pair;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 public class ProjectAllowDupPrel extends ProjectPrel {
 
   public ProjectAllowDupPrel(RelOptCluster cluster, RelTraitSet traits, RelNode child, List<RexNode> exps,
-      RelDataType rowType) {
-    super(cluster, traits, child, exps, rowType);
+                             RelDataType rowType) {
+    this(cluster, traits, child, exps, rowType, false);
+  }
+
+  public ProjectAllowDupPrel(RelOptCluster cluster, RelTraitSet traits, RelNode child, List<RexNode> exps,
+      RelDataType rowType, boolean outputProj) {
+    super(cluster, traits, child, exps, rowType, outputProj);
   }
 
   @Override
   public ProjectAllowDupPrel copy(RelTraitSet traitSet, RelNode input, List<RexNode> exps, RelDataType rowType) {
-    return new ProjectAllowDupPrel(getCluster(), traitSet, input, exps, rowType);
+    return new ProjectAllowDupPrel(getCluster(), traitSet, input, exps, rowType, outputProj);
   }
 
   @Override
@@ -55,7 +59,8 @@ public class ProjectAllowDupPrel extends ProjectPrel {
 
     PhysicalOperator childPOP = child.getPhysicalOperator(creator);
 
-    Project p = new Project(this.getProjectExpressions(new DrillParseContext(PrelUtil.getSettings(getCluster()))),  childPOP);
+    Project p = new Project(this.getProjectExpressions(new DrillParseContext(PrelUtil.getSettings(getCluster()))),
+        childPOP, outputProj);
     return creator.addMetadata(this, p);
   }
 

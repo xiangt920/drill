@@ -15,40 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.planner.logical;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
 import org.apache.calcite.plan.Convention;
 import org.apache.calcite.plan.RelOptCluster;
-import org.apache.calcite.rel.InvalidRelException;
-import org.apache.calcite.rel.core.Aggregate;
-import org.apache.calcite.rel.core.Window;
-import org.apache.calcite.rel.logical.LogicalAggregate;
-import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.SqlOperator;
-import org.apache.calcite.sql.SqlOperatorBinding;
-import org.apache.calcite.sql.fun.SqlCountAggFunction;
-import org.apache.calcite.sql.type.SqlReturnTypeInference;
-import org.apache.calcite.sql.type.SqlTypeName;
-import org.apache.calcite.util.trace.CalciteTrace;
-import org.apache.drill.exec.expr.fn.DrillFuncHolder;
-import org.apache.drill.exec.planner.physical.PlannerSettings;
-import org.apache.drill.exec.planner.sql.DrillCalciteSqlAggFunctionWrapper;
-import org.apache.drill.exec.planner.sql.DrillSqlOperator;
-import org.apache.calcite.rel.core.AggregateCall;
-import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptRuleOperand;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.Aggregate;
+import org.apache.calcite.rel.core.AggregateCall;
+import org.apache.calcite.rel.core.Window;
+import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -56,18 +37,31 @@ import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlAggFunction;
+import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.fun.SqlAvgAggFunction;
+import org.apache.calcite.sql.fun.SqlCountAggFunction;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.fun.SqlSumAggFunction;
 import org.apache.calcite.sql.fun.SqlSumEmptyIsZeroAggFunction;
+import org.apache.calcite.sql.type.SqlReturnTypeInference;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.CompositeList;
 import org.apache.calcite.util.ImmutableIntList;
 import org.apache.calcite.util.Util;
-
-import com.google.common.collect.ImmutableList;
+import org.apache.drill.exec.planner.physical.PlannerSettings;
+import org.apache.drill.exec.planner.sql.DrillCalciteSqlAggFunctionWrapper;
+import org.apache.drill.exec.planner.sql.DrillSqlOperator;
 import org.apache.drill.exec.planner.sql.TypeInferenceUtils;
 import org.apache.drill.exec.planner.sql.parser.DrillCalciteWrapperUtility;
-import org.slf4j.Logger;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Rule to reduce aggregates to simpler forms. Currently only AVG(x) to
@@ -239,6 +233,20 @@ public class DrillReduceAggregatesRule extends RelOptRule {
       return reduceSum(oldAggRel, oldCall, newCalls, aggCallMapping);
     }
     if (sqlAggFunction instanceof SqlAvgAggFunction) {
+      // for DECIMAL data types does not produce rewriting of complex calls,
+      // since SUM returns value with 38 precision and further handling of the value
+      // causes the loss of the scale
+      if (oldCall.getType().getSqlTypeName() == SqlTypeName.DECIMAL) {
+        return oldAggRel.getCluster().getRexBuilder().addAggCall(
+            oldCall,
+            oldAggRel.getGroupCount(),
+            oldAggRel.indicator,
+            newCalls,
+            aggCallMapping,
+            ImmutableList.of(getFieldType(
+                oldAggRel.getInput(),
+                oldCall.getArgList().get(0))));
+      }
       final SqlKind subtype = sqlAggFunction.getKind();
       switch (subtype) {
       case AVG:
@@ -254,7 +262,7 @@ public class DrillReduceAggregatesRule extends RelOptRule {
             oldAggRel, oldCall, true, true, newCalls, aggCallMapping,
             inputExprs);
       case STDDEV_SAMP:
-        // replace original STDDEV_POP(x) with
+        // replace original STDDEV_SAMP(x) with
         //   SQRT(
         //     (SUM(x * x) - SUM(x) * SUM(x) / COUNT(x))
         //     / CASE COUNT(x) WHEN 1 THEN NULL ELSE COUNT(x) - 1 END)
@@ -269,7 +277,7 @@ public class DrillReduceAggregatesRule extends RelOptRule {
             oldAggRel, oldCall, true, false, newCalls, aggCallMapping,
             inputExprs);
       case VAR_SAMP:
-        // replace original VAR_POP(x) with
+        // replace original VAR_SAMP(x) with
         //     (SUM(x * x) - SUM(x) * SUM(x) / COUNT(x))
         //     / CASE COUNT(x) WHEN 1 THEN NULL ELSE COUNT(x) - 1 END
         return reduceStddev(
@@ -681,7 +689,6 @@ public class DrillReduceAggregatesRule extends RelOptRule {
   }
 
   private static class DrillConvertSumToSumZero extends RelOptRule {
-    protected static final Logger tracer = CalciteTrace.getPlannerTracer();
 
     public DrillConvertSumToSumZero(RelOptRuleOperand operand) {
       super(operand, DrillRelFactories.LOGICAL_BUILDER, null);
@@ -732,18 +739,14 @@ public class DrillReduceAggregatesRule extends RelOptRule {
         }
       }
 
-      try {
-        call.transformTo(new DrillAggregateRel(
-            oldAggRel.getCluster(),
-            oldAggRel.getTraitSet(),
-            oldAggRel.getInput(),
-            oldAggRel.indicator,
-            oldAggRel.getGroupSet(),
-            oldAggRel.getGroupSets(),
-            newAggregateCalls));
-      } catch (InvalidRelException e) {
-        tracer.warn(e.toString());
-      }
+      call.transformTo(new DrillAggregateRel(
+          oldAggRel.getCluster(),
+          oldAggRel.getTraitSet(),
+          oldAggRel.getInput(),
+          oldAggRel.indicator,
+          oldAggRel.getGroupSet(),
+          oldAggRel.getGroupSets(),
+          newAggregateCalls));
     }
   }
 

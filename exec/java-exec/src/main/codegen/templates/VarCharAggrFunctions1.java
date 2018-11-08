@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -35,6 +35,7 @@ package org.apache.drill.exec.expr.fn.impl.gaggr;
 import org.apache.drill.exec.expr.DrillAggFunc;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate.FunctionScope;
+import org.apache.drill.exec.expr.annotations.FunctionTemplate.ReturnType;
 import org.apache.drill.exec.expr.annotations.Output;
 import org.apache.drill.exec.expr.annotations.Param;
 import org.apache.drill.exec.expr.annotations.Workspace;
@@ -56,7 +57,11 @@ public class ${aggrtype.className}VarBytesFunctions {
 <#list aggrtype.types as type>
 <#if type.major == "VarBytes">
 
-@FunctionTemplate(name = "${aggrtype.funcName}", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
+@FunctionTemplate(name = "${aggrtype.funcName}",
+                  <#if type.inputType.contains("VarChar")>
+                  returnType = ReturnType.SAME_IN_OUT_LENGTH,
+                  </#if>
+                  scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
 public static class ${type.inputType}${aggrtype.className} implements DrillAggFunc{
 
   @Param ${type.inputType}Holder in;
@@ -85,6 +90,16 @@ public static class ${type.inputType}${aggrtype.className} implements DrillAggFu
         break sout;
       }
     </#if>
+    <#if aggrtype.className == "AnyValue">
+      if (nonNullCount.value == 0) {
+        nonNullCount.value = 1;
+        int inputLength = in.end - in.start;
+        org.apache.drill.exec.expr.fn.impl.DrillByteArray tmp = (org.apache.drill.exec.expr.fn.impl.DrillByteArray) value.obj;
+        byte[] tempArray = new byte[inputLength];
+        in.buffer.getBytes(in.start, tempArray, 0, inputLength);
+        tmp.setBytes(tempArray);
+      }
+    <#else>
     nonNullCount.value = 1;
     org.apache.drill.exec.expr.fn.impl.DrillByteArray tmp = (org.apache.drill.exec.expr.fn.impl.DrillByteArray) value.obj;
     int cmp = 0;
@@ -116,6 +131,7 @@ public static class ${type.inputType}${aggrtype.className} implements DrillAggFu
         tmp.setBytes(tempArray);
       }
     }
+    </#if>
     <#if type.inputType?starts_with("Nullable")>
     } // end of sout block
 	  </#if>

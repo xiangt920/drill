@@ -17,21 +17,6 @@
  */
 package org.apache.drill.exec.store.avro;
 
-import com.google.common.collect.Lists;
-import org.apache.commons.io.FileUtils;
-import org.apache.drill.exec.ExecConstants;
-import org.apache.drill.test.BaseTestQuery;
-import org.apache.drill.test.TestBuilder;
-import org.apache.drill.common.exceptions.UserException;
-import org.apache.drill.common.exceptions.UserRemoteException;
-import org.apache.drill.exec.util.JsonStringHashMap;
-import org.junit.Assert;
-import org.junit.Test;
-
-import java.io.File;
-import java.util.List;
-import java.util.Map;
-
 import static org.apache.drill.exec.store.avro.AvroTestUtil.generateDoubleNestedSchema_NoNullValues;
 import static org.apache.drill.exec.store.avro.AvroTestUtil.generateLinkedList;
 import static org.apache.drill.exec.store.avro.AvroTestUtil.generateMapSchemaComplex_withNullValues;
@@ -46,11 +31,41 @@ import static org.apache.drill.exec.store.avro.AvroTestUtil.generateUnionNestedA
 import static org.apache.drill.exec.store.avro.AvroTestUtil.generateUnionNestedSchema_withNullValues;
 import static org.apache.drill.exec.store.avro.AvroTestUtil.generateUnionSchema_WithNonNullValues;
 import static org.apache.drill.exec.store.avro.AvroTestUtil.generateUnionSchema_WithNullValues;
+import static org.apache.drill.exec.store.avro.AvroTestUtil.write;
 import static org.apache.drill.test.TestBuilder.listOf;
+
+import java.io.File;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.avro.specific.TestRecordWithLogicalTypes;
+import org.apache.commons.io.FileUtils;
+import org.apache.drill.common.exceptions.UserException;
+import org.apache.drill.common.exceptions.UserRemoteException;
+import org.apache.drill.exec.ExecConstants;
+import org.apache.drill.exec.ExecTest;
+import org.apache.drill.exec.expr.fn.impl.DateUtility;
+import org.apache.drill.exec.planner.physical.PlannerSettings;
+import org.apache.drill.exec.util.JsonStringHashMap;
+import org.apache.drill.exec.work.ExecErrorConstants;
+import org.apache.drill.test.BaseTestQuery;
+import org.apache.drill.test.TestBuilder;
+import org.junit.Assert;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+
+import mockit.integration.junit4.JMockit;
 
 /**
  * Unit tests for Avro record reader.
  */
+@RunWith(JMockit.class)
 public class AvroFormatTest extends BaseTestQuery {
 
   // XXX
@@ -290,6 +305,68 @@ public class AvroFormatTest extends BaseTestQuery {
           .go();
     } finally {
       FileUtils.deleteQuietly(new File(testWriter.getFilePath()));
+    }
+  }
+
+  @Test
+  public void testAvroTableWithLogicalTypesDecimal() throws Exception {
+    ExecTest.mockUtcDateTimeZone();
+    LocalDate date = DateUtility.parseLocalDate("2018-02-03");
+    LocalTime time = DateUtility.parseLocalTime("19:25:03.0");
+    LocalDateTime timestamp = DateUtility.parseLocalDateTime("2018-02-03 19:25:03.0");
+
+    // Avro uses joda package
+    org.joda.time.DateTime jodaDateTime = org.joda.time.DateTime.parse("2018-02-03T19:25:03");
+    BigDecimal bigDecimal = new BigDecimal("123.45");
+
+    TestRecordWithLogicalTypes record = new TestRecordWithLogicalTypes(
+        true,
+        34,
+        35L,
+        3.14F,
+        3019.34,
+        "abc",
+        jodaDateTime.toLocalDate(),
+        jodaDateTime.toLocalTime(),
+        jodaDateTime,
+        bigDecimal
+    );
+
+    File data = write(TestRecordWithLogicalTypes.getClassSchema(), record);
+
+    final String query = "select * from dfs.`%s`";
+
+    testBuilder()
+        .sqlQuery(query, data.getName())
+        .unOrdered()
+        .baselineColumns("b", "i32", "i64", "f32", "f64", "s", "d", "t", "ts", "dec")
+        .baselineValues(true, 34, 35L, 3.14F, 3019.34, "abc", date, time, timestamp, bigDecimal)
+        .go();
+  }
+
+  @Test
+  public void testAvroWithDisabledDecimalType() throws Exception {
+    TestRecordWithLogicalTypes record = new TestRecordWithLogicalTypes(
+        true,
+        34,
+        35L,
+        3.14F,
+        3019.34,
+        "abc",
+        org.joda.time.LocalDate.now(),
+        org.joda.time.LocalTime.now(),
+        org.joda.time.DateTime.now(),
+        new BigDecimal("123.45")
+    );
+
+    File data = write(TestRecordWithLogicalTypes.getClassSchema(), record);
+    final String query = String.format("select * from dfs.`%s`", data.getName());
+
+    try {
+      alterSession(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY, false);
+      errorMsgTestHelper(query, ExecErrorConstants.DECIMAL_DISABLE_ERR_MSG);
+    } finally {
+      resetSessionOption(PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY);
     }
   }
 

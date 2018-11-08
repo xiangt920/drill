@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -24,18 +24,29 @@ import java.util.Set;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.drill.common.JSONOptions;
 import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.common.logical.FormatPluginConfig;
 import org.apache.drill.exec.ops.OptimizerRulesContext;
 import org.apache.drill.exec.physical.base.AbstractGroupScan;
 import org.apache.drill.exec.planner.PlannerPhase;
 
-import com.google.common.collect.ImmutableSet;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet;
+import org.apache.drill.exec.server.DrillbitContext;
+import org.apache.drill.exec.server.options.SessionOptionManager;
+import org.apache.drill.exec.store.dfs.FormatPlugin;
 
-/** Abstract class for StorePlugin implementations.
+/**
+ * Abstract class for StorePlugin implementations.
  * See StoragePlugin for description of the interface intent and its methods.
  */
 public abstract class AbstractStoragePlugin implements StoragePlugin {
 
-  protected AbstractStoragePlugin() { }
+  protected final DrillbitContext context;
+  private final String name;
+
+  protected AbstractStoragePlugin(DrillbitContext inContext, String inName) {
+    this.context = inContext;
+    this.name = inName == null ? null : inName.toLowerCase();
+  }
 
   @Override
   public boolean supportsRead() {
@@ -49,7 +60,7 @@ public abstract class AbstractStoragePlugin implements StoragePlugin {
 
   /**
    * @deprecated Marking for deprecation in next major version release. Use
-   *             {@link #getPhysicalOptimizerRules(org.apache.drill.exec.ops.OptimizerRulesContext, org.apache.drill.exec.planner.PlannerPhase)}
+   *             {@link #getOptimizerRules(org.apache.drill.exec.ops.OptimizerRulesContext, org.apache.drill.exec.planner.PlannerPhase)}
    */
   @Override
   @Deprecated
@@ -59,7 +70,7 @@ public abstract class AbstractStoragePlugin implements StoragePlugin {
 
   /**
    * @deprecated Marking for deprecation in next major version release. Use
-   *             {@link #getPhysicalOptimizerRules(org.apache.drill.exec.ops.OptimizerRulesContext, org.apache.drill.exec.planner.PlannerPhase)}
+   *             {@link #getOptimizerRules(org.apache.drill.exec.ops.OptimizerRulesContext, org.apache.drill.exec.planner.PlannerPhase)}
    */
   @Deprecated
   public Set<? extends RelOptRule> getLogicalOptimizerRules(OptimizerRulesContext optimizerContext) {
@@ -68,7 +79,7 @@ public abstract class AbstractStoragePlugin implements StoragePlugin {
 
   /**
    * @deprecated Marking for deprecation in next major version release. Use
-   *             {@link #getPhysicalOptimizerRules(org.apache.drill.exec.ops.OptimizerRulesContext, org.apache.drill.exec.planner.PlannerPhase)}
+   *             {@link #getOptimizerRules(org.apache.drill.exec.ops.OptimizerRulesContext, org.apache.drill.exec.planner.PlannerPhase)}
    */
   @Deprecated
   public Set<? extends RelOptRule> getPhysicalOptimizerRules(OptimizerRulesContext optimizerRulesContext) {
@@ -84,20 +95,31 @@ public abstract class AbstractStoragePlugin implements StoragePlugin {
     switch (phase) {
     case LOGICAL_PRUNE_AND_JOIN:
     case LOGICAL_PRUNE:
-    case LOGICAL:
+    case PARTITION_PRUNING:
       return getLogicalOptimizerRules(optimizerContext);
     case PHYSICAL:
       return getPhysicalOptimizerRules(optimizerContext);
-    case PARTITION_PRUNING:
+    case LOGICAL:
     case JOIN_PLANNING:
     default:
       return ImmutableSet.of();
     }
   }
 
+
+  @Override
+  public AbstractGroupScan getPhysicalScan(String userName, JSONOptions selection, SessionOptionManager options) throws IOException {
+    return getPhysicalScan(userName, selection);
+  }
+
   @Override
   public AbstractGroupScan getPhysicalScan(String userName, JSONOptions selection) throws IOException {
     return getPhysicalScan(userName, selection, AbstractGroupScan.ALL_COLUMNS);
+  }
+
+  @Override
+  public AbstractGroupScan getPhysicalScan(String userName, JSONOptions selection, List<SchemaPath> columns, SessionOptionManager options) throws IOException {
+    return getPhysicalScan(userName, selection, columns);
   }
 
   @Override
@@ -110,4 +132,19 @@ public abstract class AbstractStoragePlugin implements StoragePlugin {
 
   @Override
   public void close() throws Exception { }
+
+  @Override
+  public FormatPlugin getFormatPlugin(FormatPluginConfig config) {
+    throw new UnsupportedOperationException(String.format("%s doesn't support format plugins", getClass().getName()));
+  }
+
+  @Override
+  public String getName() {
+    return name;
+  }
+
+  public DrillbitContext getContext() {
+    return context;
+  }
+
 }

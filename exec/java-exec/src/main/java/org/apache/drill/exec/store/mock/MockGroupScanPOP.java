@@ -42,7 +42,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 
 /**
  * Describes a "group" scan of a (logical) mock table. The mock table has a
@@ -89,7 +89,7 @@ public class MockGroupScanPOP extends AbstractGroupScan {
     // the planner is "fooled" into thinking that this operator will do
     // disk I/O.
 
-    int rowCount = 0;
+    double rowCount = 0;
     int rowWidth = 0;
 
     // Can have multiple "read entries" which simulate blocks or
@@ -126,7 +126,7 @@ public class MockGroupScanPOP extends AbstractGroupScan {
 
       rowWidth = Math.max(rowWidth, groupRowWidth);
     }
-    int dataSize = rowCount * rowWidth;
+    double dataSize = rowCount * rowWidth;
     scanStats = new ScanStats(GroupScanProperty.EXACT_ROW_COUNT,
                                rowCount,
                                DrillCostBase.BASE_CPU_COST * dataSize,

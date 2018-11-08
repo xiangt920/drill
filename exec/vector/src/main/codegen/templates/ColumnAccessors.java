@@ -28,6 +28,8 @@
       return ValueType.INTEGER;
   <#elseif drillType == "VarChar" || drillType == "Var16Char">
       return ValueType.STRING;
+  <#elseif drillType == "VarDecimal">
+    return ValueType.DECIMAL;
   <#else>
       return ValueType.${label?upper_case};
   </#if>
@@ -65,6 +67,7 @@
 package org.apache.drill.exec.vector.accessor;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.exec.vector.DateUtilities;
@@ -77,7 +80,7 @@ import org.apache.drill.exec.vector.accessor.reader.VectorAccessor;
 import org.apache.drill.exec.vector.accessor.writer.AbstractFixedWidthWriter.BaseFixedWidthWriter;
 import org.apache.drill.exec.vector.accessor.writer.BaseVarWidthWriter;
 
-import com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
 
 import io.netty.buffer.DrillBuf;
 
@@ -112,9 +115,9 @@ public class ColumnAccessors {
     <#if accessorType=="BigDecimal">
       <#assign label="Decimal">
     </#if>
-    <#assign varWidth = drillType == "VarChar" || drillType == "Var16Char" || drillType == "VarBinary" />
+    <#assign varWidth = drillType == "VarChar" || drillType == "Var16Char" || drillType == "VarBinary"  || drillType == "VarDecimal"/>
     <#assign decimal = drillType == "Decimal9" || drillType == "Decimal18" ||
-                       drillType == "Decimal28Sparse" || drillType == "Decimal38Sparse" />
+                       drillType == "Decimal28Sparse" || drillType == "Decimal38Sparse"  || drillType == "VarDecimal"/>
     <#if varWidth>
       <#assign accessorType = "byte[]">
       <#assign label = "Bytes">
@@ -135,18 +138,16 @@ public class ColumnAccessors {
 
     <#if varWidth>
   public static class ${drillType}ColumnReader extends BaseVarWidthReader {
-   
+
     <#else>
   public static class ${drillType}ColumnReader extends BaseFixedWidthReader {
-    
+
     private static final int VALUE_WIDTH = ${drillType}Vector.VALUE_WIDTH;
 
-      <#if decimal>
-    private MajorType type;
-    
-      </#if>
     </#if>
     <#if decimal>
+    private MajorType type;
+
     @Override
     public void bindVector(ColumnMetadata schema, VectorAccessor va) {
       super.bindVector(schema, va);
@@ -177,25 +178,23 @@ public class ColumnAccessors {
     <#elseif drillType == "Decimal9">
       return DecimalUtility.getBigDecimalFromPrimitiveTypes(
           buf.getInt(${getOffset}),
-          type.getScale(),
-          type.getPrecision());
+          type.getScale());
     <#elseif drillType == "Decimal18">
       return DecimalUtility.getBigDecimalFromPrimitiveTypes(
           buf.getLong(${getOffset}),
-          type.getScale(),
-          type.getPrecision());
+          type.getScale());
     <#elseif drillType == "IntervalYear">
       return DateUtilities.fromIntervalYear(
           buf.getInt(${getOffset}));
     <#elseif drillType == "IntervalDay">
       final int offset = ${getOffset};
       return DateUtilities.fromIntervalDay(
-          buf.getInt(offset), 
+          buf.getInt(offset),
           buf.getInt(offset + ${minor.millisecondsOffset}));
     <#elseif drillType == "Interval">
       final int offset = ${getOffset};
       return DateUtilities.fromInterval(
-          buf.getInt(offset), 
+          buf.getInt(offset),
           buf.getInt(offset + ${minor.daysOffset}),
           buf.getInt(offset + ${minor.millisecondsOffset}));
     <#elseif drillType == "Decimal28Sparse" || drillType == "Decimal38Sparse">
@@ -234,6 +233,14 @@ public class ColumnAccessors {
     public String getString() {
       return new String(getBytes(${indexVar}), Charsets.UTF_16);
     }
+  <#elseif drillType == "VarDecimal">
+
+    @Override
+    public BigDecimal getDecimal() {
+      byte[] bytes = getBytes();
+      BigInteger unscaledValue = bytes.length == 0 ? BigInteger.ZERO : new BigInteger(bytes);
+      return new BigDecimal(unscaledValue, type.getScale());
+    }
   </#if>
   }
 
@@ -241,9 +248,9 @@ public class ColumnAccessors {
   public static class ${drillType}ColumnWriter extends BaseVarWidthWriter {
       <#else>
   public static class ${drillType}ColumnWriter extends BaseFixedWidthWriter {
-    
+
     private static final int VALUE_WIDTH = ${drillType}Vector.VALUE_WIDTH;
-    
+
         <#if decimal>
     private MajorType type;
         </#if>
@@ -268,85 +275,83 @@ public class ColumnAccessors {
 
       </#if>
       <@getType drillType label />
-      <#if accessorType == "byte[]">
-        <#assign args = ", int len">
-      <#else>
-        <#assign args = "">
-      </#if>
-      <#if javaType == "char">
-        <#assign putType = "short" />
-        <#assign doCast = true />
-      <#else>
-        <#assign putType = javaType />
-        <#assign doCast = (cast == "set") />
-      </#if>
       <#if ! varWidth>
-
     </#if>
+
     @Override
-    public final void set${label}(final ${accessorType} value${args}) {
+    public final void set${label}(final ${accessorType} value${putArgs}) {
       <#-- Must compute the write offset first; can't be inline because the
            writeOffset() function has a side effect of possibly changing the buffer
            address (bufAddr). -->
-      <#if varWidth>
-      final int offset = writeIndex(len);
-      <#else>
-      final int writeIndex = writeIndex();
-      <#assign putAddr = "writeIndex * VALUE_WIDTH">
+      <#if ! varWidth>
+      final int writeOffset = prepareWrite();
+      <#assign putOffset = "writeOffset * VALUE_WIDTH">
       </#if>
       <#if varWidth>
+      final int offset = prepareWrite(len);
       drillBuf.setBytes(offset, value, 0, len);
       offsetsWriter.setNextOffset(offset + len);
       <#elseif drillType == "Decimal9">
-      drillBuf.setInt(${putAddr},
+      drillBuf.setInt(${putOffset},
           DecimalUtility.getDecimal9FromBigDecimal(value,
-                type.getScale(), type.getPrecision()));
+              type.getScale()));
       <#elseif drillType == "Decimal18">
-      drillBuf.setLong(${putAddr},
+      drillBuf.setLong(${putOffset},
           DecimalUtility.getDecimal18FromBigDecimal(value,
-                type.getScale(), type.getPrecision()));
+              type.getScale()));
       <#elseif drillType == "Decimal38Sparse">
       <#-- Hard to optimize this case. Just use the available tools. -->
-      DecimalUtility.getSparseFromBigDecimal(value, vector.getBuffer(), writeIndex * VALUE_WIDTH,
-               type.getScale(), type.getPrecision(), 6);
+      DecimalUtility.getSparseFromBigDecimal(value, drillBuf,
+          ${putOffset},
+          type.getScale(), 6);
       <#elseif drillType == "Decimal28Sparse">
       <#-- Hard to optimize this case. Just use the available tools. -->
-      DecimalUtility.getSparseFromBigDecimal(value, vector.getBuffer(), writeIndex * VALUE_WIDTH,
-               type.getScale(), type.getPrecision(), 5);
+      DecimalUtility.getSparseFromBigDecimal(value, drillBuf,
+          ${putOffset},
+          type.getScale(), 5);
       <#elseif drillType == "IntervalYear">
-      drillBuf.setInt(${putAddr},
-                value.getYears() * 12 + value.getMonths());
+      drillBuf.setInt(${putOffset},
+          value.getYears() * 12 + value.getMonths());
       <#elseif drillType == "IntervalDay">
-      final int offset = ${putAddr};
-      drillBuf.setInt(offset,     value.getDays());
-      drillBuf.setInt(offset + 4, DateUtilities.periodToMillis(value));
+      final int offset = ${putOffset};
+      drillBuf.setInt(offset, value.getDays());
+      drillBuf.setInt(offset + ${minor.millisecondsOffset}, DateUtilities.periodToMillis(value));
       <#elseif drillType == "Interval">
-      final int offset = ${putAddr};
-      drillBuf.setInt(offset,     value.getYears() * 12 + value.getMonths());
-      drillBuf.setInt(offset + 4, value.getDays());
-      drillBuf.setInt(offset + 8, DateUtilities.periodToMillis(value));
+      final int offset = ${putOffset};
+      drillBuf.setInt(offset, DateUtilities.periodToMonths(value));
+      drillBuf.setInt(offset + ${minor.daysOffset}, value.getDays());
+      drillBuf.setInt(offset + ${minor.millisecondsOffset}, DateUtilities.periodToMillis(value));
       <#elseif drillType == "Float4">
-      drillBuf.setInt(${putAddr}, Float.floatToRawIntBits((float) value));
+      drillBuf.setInt(${putOffset}, Float.floatToRawIntBits((float) value));
       <#elseif drillType == "Float8">
-      drillBuf.setLong(${putAddr}, Double.doubleToRawLongBits(value));
+      drillBuf.setLong(${putOffset}, Double.doubleToRawLongBits(value));
       <#else>
-      drillBuf.set${putType?cap_first}(${putAddr}, <#if doCast>(${putType}) </#if>value);
+      drillBuf.set${putType?cap_first}(${putOffset}, <#if doCast>(${putType}) </#if>value);
       </#if>
       vectorIndex.nextElement();
     }
     <#if drillType == "VarChar">
-    
+
     @Override
     public final void setString(String value) {
       final byte bytes[] = value.getBytes(Charsets.UTF_8);
       setBytes(bytes, bytes.length);
     }
     <#elseif drillType == "Var16Char">
-    
+
     @Override
     public final void setString(String value) {
       final byte bytes[] = value.getBytes(Charsets.UTF_16);
       setBytes(bytes, bytes.length);
+    }
+
+    <#elseif drillType = "VarDecimal">
+
+    @Override
+    public final void setDecimal(final BigDecimal bd) {
+      byte[] barr = bd.unscaledValue().toByteArray();
+      int len = barr.length;
+      setBytes(barr, len);
     }
     </#if>
   }
@@ -366,7 +371,7 @@ import org.apache.drill.exec.vector.accessor.reader.BaseScalarReader;
 import org.apache.drill.exec.vector.accessor.writer.BaseScalarWriter;
 
 public class ColumnAccessorUtils {
-  
+
   private ColumnAccessorUtils() { }
 
 <@build vv.types "Required" "Reader" />

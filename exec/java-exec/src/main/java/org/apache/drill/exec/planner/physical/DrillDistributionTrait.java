@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -21,7 +21,7 @@ import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelTrait;
 import org.apache.calcite.plan.RelTraitDef;
 
-import com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
 
 public class DrillDistributionTrait implements RelTrait {
   public static enum DistributionType {SINGLETON, HASH_DISTRIBUTED, RANGE_DISTRIBUTED, RANDOM_DISTRIBUTED,
@@ -35,6 +35,7 @@ public class DrillDistributionTrait implements RelTrait {
 
   private DistributionType type;
   private final ImmutableList<DistributionField> fields;
+  private PartitionFunction partitionFunction = null;
 
   public DrillDistributionTrait(DistributionType type) {
     assert (type == DistributionType.SINGLETON || type == DistributionType.RANDOM_DISTRIBUTED || type == DistributionType.ANY
@@ -47,6 +48,14 @@ public class DrillDistributionTrait implements RelTrait {
     assert (type == DistributionType.HASH_DISTRIBUTED || type == DistributionType.RANGE_DISTRIBUTED);
     this.type = type;
     this.fields = fields;
+  }
+
+  public DrillDistributionTrait(DistributionType type, ImmutableList<DistributionField> fields,
+      PartitionFunction partitionFunction) {
+    assert (type == DistributionType.HASH_DISTRIBUTED || type == DistributionType.RANGE_DISTRIBUTED);
+    this.type = type;
+    this.fields = fields;
+    this.partitionFunction = partitionFunction;
   }
 
   @Override
@@ -77,6 +86,12 @@ public class DrillDistributionTrait implements RelTrait {
           return true; // hash distribution subsumes random distribution and ANY distribution
         }
       }
+
+      if(this.type == DistributionType.RANGE_DISTRIBUTED) {
+        if (requiredDist == DistributionType.RANDOM_DISTRIBUTED) {
+          return true; // RANGE_DISTRIBUTED distribution subsumes random distribution and ANY distribution
+        }
+      }
     }
 
     return this.equals(trait);
@@ -94,9 +109,22 @@ public class DrillDistributionTrait implements RelTrait {
     return fields;
   }
 
+  public PartitionFunction getPartitionFunction() {
+    return partitionFunction;
+  }
+
+  private boolean arePartitionFunctionsSame(PartitionFunction f1, PartitionFunction f2) {
+    if (f1 != null && f2 != null) {
+      return f1.equals(f2);
+    } else if (f2 == null && f2 == null) {
+      return true;
+    }
+    return false;
+  }
+
   @Override
   public int hashCode() {
-    return  fields == null ? type.hashCode() : type.hashCode() | fields.hashCode() << 4 ;
+    return  fields == null? type.hashCode(): type.hashCode() | fields.hashCode() << 4;
   }
 
   @Override
@@ -106,7 +134,8 @@ public class DrillDistributionTrait implements RelTrait {
     }
     if (obj instanceof DrillDistributionTrait) {
       DrillDistributionTrait that = (DrillDistributionTrait) obj;
-      return this.type == that.type && this.fields.equals(that.fields) ;
+      return this.type == that.type && this.fields.equals(that.fields) &&
+          arePartitionFunctionsSame(this.partitionFunction, that.partitionFunction);
     }
     return false;
   }

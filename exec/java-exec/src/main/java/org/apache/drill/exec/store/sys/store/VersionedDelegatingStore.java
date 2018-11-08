@@ -7,14 +7,13 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.drill.exec.store.sys.store;
 
@@ -31,22 +30,24 @@ import org.apache.drill.exec.store.sys.PersistentStoreMode;
 import org.apache.drill.exec.store.sys.VersionedPersistentStore;
 
 /**
- * Versioned Store that delegates operations to PersistentStore
- * @param <V>
+ * Versioned store that delegates operations to PersistentStore and keeps versioning,
+ * incrementing version each time write / delete operation is triggered.
+ * Once created initial version is 0. Can be used only for local versioning, not distributed.
+ *
+ * @param <V> store value type
  */
 public class VersionedDelegatingStore<V> implements VersionedPersistentStore<V> {
   private final PersistentStore<V> store;
-  private final ReadWriteLock readWriteLock;
   private final AutoCloseableLock readLock;
   private final AutoCloseableLock writeLock;
   private int version;
 
   public VersionedDelegatingStore(PersistentStore<V> store) {
     this.store = store;
-    readWriteLock = new ReentrantReadWriteLock();
+    ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
     readLock = new AutoCloseableLock(readWriteLock.readLock());
     writeLock = new AutoCloseableLock(readWriteLock.writeLock());
-    version = -1;
+    version = 0;
   }
 
   @Override
@@ -114,7 +115,7 @@ public class VersionedDelegatingStore<V> implements VersionedPersistentStore<V> 
   {
     try (@SuppressWarnings("unused") Closeable lock = writeLock.open()) {
       store.close();
-      version = -1;
+      version = DataChangeVersion.NOT_AVAILABLE;
     }
   }
 }

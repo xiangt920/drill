@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 <@pp.dropOutputFile />
 
 <#list ["Single", "Repeated"] as mode>
@@ -108,11 +107,13 @@ public class ${mode}ListWriter extends AbstractFieldWriter {
   public MapWriter map() {
     switch (mode) {
     case INIT:
-      int vectorCount = container.size();
+      final ValueVector oldVector = container.getChild(name);
       final RepeatedMapVector vector = container.addOrGet(name, RepeatedMapVector.TYPE, RepeatedMapVector.class);
       innerVector = vector;
       writer = new RepeatedMapWriter(vector, this);
-      if(vectorCount != container.size()) {
+      // oldVector will be null if it's first batch being created and it might not be same as newly added vector
+      // if new batch has schema change
+      if (oldVector == null || oldVector != vector) {
         writer.allocate();
       }
       writer.setPosition(${index});
@@ -132,11 +133,13 @@ public class ${mode}ListWriter extends AbstractFieldWriter {
   public ListWriter list() {
     switch (mode) {
     case INIT:
-      final int vectorCount = container.size();
+      final ValueVector oldVector = container.getChild(name);
       final RepeatedListVector vector = container.addOrGet(name, RepeatedListVector.TYPE, RepeatedListVector.class);
       innerVector = vector;
       writer = new RepeatedListWriter(null, vector, this);
-      if (vectorCount != container.size()) {
+      // oldVector will be null if it's first batch being created and it might not be same as newly added vector
+      // if new batch has schema change
+      if (oldVector == null || oldVector != vector) {
         writer.allocate();
       }
       writer.setPosition(${index});
@@ -157,17 +160,33 @@ public class ${mode}ListWriter extends AbstractFieldWriter {
   <#assign upperName = minor.class?upper_case />
   <#assign capName = minor.class?cap_first />
   <#if lowerName == "int" ><#assign lowerName = "integer" /></#if>
+
+  <#if minor.class?contains("Decimal") >
+  @Override
+  public ${capName}Writer ${lowerName}() {
+    // returns existing writer
+    assert mode == Mode.IN_${upperName};
+    return writer;
+  }
+
+  @Override
+  public ${capName}Writer ${lowerName}(int scale, int precision) {
+    final MajorType ${upperName}_TYPE = Types.withScaleAndPrecision(MinorType.${upperName}, DataMode.REPEATED, scale, precision);
+  <#else>
   private static final MajorType ${upperName}_TYPE = Types.repeated(MinorType.${upperName});
 
   @Override
   public ${capName}Writer ${lowerName}() {
+  </#if>
     switch (mode) {
     case INIT:
-      final int vectorCount = container.size();
+      final ValueVector oldVector = container.getChild(name);
       final Repeated${capName}Vector vector = container.addOrGet(name, ${upperName}_TYPE, Repeated${capName}Vector.class);
       innerVector = vector;
       writer = new Repeated${capName}WriterImpl(vector, this);
-      if(vectorCount != container.size()) {
+      // oldVector will be null if it's first batch being created and it might not be same as newly added vector
+      // if new batch has schema change
+      if (oldVector == null || oldVector != vector) {
         writer.allocate();
       }
       writer.setPosition(${index});
@@ -182,14 +201,14 @@ public class ${mode}ListWriter extends AbstractFieldWriter {
          .build(logger);
     }
   }
-  
+
   </#list></#list>
   @Override
   public MaterializedField getField() {
     return container.getField();
   }
   <#if mode == "Repeated">
-  
+
   @Override
   public void startList() {
     final RepeatedListVector list = (RepeatedListVector) container;

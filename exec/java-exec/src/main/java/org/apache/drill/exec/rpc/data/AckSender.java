@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.drill.exec.rpc.ResponseSender;
 
-import com.google.common.annotations.VisibleForTesting;
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
 
 /**
  * Utility class that allows a group of receivers to confirm reception of a record batch as a single unit. Response

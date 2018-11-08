@@ -36,7 +36,7 @@ import org.apache.drill.exec.vector.accessor.writer.ScalarArrayWriter;
 import org.apache.drill.test.OperatorFixture;
 import org.apache.drill.test.rowSet.schema.SchemaBuilder;
 
-import com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
 
 /**
  * Tests the performance of the writers compared to using the value
@@ -73,6 +73,7 @@ import com.google.common.base.Stopwatch;
  */
 
 public class PerformanceTool {
+  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(PerformanceTool.class);
 
   public static final int ROW_COUNT = 16 * 1024 * 1024 / 4;
   public static final int ITERATIONS = 300;
@@ -97,7 +98,8 @@ public class PerformanceTool {
       for (int i = 0; i < ITERATIONS; i++) {
         doTest();
       }
-      System.out.println(label + ": " + timer.elapsed(TimeUnit.MILLISECONDS));
+
+      logger.info("{}: {}", label, timer.elapsed(TimeUnit.MILLISECONDS));
     }
 
     public abstract void doTest();
@@ -222,7 +224,8 @@ public class PerformanceTool {
     public void doTest() {
       try (NullableIntVector vector = new NullableIntVector(rowSchema.column(0), fixture.allocator());) {
         vector.allocateNew(ROW_COUNT);
-        NullableScalarWriter colWriter = new NullableScalarWriter(
+        ColumnMetadata colSchema = MetadataUtils.fromField(vector.getField());
+        NullableScalarWriter colWriter = new NullableScalarWriter(colSchema,
             vector, new IntColumnWriter(vector.getValuesVector()));
         TestWriterIndex index = new TestWriterIndex();
         colWriter.bindIndex(index);
@@ -270,9 +273,9 @@ public class PerformanceTool {
   }
 
   public static void main(String args[]) {
-    try (OperatorFixture fixture = OperatorFixture.standardFixture();) {
+    try (OperatorFixture fixture = OperatorFixture.standardFixture(null);) {
       for (int i = 0; i < 2; i++) {
-        System.out.println((i==0) ? "Warmup" : "Test run");
+        logger.info((i==0) ? "Warmup" : "Test run");
         new RequiredVectorTester(fixture).runTest();
         new RequiredWriterTester(fixture).runTest();
         new NullableVectorTester(fixture).runTest();
@@ -282,7 +285,7 @@ public class PerformanceTool {
       }
     } catch (Exception e) {
       // TODO Auto-generated catch block
-      e.printStackTrace();
+      logger.error("Exception", e);
     }
   }
 }

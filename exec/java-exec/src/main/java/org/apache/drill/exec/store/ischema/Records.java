@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.store.ischema;
 
 import static org.slf4j.LoggerFactory.getLogger;
@@ -25,9 +24,17 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.drill.exec.planner.types.DrillRelDataTypeSystem;
+import org.apache.drill.exec.store.dfs.WorkspaceSchemaFactory;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 
-import com.google.common.base.MoreObjects;
+import org.apache.drill.shaded.guava.com.google.common.base.MoreObjects;
+
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 
 public class Records {
 
@@ -131,9 +138,15 @@ public class Records {
           break;
         // 2.  SqlTypeName enumerators whose names (currently) do not match SQL's
         //     values for DATA_TYPE:
-        case CHAR:                this.DATA_TYPE = "CHARACTER";         break;
-        case VARCHAR:             this.DATA_TYPE = "CHARACTER VARYING"; break;
-        case VARBINARY:           this.DATA_TYPE = "BINARY VARYING";    break;
+        case CHAR:
+          this.DATA_TYPE = "CHARACTER";
+          break;
+        case VARCHAR:
+          this.DATA_TYPE = "CHARACTER VARYING";
+          break;
+        case VARBINARY:
+          this.DATA_TYPE = "BINARY VARYING";
+          break;
         case INTERVAL_YEAR:
         case INTERVAL_YEAR_MONTH:
         case INTERVAL_MONTH:
@@ -146,7 +159,9 @@ public class Records {
         case INTERVAL_HOUR_SECOND:
         case INTERVAL_MINUTE:
         case INTERVAL_MINUTE_SECOND:
-        case INTERVAL_SECOND:     this.DATA_TYPE = "INTERVAL";          break;
+        case INTERVAL_SECOND:
+          this.DATA_TYPE = "INTERVAL";
+          break;
         // 3:  SqlTypeName enumerators not yet seen and confirmed or handled.
         default:
           logger.warn( "Type not handled explicitly (code needs review): "
@@ -213,10 +228,18 @@ public class Records {
           this.CHARACTER_OCTET_LENGTH = null;
           // This NUMERIC_PRECISION is in bits since NUMERIC_PRECISION_RADIX is 2.
           switch ( sqlTypeName ) {
-            case TINYINT:  NUMERIC_PRECISION =  8; break;
-            case SMALLINT: NUMERIC_PRECISION = 16; break;
-            case INTEGER:  NUMERIC_PRECISION = 32; break;
-            case BIGINT:   NUMERIC_PRECISION = 64; break;
+            case TINYINT:
+              NUMERIC_PRECISION = 8;
+              break;
+            case SMALLINT:
+              NUMERIC_PRECISION = 16;
+              break;
+            case INTEGER:
+              NUMERIC_PRECISION = 32;
+              break;
+            case BIGINT:
+              NUMERIC_PRECISION = 64;
+              break;
             default:
               throw new AssertionError(
                   "Unexpected " + sqlTypeName.getClass().getName() + " value "
@@ -254,9 +277,15 @@ public class Records {
           this.CHARACTER_OCTET_LENGTH = null;
           // This NUMERIC_PRECISION is in bits since NUMERIC_PRECISION_RADIX is 2.
           switch ( sqlTypeName ) {
-            case REAL:   NUMERIC_PRECISION = 24; break;
-            case FLOAT:  NUMERIC_PRECISION = 24; break;
-            case DOUBLE: NUMERIC_PRECISION = 53; break;
+            case REAL:
+              NUMERIC_PRECISION = 24;
+              break;
+            case FLOAT:
+              NUMERIC_PRECISION = 24;
+              break;
+            case DOUBLE:
+              NUMERIC_PRECISION = 53;
+              break;
             default:
               throw new AssertionError(
                   "Unexpected type " + sqlTypeName + " in approximate-types branch" );
@@ -286,7 +315,9 @@ public class Records {
           this.INTERVAL_TYPE = null;
           this.INTERVAL_PRECISION = null;
           switch(sqlTypeName) {
-          case DATE: this.COLUMN_SIZE = 10; break;// yyyy-MM-dd
+          case DATE:
+            this.COLUMN_SIZE = 10;
+            break;// yyyy-MM-dd
           case TIME: this.COLUMN_SIZE = this.DATETIME_PRECISION == 0
               ? 8 // HH::mm::ss
               : 8 + 1 + this.DATETIME_PRECISION;
@@ -374,8 +405,12 @@ public class Records {
             switch(start) {
             case YEAR:
               switch(end) {
-              case YEAR: this.COLUMN_SIZE = INTERVAL_PRECISION + 2; break;// P..Y
-              case MONTH: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 5; break; // P..Y12M
+              case YEAR:
+                this.COLUMN_SIZE = INTERVAL_PRECISION + 2;
+                break;// P..Y
+              case MONTH:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 5;
+                break; // P..Y12M
               default:
                 throw new AssertionError("Unexpected interval type " + this.INTERVAL_TYPE + " in interval-types branch" );
               }
@@ -383,7 +418,9 @@ public class Records {
 
             case MONTH:
               switch(end) {
-              case MONTH: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 2; break; // P..M
+              case MONTH:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 2;
+                break; // P..M
               default:
                 throw new AssertionError("Unexpected interval type " + this.INTERVAL_TYPE + " in interval-types branch" );
               }
@@ -391,10 +428,18 @@ public class Records {
 
             case DAY:
               switch(end) {
-              case DAY: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 2; break; // P..D
-              case HOUR: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 6; break; // P..DT12H
-              case MINUTE: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 9; break; // P..DT12H60M
-              case SECOND: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 12 + extraSecondIntervalSize; break; // P..DT12H60M60....S
+              case DAY:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 2;
+                break; // P..D
+              case HOUR:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 6;
+                break; // P..DT12H
+              case MINUTE:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 9;
+                break; // P..DT12H60M
+              case SECOND:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 12 + extraSecondIntervalSize;
+                break; // P..DT12H60M60....S
               default:
                 throw new AssertionError("Unexpected interval type " + this.INTERVAL_TYPE + " in interval-types branch" );
               }
@@ -402,9 +447,15 @@ public class Records {
 
             case HOUR:
               switch(end) {
-              case HOUR: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 3; break; // PT..H
-              case MINUTE: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 6; break; // PT..H60M
-              case SECOND: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 9 + extraSecondIntervalSize; break; // PT..H12M60....S
+              case HOUR:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 3;
+                break; // PT..H
+              case MINUTE:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 6;
+                break; // PT..H60M
+              case SECOND:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 9 + extraSecondIntervalSize;
+                break; // PT..H12M60....S
               default:
                 throw new AssertionError("Unexpected interval type " + this.INTERVAL_TYPE + " in interval-types branch" );
               }
@@ -412,8 +463,12 @@ public class Records {
 
             case MINUTE:
               switch(end) {
-              case MINUTE: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 3; break; // PT...M
-              case SECOND: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 6 + extraSecondIntervalSize; break; // PT..M60....S
+              case MINUTE:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 3;
+                break; // PT...M
+              case SECOND:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 6 + extraSecondIntervalSize;
+                break; // PT..M60....S
               default:
                 throw new AssertionError("Unexpected interval type " + this.INTERVAL_TYPE + " in interval-types branch" );
               }
@@ -422,7 +477,9 @@ public class Records {
 
             case SECOND:
               switch(end) {
-              case SECOND: this.COLUMN_SIZE = this.INTERVAL_PRECISION + 3 + extraSecondIntervalSize; break; // PT....S
+              case SECOND:
+                this.COLUMN_SIZE = this.INTERVAL_PRECISION + 3 + extraSecondIntervalSize;
+                break; // PT....S
               default:
                 throw new AssertionError("Unexpected interval type " + this.INTERVAL_TYPE + " in interval-types branch" );
               }
@@ -492,6 +549,55 @@ public class Records {
       this.SCHEMA_OWNER = owner;
       this.TYPE = type;
       this.IS_MUTABLE = isMutable ? "YES" : "NO";
+    }
+  }
+
+  /** Pojo object for a record in INFORMATION_SCHEMA.FILES */
+  public static class File {
+
+    public final String SCHEMA_NAME;
+    public final String ROOT_SCHEMA_NAME;
+    public final String WORKSPACE_NAME;
+    public final String FILE_NAME;
+    public final String RELATIVE_PATH;
+    public final boolean IS_DIRECTORY;
+    public final boolean IS_FILE;
+    public final long LENGTH;
+    public final String OWNER;
+    public final String GROUP;
+    public final String PERMISSION;
+    public final Timestamp ACCESS_TIME;
+    public final Timestamp MODIFICATION_TIME;
+
+    public File(String schemaName, WorkspaceSchemaFactory.WorkspaceSchema wsSchema, FileStatus fileStatus) {
+      this.SCHEMA_NAME = schemaName;
+      this.ROOT_SCHEMA_NAME = wsSchema.getSchemaPath().get(0);
+      this.WORKSPACE_NAME = wsSchema.getName();
+      this.FILE_NAME = fileStatus.getPath().getName();
+      this.RELATIVE_PATH = Path.getPathWithoutSchemeAndAuthority(new Path(wsSchema.getDefaultLocation())).toUri()
+        .relativize(Path.getPathWithoutSchemeAndAuthority(fileStatus.getPath()).toUri()).getPath();
+      this.IS_DIRECTORY = fileStatus.isDirectory();
+      this.IS_FILE = fileStatus.isFile();
+      this.LENGTH = fileStatus.getLen();
+      this.OWNER = fileStatus.getOwner();
+      this.GROUP = fileStatus.getGroup();
+      this.PERMISSION = fileStatus.getPermission().toString();
+      this.ACCESS_TIME = getTimestampWithReplacedZone(fileStatus.getAccessTime());
+      this.MODIFICATION_TIME = getTimestampWithReplacedZone(fileStatus.getModificationTime());
+    }
+
+    /**
+     * Convert milliseconds into sql timestamp.
+     * Get the timestamp in UTC because Drill's internal TIMESTAMP stores time in UTC.
+     *
+     * @param ms milliseconds
+     * @return sql timestamp instance
+     */
+    private Timestamp getTimestampWithReplacedZone(long ms) {
+      return Timestamp.from(Instant.ofEpochMilli(ms)
+          .atZone(ZoneId.systemDefault())
+          .withZoneSameLocal(ZoneOffset.UTC)
+          .toInstant());
     }
   }
 }

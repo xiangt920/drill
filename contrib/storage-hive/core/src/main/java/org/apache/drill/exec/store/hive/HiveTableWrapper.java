@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -23,7 +23,6 @@ import java.util.Map;
 
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Order;
-import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.SerDeInfo;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 
@@ -31,7 +30,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 @JsonTypeName("table")
 public class HiveTableWrapper {
@@ -56,7 +55,7 @@ public class HiveTableWrapper {
   @JsonProperty
   public List<FieldSchemaWrapper> partitionKeys;
   @JsonProperty
-  public Map<String,String> parameters;
+  public Map<String, String> parameters;
   @JsonProperty
   public String viewOriginalText;
   @JsonProperty
@@ -128,6 +127,11 @@ public class HiveTableWrapper {
   @JsonIgnore
   public HiveTableWithColumnCache getTable() {
     return table;
+  }
+
+  @JsonIgnore
+  public Map<String, String> getParameters() {
+    return parameters;
   }
 
   @Override

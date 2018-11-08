@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -21,26 +21,27 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentMap;
+import java.util.Set;
 
 import org.apache.drill.common.AutoCloseables;
 import org.apache.drill.common.logical.StoragePluginConfig;
 
-import com.google.common.collect.LinkedListMultimap;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Multimaps;
+import org.apache.drill.shaded.guava.com.google.common.collect.LinkedListMultimap;
+import org.apache.drill.shaded.guava.com.google.common.collect.Multimap;
+import org.apache.drill.shaded.guava.com.google.common.collect.Multimaps;
+import org.apache.drill.common.map.CaseInsensitiveMap;
 
 /**
  * Holds maps to storage plugins. Supports name => plugin and config => plugin mappings.
  *
  * This is inspired by ConcurrentMap but provides a secondary key mapping that allows an alternative lookup mechanism.
  * The class is responsible for internally managing consistency between the two maps. This class is threadsafe.
+ * Name map is case insensitive.
  */
 class StoragePluginMap implements Iterable<Entry<String, StoragePlugin>>, AutoCloseable {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StoragePluginMap.class);
 
-  private final ConcurrentMap<String, StoragePlugin> nameMap = Maps.newConcurrentMap();
+  private final Map<String, StoragePlugin> nameMap = CaseInsensitiveMap.newConcurrentMap();
 
   @SuppressWarnings("unchecked")
   private final Multimap<StoragePluginConfig, StoragePlugin> configMap =
@@ -111,7 +112,12 @@ class StoragePluginMap implements Iterable<Entry<String, StoragePlugin>>, AutoCl
     return nameMap.entrySet().iterator();
   }
 
-  public Iterable<String> names() {
+  /**
+   * Returns set of plugin names of this {@link StoragePluginMap}
+   *
+   * @return plugin names
+   */
+  public Set<String> getNames() {
     return nameMap.keySet();
   }
 

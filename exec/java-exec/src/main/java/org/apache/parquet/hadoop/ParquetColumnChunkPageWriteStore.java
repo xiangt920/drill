@@ -7,18 +7,15 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.parquet.hadoop;
-
-import static org.apache.parquet.column.statistics.Statistics.getStatsBasedOnType;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -26,9 +23,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 import org.apache.drill.exec.store.parquet.ParquetDirectByteBufferAllocator;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.bytes.CapacityByteArrayOutputStream;
@@ -43,8 +40,6 @@ import org.apache.parquet.hadoop.CodecFactory.BytesCompressor;
 import org.apache.parquet.io.ParquetEncodingException;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.bytes.ByteBufferAllocator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This is a copy of ColumnChunkPageWriteStore from parquet library except of OutputStream that is used here.
@@ -122,7 +117,7 @@ public class ParquetColumnChunkPageWriteStore implements PageWriteStore, Closeab
       this.path = path;
       this.compressor = compressor;
       this.buf = new CapacityByteArrayOutputStream(initialSlabSize, maxCapacityHint, allocator);
-      this.totalStatistics = getStatsBasedOnType(this.path.getType());
+      this.totalStatistics = Statistics.createStats(this.path.getPrimitiveType());
     }
 
     @Override
@@ -229,11 +224,7 @@ public class ParquetColumnChunkPageWriteStore implements PageWriteStore, Closeab
         writer.writeDictionaryPage(dictionaryPage);
         // tracking the dictionary encoding is handled in writeDictionaryPage
       }
-      List<Encoding> encodings = Lists.newArrayList();
-      encodings.addAll(rlEncodings);
-      encodings.addAll(dlEncodings);
-      encodings.addAll(dataEncodings);
-      writer.writeDataPages(BytesInput.from(buf), uncompressedLength, compressedLength, totalStatistics, encodings);
+      writer.writeDataPages(BytesInput.from(buf), uncompressedLength, compressedLength, totalStatistics, rlEncodings, dlEncodings, dataEncodings);
       writer.endColumn();
       logger.debug(
           String.format(

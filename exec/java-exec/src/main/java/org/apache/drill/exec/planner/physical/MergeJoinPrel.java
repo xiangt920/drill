@@ -39,7 +39,7 @@ import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rex.RexNode;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 public class MergeJoinPrel  extends JoinPrel {
 
@@ -65,7 +65,8 @@ public class MergeJoinPrel  extends JoinPrel {
     if (PrelUtil.getSettings(getCluster()).useDefaultCosting()) {
       return super.computeSelfCost(planner, mq).multiplyBy(.1);
     }
-    if (joincategory == JoinCategory.CARTESIAN || joincategory == JoinCategory.INEQUALITY) {
+    if (joincategory == JoinCategory.CARTESIAN || joincategory == JoinCategory.INEQUALITY
+        || getJoinType() == JoinRelType.FULL) {
       return planner.getCostFactory().makeInfiniteCost();
     }
     double leftRowCount = mq.getRowCount(this.getLeft());

@@ -1,26 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
- Licensed to the Apache Software Foundation (ASF) under one or more
- contributor license agreements.  See the NOTICE file distributed with
- this work for additional information regarding copyright ownership.
- The ASF licenses this file to You under the Apache License, Version 2.0
- (the "License"); you may not use this file except in compliance with
- the License.  You may obtain a copy of the License at
 
-     http://www.apache.org/licenses/LICENSE-2.0
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <artifactId>drill-root</artifactId>
     <groupId>org.apache.drill</groupId>
-    <version>1.14.0-SNAPSHOT</version>
+    <version>1.15.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>drill-yarn</artifactId>
@@ -40,7 +43,7 @@
          </configuration>
       </plugin>
         <!-- See http://stackoverflow.com/questions/31173467/maven-cannot-find-git-dotgitdirectory -->
-  <!-- 
+  <!--
       <plugin>
         <groupId>pl.project13.maven</groupId>
         <artifactId>git-commit-id-plugin</artifactId>
@@ -62,7 +65,7 @@
      -->
     </plugins>
   </build>
-  
+
   <dependencies>
 
     <!-- For YARN client. -->
@@ -72,7 +75,7 @@
       <artifactId>hadoop-yarn-api</artifactId>
       <scope>compile</scope>
     </dependency>
-    
+
     <!--  Included as a reference because this seems to be the only
           way to pick up profile-specific jars. -->
 
@@ -95,15 +98,25 @@
     </dependency>
     <dependency>
       <groupId>org.apache.curator</groupId>
+      <artifactId>curator-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-framework</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-x-discovery</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.curator</groupId>
       <artifactId>curator-test</artifactId>
-      <scope>test</scope>
     </dependency>
 
     <!-- For configuration -->
     <dependency>
       <groupId>com.typesafe</groupId>
       <artifactId>config</artifactId>
-      <version>1.0.0</version>
     </dependency>
 
     <!-- Logging -->
@@ -113,7 +126,7 @@
       <version>1.0.13</version>
       <scope>test</scope>
     </dependency>
-    
+
     <!--  Testing -->
     <dependency>
       <groupId>org.apache.drill</groupId>
@@ -123,21 +136,4 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
-
-  <dependencyManagement>
-   <dependencies>
-	   <dependency>
-	      <groupId>org.apache.curator</groupId>
-	      <artifactId>curator-test</artifactId>
-	      <version>2.7.1</version>
-	      <scope>test</scope>
-	      <exclusions>
-          <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
-          </exclusion>
-	      </exclusions>
-	    </dependency>
-    </dependencies>
-  </dependencyManagement>
 </project>

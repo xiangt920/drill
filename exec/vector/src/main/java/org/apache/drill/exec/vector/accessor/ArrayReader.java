@@ -52,7 +52,7 @@ public interface ArrayReader extends ColumnReader {
   /**
    * Return the generic object reader for the array element. This
    * version <i>does not</i> position the reader, the client must
-   * call {@link setPosn()} to set the position. This form allows
+   * call {@link #setPosn(int)} to set the position. This form allows
    * up-front setup of the readers when convenient for the caller.
    */
 
@@ -60,6 +60,7 @@ public interface ArrayReader extends ColumnReader {
   ScalarReader scalar();
   TupleReader tuple();
   ArrayReader array();
+  VariantReader variant();
 
   /**
    * Set the array reader to read a given array entry. Not used for

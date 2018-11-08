@@ -6,9 +6,9 @@
 
 Apache Drill is a distributed MPP query layer that supports SQL and alternative query languages against NoSQL and Hadoop data storage systems.  It was inspired in part by [Google's Dremel](http://research.google.com/pubs/pub36632.html).  
 
-## Quickstart
+## Developers
 
-Please read INSTALL.md for setting up and running Apache Drill.
+Please read [Environment.md](docs/dev/Environment.md) for setting up and running Apache Drill. For complete developer documentation see [DevDocs.md](docs/dev/DevDocs.md).
 
 ## More Information
 Please see the [Apache Drill Website](http://drill.apache.org/) or the [Apache Drill Documentation](http://drill.apache.org/docs/) for more information including:
@@ -20,7 +20,10 @@ Please see the [Apache Drill Website](http://drill.apache.org/) or the [Apache D
 
 
 ## Join the community!
-Apache Drill is an Apache Foundation project and is seeking all types of contributions.  Please say hello on the Apache Drill mailing list or join our Google Hangouts for more information.  (More information can be found at the Apache Drill website).
+Apache Drill is an Apache Foundation project and is seeking all types of contributions.
+Please say hello on the [Apache Drill mailing list](http://drill.apache.org/mailinglists/)
+or join our [Google Hangouts](http://drill.apache.org/community-resources/) for more information.
+(More information can be found at the [Apache Drill website](http://drill.apache.org/)).
 
 ## Export Control
 This distribution includes cryptographic software. The country in which you currently reside may have restrictions on the import, possession, use, and/or re-export to another country, of encryption software. BEFORE using any encryption software, please check your country's laws, regulations and policies concerning the import, possession, or use, and re-export of encryption software, to see if this is permitted. See <http://www.wassenaar.org/> for more information.  

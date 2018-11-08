@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.expr.fn;
 
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.common.types.Types;
@@ -28,6 +28,7 @@ public class ValueReference {
   private boolean isConstant = false;
   private boolean isFieldReader = false;
   private boolean isComplexWriter = false;
+  private boolean isInternal = false;
 
   public ValueReference(MajorType type, String name) {
     Preconditions.checkNotNull(type);
@@ -50,6 +51,14 @@ public class ValueReference {
 
   public boolean isConstant() {
     return isConstant;
+  }
+
+  public void setInternal(boolean isInternal) {
+    this.isInternal = isInternal;
+  }
+
+  public boolean isInternal() {
+    return isInternal;
   }
 
   public boolean isFieldReader() {

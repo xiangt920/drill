@@ -20,6 +20,8 @@ package org.apache.drill.exec.server;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javax.tools.ToolProvider;
+
 import org.apache.drill.common.AutoCloseables;
 import org.apache.drill.common.StackTrace;
 import org.apache.drill.common.concurrent.ExtendedLatch;
@@ -51,8 +53,9 @@ import org.apache.drill.exec.work.WorkManager;
 import org.apache.zookeeper.Environment;
 
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint.State;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
+import org.slf4j.bridge.SLF4JBridgeHandler;
 
 /**
  * Starts, tracks and stops all the required services for a Drillbit daemon to work.
@@ -68,6 +71,9 @@ public class Drillbit implements AutoCloseable {
      */
     GuavaPatcher.patch();
     Environment.logEnv("Drillbit environment: ", logger);
+    // Jersey uses java.util.logging - create bridge: jul to slf4j
+    SLF4JBridgeHandler.removeHandlersForRootLogger();
+    SLF4JBridgeHandler.install();
   }
 
   public final static String SYSTEM_OPTIONS_NAME = "org.apache.drill.exec.server.Drillbit.system_options";
@@ -130,6 +136,12 @@ public class Drillbit implements AutoCloseable {
     final CaseInsensitiveMap<OptionDefinition> definitions,
     final RemoteServiceSet serviceSet,
     final ScanResult classpathScan) throws Exception {
+
+    //Must start up with access to JDK Compiler
+    if (ToolProvider.getSystemJavaCompiler() == null) {
+      throw new DrillbitStartupException("JDK Java compiler not available. Ensure Drill is running with the java executable from a JDK and not a JRE");
+    }
+
     gracePeriod = config.getInt(ExecConstants.GRACE_PERIOD);
     final Stopwatch w = Stopwatch.createStarted();
     logger.debug("Construction started.");
@@ -180,7 +192,7 @@ public class Drillbit implements AutoCloseable {
     if (profileStoreProvider != storeProvider) {
       profileStoreProvider.start();
     }
-    final DrillbitEndpoint md = engine.start();
+    DrillbitEndpoint md = engine.start();
     manager.start(md, engine.getController(), engine.getDataConnectionCreator(), coord, storeProvider, profileStoreProvider);
     @SuppressWarnings("resource")
     final DrillbitContext drillbitContext = manager.getContext();
@@ -189,11 +201,14 @@ public class Drillbit implements AutoCloseable {
     drillbitContext.getOptionManager().init();
     javaPropertiesToSystemOptions();
     manager.getContext().getRemoteFunctionRegistry().init(context.getConfig(), storeProvider, coord);
-    registrationHandle = coord.register(md);
     webServer.start();
-
+    //Discovering HTTP port (in case of port hunting)
+    if (webServer.isRunning()) {
+      int httpPort = getWebServerPort();
+      md = md.toBuilder().setHttpPort(httpPort).build();
+    }
+    registrationHandle = coord.register(md);
     // Must start the RM after the above since it needs to read system options.
-
     drillbitContext.startRM();
 
     Runtime.getRuntime().addShutdownHook(new ShutdownThread(this, new StackTrace()));
@@ -206,6 +221,12 @@ public class Drillbit implements AutoCloseable {
   public void waitForGracePeriod() {
     ExtendedLatch exitLatch = new ExtendedLatch();
     exitLatch.awaitUninterruptibly(gracePeriod);
+  }
+
+  private void updateState(State state) {
+    if ( registrationHandle != null) {
+      coord.update(registrationHandle, state);
+    }
   }
 
   /*
@@ -225,14 +246,14 @@ public class Drillbit implements AutoCloseable {
     }
     final Stopwatch w = Stopwatch.createStarted();
     logger.debug("Shutdown begun.");
-    registrationHandle = coord.update(registrationHandle, State.QUIESCENT);
+    updateState(State.QUIESCENT);
     stateManager.setState(DrillbitState.GRACE);
     waitForGracePeriod();
     stateManager.setState(DrillbitState.DRAINING);
     // wait for all the in-flight queries to finish
     manager.waitToExit(forcefulShutdown);
     //safe to exit
-    registrationHandle = coord.update(registrationHandle, State.OFFLINE);
+    updateState(State.OFFLINE);
     stateManager.setState(DrillbitState.OFFLINE);
     if(quiescentMode == true) {
       return;
@@ -343,6 +364,11 @@ public class Drillbit implements AutoCloseable {
 
     @Override
     public void run() {
+      if (FailureUtils.hadUnrecoverableFailure()) {
+        // We cannot close drill cleanly in this case.
+        return;
+      }
+
       logger.info("Received shutdown request.");
       try {
         /*
@@ -391,7 +417,11 @@ public class Drillbit implements AutoCloseable {
     try {
       bit = new Drillbit(config, validators, remoteServiceSet, classpathScan);
     } catch (final Exception ex) {
-      throw new DrillbitStartupException("Failure while initializing values in Drillbit.", ex);
+      if (ex instanceof DrillbitStartupException) {
+        throw (DrillbitStartupException) ex;
+      } else {
+        throw new DrillbitStartupException("Failure while initializing values in Drillbit.", ex);
+      }
     }
 
     try {
@@ -432,5 +462,4 @@ public class Drillbit implements AutoCloseable {
     // return as-is
     return s;
   }
-
 }

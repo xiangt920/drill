@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -20,8 +20,9 @@ package org.apache.drill.exec.record;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 import org.apache.drill.categories.VectorTest;
 import org.apache.drill.common.config.DrillConfig;
@@ -46,8 +47,8 @@ import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.vector.ValueVector;
 import org.junit.Test;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 import org.junit.experimental.categories.Category;
 import org.mockito.Mockito;
 
@@ -55,6 +56,7 @@ import java.util.List;
 
 @Category(VectorTest.class)
 public class TestRecordIterator extends PopUnitTestBase {
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TestRecordIterator.class);
   DrillConfig c = DrillConfig.create();
 
   @Test
@@ -64,7 +66,7 @@ public class TestRecordIterator extends PopUnitTestBase {
 
     final PhysicalPlanReader reader = PhysicalPlanReaderTestFactory.defaultPhysicalPlanReader(c);
 
-    final String planStr = Files.toString(DrillFileUtils.getResourceAsFile("/record/test_recorditerator.json"), Charsets.UTF_8);
+    final String planStr = Files.asCharSource(DrillFileUtils.getResourceAsFile("/record/test_recorditerator.json"), Charsets.UTF_8).read();
 
     final PhysicalPlan plan = reader.readPhysicalPlan(planStr);
     final FunctionImplementationRegistry registry = new FunctionImplementationRegistry(c);
@@ -106,11 +108,11 @@ public class TestRecordIterator extends PopUnitTestBase {
     assertEquals(11112, totalRecords);
     try {
       iter.mark();
-      assertTrue(false);
+      fail();
     } catch (UnsupportedOperationException e) {}
     try {
       iter.reset();
-      assertTrue(false);
+      fail();
     } catch (UnsupportedOperationException e) {}
   }
 
@@ -120,7 +122,7 @@ public class TestRecordIterator extends PopUnitTestBase {
     final UserClientConnection connection = Mockito.mock(UserClientConnection.class);
 
     final PhysicalPlanReader reader = PhysicalPlanReaderTestFactory.defaultPhysicalPlanReader(c);
-    final String planStr = Files.toString(DrillFileUtils.getResourceAsFile("/record/test_recorditerator.json"), Charsets.UTF_8);
+    final String planStr = Files.asCharSource(DrillFileUtils.getResourceAsFile("/record/test_recorditerator.json"), Charsets.UTF_8).read();
 
     final PhysicalPlan plan = reader.readPhysicalPlan(planStr);
     final FunctionImplementationRegistry registry = new FunctionImplementationRegistry(c);
@@ -134,7 +136,7 @@ public class TestRecordIterator extends PopUnitTestBase {
         OperatorUtilities.getChildCount(dummyPop));
     OperatorStats stats = exec.getContext().getStats().newOperatorStats(def, exec.getContext().getAllocator());
     RecordIterator iter = new RecordIterator(singleBatch, null, exec.getContext().newOperatorContext(dummyPop, stats), 0, null);
-    List<ValueVector> vectors = null;
+    List<ValueVector> vectors;
     // batche sizes
     // 1, 100, 10, 10000, 1, 1000
     // total = 11112
@@ -318,7 +320,7 @@ public class TestRecordIterator extends PopUnitTestBase {
         final Integer v = (Integer)o;
         result &= (v == expected);
       } else {
-        System.out.println(String.format("Found wrong type %s at position %d", o.getClass(), position));
+        logger.error("Found wrong type {} at position {}", o.getClass(), position);
         result = false;
         break;
       }

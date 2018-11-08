@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 <@pp.dropOutputFile />
 <@pp.changeOutputFile name="/org/apache/drill/exec/vector/complex/impl/AbstractFieldReader.java" />
 
@@ -30,10 +29,9 @@ package org.apache.drill.exec.vector.complex.impl;
  * This class is generated using freemarker and the ${.template_name} template.
  */
 @SuppressWarnings("unused")
-abstract class AbstractFieldReader extends AbstractBaseReader implements FieldReader{
+abstract class AbstractFieldReader extends AbstractBaseReader implements FieldReader {
 
-  AbstractFieldReader(){
-    super();
+  AbstractFieldReader() {
   }
 
   /**
@@ -45,83 +43,86 @@ abstract class AbstractFieldReader extends AbstractBaseReader implements FieldRe
   }
 
   <#list ["Object", "BigDecimal", "Integer", "Long", "Boolean",
-          "Character", "DateTime", "Period", "Double", "Float",
+          "Character", "LocalDate", "LocalTime", "LocalDateTime", "Period", "Double", "Float",
           "Text", "String", "Byte", "Short", "byte[]"] as friendlyType>
   <#assign safeType=friendlyType />
   <#if safeType=="byte[]"><#assign safeType="ByteArray" /></#if>
 
-  public ${friendlyType} read${safeType}(int arrayIndex){
+  public ${friendlyType} read${safeType}(int arrayIndex) {
     fail("read${safeType}(int arrayIndex)");
     return null;
   }
 
-  public ${friendlyType} read${safeType}(){
+  public ${friendlyType} read${safeType}() {
     fail("read${safeType}()");
     return null;
   }
 
   </#list>
 
-  public void copyAsValue(MapWriter writer){
+  public void copyAsValue(MapWriter writer) {
     fail("CopyAsValue MapWriter");
   }
-  public void copyAsField(String name, MapWriter writer){
+  public void copyAsField(String name, MapWriter writer) {
     fail("CopyAsField MapWriter");
   }
 
-  public void copyAsField(String name, ListWriter writer){
+  public void copyAsField(String name, ListWriter writer) {
     fail("CopyAsFieldList");
   }
 
   <#list vv.types as type><#list type.minor as minor><#assign name = minor.class?cap_first />
   <#assign boxedType = (minor.boxedType!type.boxedType) />
 
-  public void read(${name}Holder holder){
+  public void read(${name}Holder holder) {
     fail("${name}");
   }
 
-  public void read(Nullable${name}Holder holder){
+  public void read(Nullable${name}Holder holder) {
     fail("${name}");
   }
 
-  public void read(int arrayIndex, ${name}Holder holder){
+  public void read(int arrayIndex, ${name}Holder holder) {
     fail("Repeated${name}");
   }
 
-  public void read(int arrayIndex, Nullable${name}Holder holder){
+  public void read(int arrayIndex, Nullable${name}Holder holder) {
     fail("Repeated${name}");
   }
 
-  public void copyAsValue(${name}Writer writer){
+  public void copyAsValue(${name}Writer writer) {
     fail("CopyAsValue${name}");
   }
-  public void copyAsField(String name, ${name}Writer writer){
+
+  <#if minor.class == "VarDecimal">
+  public void copyAsField(String name, ${name}Writer writer, int scale, int precision) {
+  <#else>
+  public void copyAsField(String name, ${name}Writer writer) {
+  </#if>
     fail("CopyAsField${name}");
   }
   </#list></#list>
 
-  public FieldReader reader(String name){
+  public void read(int arrayIndex, UntypedNullHolder holder) {
+      fail("UntypedNullHolder");
+  }
+
+  public FieldReader reader(String name) {
     fail("reader(String name)");
     return null;
   }
 
-  public FieldReader reader(){
+  public FieldReader reader() {
     fail("reader()");
     return null;
-
   }
 
-  public int size(){
+  public int size() {
     fail("size()");
     return -1;
   }
 
-  private void fail(String name){
+  private void fail(String name) {
     throw new IllegalArgumentException(String.format("You tried to read a [%s] type when you are using a field reader of type [%s].", name, this.getClass().getSimpleName()));
   }
-
-
 }
-
-
-

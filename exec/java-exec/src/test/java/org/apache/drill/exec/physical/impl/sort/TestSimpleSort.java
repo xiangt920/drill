@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -42,8 +42,8 @@ import org.apache.drill.exec.vector.IntVector;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 
 import org.junit.experimental.categories.Category;
 import org.mockito.Mockito;
@@ -59,7 +59,7 @@ public class TestSimpleSort extends ExecTest {
     final UserClientConnection connection = Mockito.mock(UserClientConnection.class);
 
     final PhysicalPlanReader reader = PhysicalPlanReaderTestFactory.defaultPhysicalPlanReader(c);
-    final PhysicalPlan plan = reader.readPhysicalPlan(Files.toString(DrillFileUtils.getResourceAsFile("/sort/one_key_sort.json"), Charsets.UTF_8));
+    final PhysicalPlan plan = reader.readPhysicalPlan(Files.asCharSource(DrillFileUtils.getResourceAsFile("/sort/one_key_sort.json"), Charsets.UTF_8).read());
     final FunctionImplementationRegistry registry = new FunctionImplementationRegistry(c);
     final FragmentContextImpl context = new FragmentContextImpl(bitContext, PlanFragment.getDefaultInstance(), connection, registry);
     final SimpleRootExec exec = new SimpleRootExec(ImplCreator.getExec(context, (FragmentRoot) plan.getSortedOperators(false).iterator().next()));
@@ -84,8 +84,6 @@ public class TestSimpleSort extends ExecTest {
       }
     }
 
-    System.out.println(String.format("Sorted %,d records in %d batches.", recordCount, batchCount));
-
     if(context.getExecutorState().getFailureCause() != null) {
       throw context.getExecutorState().getFailureCause();
     }
@@ -98,7 +96,7 @@ public class TestSimpleSort extends ExecTest {
     final UserClientConnection connection = Mockito.mock(UserClientConnection.class);
 
     final PhysicalPlanReader reader = PhysicalPlanReaderTestFactory.defaultPhysicalPlanReader(c);
-    final PhysicalPlan plan = reader.readPhysicalPlan(Files.toString(DrillFileUtils.getResourceAsFile("/sort/two_key_sort.json"), Charsets.UTF_8));
+    final PhysicalPlan plan = reader.readPhysicalPlan(Files.asCharSource(DrillFileUtils.getResourceAsFile("/sort/two_key_sort.json"), Charsets.UTF_8).read());
     final FunctionImplementationRegistry registry = new FunctionImplementationRegistry(c);
     final FragmentContextImpl context = new FragmentContextImpl(bitContext, PlanFragment.getDefaultInstance(), connection, registry);
     final SimpleRootExec exec = new SimpleRootExec(ImplCreator.getExec(context, (FragmentRoot) plan.getSortedOperators(false).iterator().next()));
@@ -129,8 +127,6 @@ public class TestSimpleSort extends ExecTest {
         assertTrue(previousLong >= a2.get(i));
       }
     }
-
-    System.out.println(String.format("Sorted %,d records in %d batches.", recordCount, batchCount));
 
     if(context.getExecutorState().getFailureCause() != null) {
       throw context.getExecutorState().getFailureCause();

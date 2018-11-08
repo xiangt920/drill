@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,15 +17,12 @@
  */
 package org.apache.drill.exec.store.bson;
 
-import io.netty.buffer.DrillBuf;
-
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.util.List;
 
 import org.apache.drill.common.exceptions.DrillRuntimeException;
-import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.expression.PathSegment;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.exec.expr.holders.BigIntHolder;
@@ -38,14 +35,15 @@ import org.apache.drill.exec.physical.base.GroupScan;
 import org.apache.drill.exec.vector.complex.impl.MapOrListWriterImpl;
 import org.apache.drill.exec.vector.complex.writer.BaseWriter;
 import org.apache.drill.exec.vector.complex.writer.BaseWriter.ComplexWriter;
-import org.apache.drill.exec.vector.complex.writer.DateWriter;
-import org.apache.drill.exec.vector.complex.writer.TimeWriter;
+import org.apache.drill.exec.vector.complex.writer.TimeStampWriter;
 import org.bson.BsonBinary;
 import org.bson.BsonReader;
 import org.bson.BsonType;
 import org.joda.time.DateTime;
 
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+
+import io.netty.buffer.DrillBuf;
 
 public class BsonRecordReader {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BsonRecordReader.class);
@@ -55,6 +53,8 @@ public class BsonRecordReader {
   private final boolean readNumbersAsDouble;
   protected DrillBuf workBuf;
   private String currentFieldName;
+  // Used for error context
+  private BsonReader reader;
 
   public BsonRecordReader(DrillBuf managedBuf, boolean allTextMode, boolean readNumbersAsDouble) {
     this(managedBuf, GroupScan.ALL_COLUMNS, readNumbersAsDouble);
@@ -68,6 +68,7 @@ public class BsonRecordReader {
   }
 
   public void write(ComplexWriter writer, BsonReader reader) throws IOException {
+    this.reader = reader;
     reader.readStartDocument();
     BsonType readBsonType = reader.getCurrentBsonType();
     switch (readBsonType) {
@@ -247,14 +248,14 @@ public class BsonRecordReader {
   }
 
   private void writeTimeStamp(int timestamp, final MapOrListWriterImpl writer, String fieldName, boolean isList) {
-    DateTime dateTime = new DateTime(timestamp);
-    TimeWriter t;
+    DateTime dateTime = new DateTime(timestamp*1000L);
+    TimeStampWriter t;
     if (isList == false) {
-      t = writer.map.time(fieldName);
+      t = writer.map.timeStamp(fieldName);
     } else {
-      t = writer.list.time();
+      t = writer.list.timeStamp();
     }
-    t.writeTime((int) (dateTime.withZoneRetainFields(org.joda.time.DateTimeZone.UTC).getMillis()));
+    t.writeTimeStamp((int) (dateTime.withZoneRetainFields(org.joda.time.DateTimeZone.UTC).getMillis()));
   }
 
   private void writeString(String readString, final MapOrListWriterImpl writer, String fieldName, boolean isList) {
@@ -297,13 +298,13 @@ public class BsonRecordReader {
 
   private void writeDateTime(long readDateTime, final MapOrListWriterImpl writer, String fieldName, boolean isList) {
     DateTime date = new DateTime(readDateTime);
-    DateWriter dt;
+    TimeStampWriter dt;
     if (isList == false) {
-      dt = writer.map.date(fieldName);
+      dt = writer.map.timeStamp(fieldName);
     } else {
-      dt = writer.list.date();
+      dt = writer.list.timeStamp();
     }
-    dt.writeDate(date.withZoneRetainFields(org.joda.time.DateTimeZone.UTC).getMillis());
+    dt.writeTimeStamp(date.withZoneRetainFields(org.joda.time.DateTimeZone.UTC).getMillis());
   }
 
   private void writeBoolean(boolean readBoolean, final MapOrListWriterImpl writer, String fieldName, boolean isList) {
@@ -365,17 +366,20 @@ public class BsonRecordReader {
     }
   }
 
-  public UserException.Builder getExceptionWithContext(UserException.Builder exceptionBuilder, String field,
-      String msg, Object... args) {
-    return null;
-  }
-
-  public UserException.Builder getExceptionWithContext(Throwable exception, String field, String msg, Object... args) {
-    return null;
-  }
-
   private void ensure(final int length) {
     workBuf = workBuf.reallocIfNeeded(length);
   }
 
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder("BsonRecordReader[");
+    if (reader != null) {
+      sb.append("Name=")
+          .append(reader.getCurrentName())
+          .append(", Type=")
+          .append(reader.getCurrentBsonType());
+    }
+    sb.append(']');
+    return sb.toString();
+  }
 }

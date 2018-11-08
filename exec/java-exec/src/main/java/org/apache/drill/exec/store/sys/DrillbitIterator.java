@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -21,6 +21,7 @@ import java.util.Iterator;
 
 import org.apache.drill.exec.ops.ExecutorFragmentContext;
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
+import org.apache.drill.exec.store.pojo.NonNullable;
 
 public class DrillbitIterator implements Iterator<Object> {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DrillbitIterator.class);
@@ -34,12 +35,17 @@ public class DrillbitIterator implements Iterator<Object> {
   }
 
   public static class DrillbitInstance {
+    @NonNullable
     public String hostname;
     public int user_port;
     public int control_port;
     public int data_port;
+    public int http_port;
+    @NonNullable
     public boolean current;
+    @NonNullable
     public String version;
+    @NonNullable
     public String state;
   }
 
@@ -54,6 +60,7 @@ public class DrillbitIterator implements Iterator<Object> {
     DrillbitInstance i = new DrillbitInstance();
     i.current = isCurrent(ep);
     i.hostname = ep.getAddress();
+    i.http_port = ep.getHttpPort();
     i.user_port = ep.getUserPort();
     i.control_port = ep.getControlPort();
     i.data_port = ep.getDataPort();

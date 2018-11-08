@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.physical.impl.mergereceiver;
 
 import static org.junit.Assert.assertEquals;
@@ -37,8 +36,8 @@ import org.apache.drill.exec.server.RemoteServiceSet;
 import org.apache.drill.exec.vector.ValueVector;
 import org.junit.Test;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 import org.junit.experimental.categories.Category;
 
 @Category(OperatorTest.class)
@@ -57,8 +56,8 @@ public class TestMergingReceiver extends PopUnitTestBase {
       bit2.run();
       client.connect();
       final List<QueryDataBatch> results = client.runQuery(org.apache.drill.exec.proto.UserBitShared.QueryType.PHYSICAL,
-        Files.toString(DrillFileUtils.getResourceAsFile("/mergerecv/merging_receiver.json"),
-          Charsets.UTF_8));
+        Files.asCharSource(DrillFileUtils.getResourceAsFile("/mergerecv/merging_receiver.json"),
+          Charsets.UTF_8).read());
       int count = 0;
       final RecordBatchLoader batchLoader = new RecordBatchLoader(client.getAllocator());
       // print the results
@@ -88,8 +87,8 @@ public class TestMergingReceiver extends PopUnitTestBase {
       client.connect();
       final List<QueryDataBatch> results =
           client.runQuery(org.apache.drill.exec.proto.UserBitShared.QueryType.PHYSICAL,
-              Files.toString(DrillFileUtils.getResourceAsFile("/mergerecv/multiple_providers.json"),
-                  Charsets.UTF_8));
+              Files.asCharSource(DrillFileUtils.getResourceAsFile("/mergerecv/multiple_providers.json"),
+                  Charsets.UTF_8).read());
       int count = 0;
       final RecordBatchLoader batchLoader = new RecordBatchLoader(client.getAllocator());
       // print the results
@@ -137,8 +136,8 @@ public class TestMergingReceiver extends PopUnitTestBase {
       client.connect();
       final List<QueryDataBatch> results =
           client.runQuery(org.apache.drill.exec.proto.UserBitShared.QueryType.PHYSICAL,
-              Files.toString(DrillFileUtils.getResourceAsFile("/mergerecv/empty_batch.json"),
-                  Charsets.UTF_8));
+              Files.asCharSource(DrillFileUtils.getResourceAsFile("/mergerecv/empty_batch.json"),
+                  Charsets.UTF_8).read());
       int count = 0;
       final RecordBatchLoader batchLoader = new RecordBatchLoader(client.getAllocator());
       // print the results
@@ -167,8 +166,8 @@ public class TestMergingReceiver extends PopUnitTestBase {
       client.connect();
       final List<QueryDataBatch> results =
           client.runQuery(org.apache.drill.exec.proto.UserBitShared.QueryType.PHYSICAL,
-              Files.toString(DrillFileUtils.getResourceAsFile("/mergerecv/empty_batch_noschema.json"),
-                  Charsets.UTF_8));
+              Files.asCharSource(DrillFileUtils.getResourceAsFile("/mergerecv/empty_batch_noschema.json"),
+                  Charsets.UTF_8).read());
       int count = 0;
       final RecordBatchLoader batchLoader = new RecordBatchLoader(client.getAllocator());
       // print the results
@@ -197,8 +196,8 @@ public class TestMergingReceiver extends PopUnitTestBase {
       client.connect();
       final List<QueryDataBatch> results =
           client.runQuery(org.apache.drill.exec.proto.UserBitShared.QueryType.PHYSICAL,
-              Files.toString(DrillFileUtils.getResourceAsFile("/mergerecv/multiple_providers_empty_batches.json"),
-                  Charsets.UTF_8));
+              Files.asCharSource(DrillFileUtils.getResourceAsFile("/mergerecv/multiple_providers_empty_batches.json"),
+                  Charsets.UTF_8).read());
       int count = 0;
       final RecordBatchLoader batchLoader = new RecordBatchLoader(client.getAllocator());
       // print the results

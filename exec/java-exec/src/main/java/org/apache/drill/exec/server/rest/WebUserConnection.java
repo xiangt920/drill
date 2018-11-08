@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,13 +17,15 @@
  */
 package org.apache.drill.exec.server.rest;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import org.apache.drill.exec.util.ValueVectorElementFormatter;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.DrillBuf;
 import io.netty.channel.ChannelFuture;
 import org.apache.drill.common.exceptions.UserException;
+import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.physical.impl.materialize.QueryWritableBatch;
 import org.apache.drill.exec.proto.GeneralRPCProtos.Ack;
@@ -73,20 +75,20 @@ public class WebUserConnection extends AbstractDisposableUserClientConnection im
 
   @Override
   public void sendData(RpcOutcomeListener<Ack> listener, QueryWritableBatch result) {
-    // Check if there is any data or not. There can be overflow here but DrillBuf doesn't support allocating with
+    // There can be overflow here but DrillBuf doesn't support allocating with
     // bytes in long. Hence we are just preserving the earlier behavior and logging debug log for the case.
     final int dataByteCount = (int) result.getByteCount();
 
-    if (dataByteCount <= 0) {
+    if (dataByteCount < 0) {
       if (logger.isDebugEnabled()) {
-        logger.debug("Either no data received in this batch or there is BufferOverflow in dataByteCount: {}",
+        logger.debug("There is BufferOverflow in dataByteCount: {}",
             dataByteCount);
       }
       listener.success(Acks.OK, null);
       return;
     }
 
-    // If here that means there is some data for sure. Create a ByteBuf with all the data in it.
+    // Create a ByteBuf with all the data in it.
     final int rows = result.getHeader().getRowCount();
     final BufferAllocator allocator = webSessionResources.getAllocator();
     final DrillBuf bufferWithData = allocator.buffer(dataByteCount);
@@ -106,13 +108,15 @@ public class WebUserConnection extends AbstractDisposableUserClientConnection im
         for (int i = 0; i < loader.getSchema().getFieldCount(); ++i) {
           columns.add(loader.getSchema().getColumn(i).getName());
         }
+        ValueVectorElementFormatter formatter = new ValueVectorElementFormatter(webSessionResources.getSession().getOptions());
         for (int i = 0; i < rows; ++i) {
           final Map<String, String> record = Maps.newHashMap();
           for (VectorWrapper<?> vw : loader) {
             final String field = vw.getValueVector().getMetadata().getNamePart().getName();
+            final TypeProtos.MinorType fieldMinorType = vw.getValueVector().getMetadata().getMajorType().getMinorType();
             final Accessor accessor = vw.getValueVector().getAccessor();
             final Object value = i < accessor.getValueCount() ? accessor.getObject(i) : null;
-            final String display = value == null ? null : value.toString();
+            final String display = value == null ? null : formatter.format(value, fieldMinorType);
             record.put(field, display);
           }
           results.add(record);

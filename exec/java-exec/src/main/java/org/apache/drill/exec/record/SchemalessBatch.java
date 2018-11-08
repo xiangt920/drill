@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.record;
 
 
@@ -104,5 +103,18 @@ public class SchemalessBatch implements CloseableRecordBatch {
   @Override
   public void close() throws Exception {
     // This is present to match BatchCreator#getBatch() returning type.
+  }
+
+  @Override
+  public VectorContainer getContainer() { return null; }
+
+  @Override
+  public boolean hasFailed() {
+    return false;
+  }
+
+  @Override
+  public void dump() {
+    logger.error("SchemalessBatch[]");
   }
 }

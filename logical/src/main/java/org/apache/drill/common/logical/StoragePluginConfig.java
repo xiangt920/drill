@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,20 +18,36 @@
 package org.apache.drill.common.logical;
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
-
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property="type")
-public abstract class StoragePluginConfig{
+public abstract class StoragePluginConfig {
 
-  private boolean enabled = true;
+  private Boolean enabled;
 
+  /**
+   * Check for enabled status of the plugin
+   *
+   * @return true, when enabled. False, when disabled or status is absent
+   */
   public boolean isEnabled() {
-    return enabled;
+    return enabled != null && enabled;
   }
 
-  public void setEnabled(boolean enabled) {
+
+  public void setEnabled(Boolean enabled) {
     this.enabled = enabled;
+  }
+
+  /**
+   * Allows to check whether the enabled status is present in config
+   *
+   * @return true if enabled status is present, false otherwise
+   */
+  @JsonIgnore
+  public boolean isEnabledStatusPresent() {
+    return enabled != null;
   }
 
   @Override
@@ -39,5 +55,9 @@ public abstract class StoragePluginConfig{
 
   @Override
   public abstract int hashCode();
+
+  public String getValue(String key) {
+    return null;
+  }
 
 }

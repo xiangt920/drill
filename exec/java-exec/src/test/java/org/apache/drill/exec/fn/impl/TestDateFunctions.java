@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * <p>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,8 +17,8 @@
  */
 package org.apache.drill.exec.fn.impl;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 import mockit.integration.junit4.JMockit;
 import org.apache.drill.categories.SqlFunctionTest;
 import org.apache.drill.categories.UnlikelyTest;
@@ -54,7 +54,7 @@ public class TestDateFunctions extends PopUnitTestBase {
       bit.run();
       client.connect();
       List<QueryDataBatch> results = client.runQuery(org.apache.drill.exec.proto.UserBitShared.QueryType.PHYSICAL,
-        Files.toString(DrillFileUtils.getResourceAsFile(physicalPlan), Charsets.UTF_8)
+        Files.asCharSource(DrillFileUtils.getResourceAsFile(physicalPlan), Charsets.UTF_8).read()
           .replace("#{TEST_FILE}", resourceFile));
 
       RecordBatchLoader batchLoader = new RecordBatchLoader(bit.getContext().getAllocator());
@@ -65,9 +65,7 @@ public class TestDateFunctions extends PopUnitTestBase {
 
       int i = 0;
       for (VectorWrapper<?> v : batchLoader) {
-
         ValueVector.Accessor accessor = v.getValueVector().getAccessor();
-        System.out.println(accessor.getObject(0));
         assertEquals(expectedResults[i++], accessor.getObject(0).toString());
       }
 

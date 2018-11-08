@@ -6,20 +6,19 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * <p/>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.physical.unit;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.apache.drill.test.DrillTestWrapper;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
@@ -33,6 +32,7 @@ import org.apache.drill.exec.store.dfs.DrillFileSystem;
 import org.apache.drill.exec.store.parquet.ParquetDirectByteBufferAllocator;
 import org.apache.drill.exec.store.parquet.ParquetReaderUtility;
 import org.apache.drill.exec.store.parquet.columnreaders.ParquetRecordReader;
+import org.apache.drill.test.PhysicalOpUnitTestBase;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.CodecFactory;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -92,14 +92,14 @@ public class MiniPlanUnitTestBase extends PhysicalOpUnitTestBase {
      * @param baselineValues
      * @return
      */
-    public MiniPlanTestBuilder baselineValues(Object ... baselineValues) {
+    public MiniPlanTestBuilder baselineValues(Object... baselineValues) {
       if (baselineRecords == null) {
         baselineRecords = new ArrayList<>();
       }
 
       Map<String, Object> ret = new HashMap<>();
       int i = 0;
-      Preconditions.checkArgument(expectSchema != null , "Expected schema should be set before specify baseline values.");
+      Preconditions.checkArgument(expectSchema != null, "Expected schema should be set before specify baseline values.");
       Preconditions.checkArgument(baselineValues.length == expectSchema.getFieldCount(),
           "Must supply the same number of baseline values as columns in expected schema.");
 
@@ -152,7 +152,7 @@ public class MiniPlanUnitTestBase extends PhysicalOpUnitTestBase {
       }
       Map<String, List<Object>> actualSuperVectors = new TreeMap<String, List<Object>>();
 
-      int actualBatchNum = DrillTestWrapper.addToCombinedVectorResults(batchIterator, expectSchema, null, null, actualSuperVectors);
+      int actualBatchNum = DrillTestWrapper.addToCombinedVectorResults(batchIterator, expectSchema, null, null, actualSuperVectors, null);
       if (expectBatchNum != null) {
         if (expectBatchNum != actualBatchNum) {
           throw new AssertionError(String.format("Expected %s batches from operator tree. But operators return %s batch!", expectBatchNum, actualBatchNum));
@@ -172,7 +172,7 @@ public class MiniPlanUnitTestBase extends PhysicalOpUnitTestBase {
   }
 
   /**
-   * Similar to {@link OperatorTestBuilder}, build a physical operator (RecordBatch) and specify its input record batches.
+   * Similar to {@link LegacyOperatorTestBuilder}, build a physical operator (RecordBatch) and specify its input record batches.
    * The input record batch could be a non-scan operator by calling {@link PopBuilder#addInputAsChild},
    * or a scan operator by calling {@link PopBuilder#addJsonScanAsChild()} if it's SCAN operator.
    *
@@ -231,7 +231,7 @@ public class MiniPlanUnitTestBase extends PhysicalOpUnitTestBase {
     protected long maxAllocation = MAX_ALLOCATION;
 
     final private List<RecordBatch> inputs = Lists.newArrayList();
-    final PopBuilder parent ;
+    final PopBuilder parent;
 
     public PopBuilder() {
       this.parent = null;
@@ -335,13 +335,13 @@ public class MiniPlanUnitTestBase extends PhysicalOpUnitTestBase {
     }
 
     @SuppressWarnings("unchecked")
-    public T columnsToRead(SchemaPath ... columnsToRead) {
+    public T columnsToRead(SchemaPath... columnsToRead) {
       this.columnsToRead = Lists.newArrayList(columnsToRead);
       return (T) this;
     }
 
     @SuppressWarnings("unchecked")
-    public T columnsToRead(String ... columnsToRead) {
+    public T columnsToRead(String... columnsToRead) {
       this.columnsToRead = Lists.newArrayList();
 
       for (String column : columnsToRead) {

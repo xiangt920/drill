@@ -15,10 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.test;
 
-import com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
 import org.apache.commons.io.FileUtils;
 import org.junit.runner.Description;
 
@@ -28,17 +27,31 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
+ * <h4>Overview</h4>
  * <p>
  * This is a {@link DirTestWatcher} which creates all the temporary directories required by a Drillbit and the various <b>dfs.*</b> storage workspaces. It also
  * provides convenience methods that do the following:
- * </p>
  *
  * <ol>
  *   <li>Copy project files to temp directories. This is useful for copying the sample data into a temp directory.</li>
  *   <li>Copy resource files to temp.</li>
  *   <li>Updating parquet metadata files.</li>
  * </ol>
+ * </p>
  *
+ * <p>
+ *   The {@link BaseDirTestWatcher} creates the following directories in the <b>base temp directory</b> (for a description of where the <b>base temp directory</b>
+ *   is located please read the docs for {@link DirTestWatcher}):
+ *
+ *   <ul>
+ *     <li><b>tmp:</b> {@link #getTmpDir()}</li>
+ *     <li><b>store:</b> {@link #getStoreDir()}</li>
+ *     <li><b>root:</b> {@link #getRootDir()}</li>
+ *     <li><b>dfsTestTmp:</b> {@link #getDfsTestTmpDir()}</li>
+ *   </ul>
+ * </p>
+ *
+ * <h4>Examples</h4>
  * <p>
  *   The {@link BaseDirTestWatcher} is used in {@link BaseTestQuery} and an example of how it is used in conjunction with the {@link ClusterFixture} can be found in
  *   {@link ExampleTest}.
@@ -53,6 +66,8 @@ public class BaseDirTestWatcher extends DirTestWatcher {
     TEST_TMP // Corresponds to the directory that should be mapped to dfs.tmp
   }
 
+  private File codegenDir;
+  private File spillDir;
   private File tmpDir;
   private File storeDir;
   private File dfsTestTmpParentDir;
@@ -78,6 +93,8 @@ public class BaseDirTestWatcher extends DirTestWatcher {
   protected void starting(Description description) {
     super.starting(description);
 
+    codegenDir = makeSubDir(Paths.get("codegen"));
+    spillDir = makeSubDir(Paths.get("spill"));
     rootDir = makeSubDir(Paths.get("root"));
     tmpDir = makeSubDir(Paths.get("tmp"));
     storeDir = makeSubDir(Paths.get("store"));
@@ -91,6 +108,8 @@ public class BaseDirTestWatcher extends DirTestWatcher {
    */
   public void clear() {
     try {
+      FileUtils.cleanDirectory(codegenDir);
+      FileUtils.cleanDirectory(spillDir);
       FileUtils.cleanDirectory(rootDir);
       FileUtils.cleanDirectory(tmpDir);
       FileUtils.cleanDirectory(storeDir);
@@ -130,6 +149,18 @@ public class BaseDirTestWatcher extends DirTestWatcher {
    */
   public File getRootDir() {
     return rootDir;
+  }
+
+  /**
+   * Gets the temp directory that should be used to save generated code files.
+   * @return The temp directory that should be used to save generated code files.
+   */
+  public File getCodegenDir() {
+    return codegenDir;
+  }
+
+  public File getSpillDir() {
+    return spillDir;
   }
 
   /**
@@ -211,6 +242,22 @@ public class BaseDirTestWatcher extends DirTestWatcher {
    */
   public File copyResourceToRoot(Path relPath, Path destPath) {
     return copyTo(relPath, destPath, TestTools.FileSource.RESOURCE, DirType.ROOT);
+  }
+
+  /**
+   * Removes a file or directory copied at relativePath inside the root directory
+   * @param relPath - relative path of file/directory to be deleted from the root directory
+   * @throws IOException - Throws exception in case of failure
+   */
+  public void removeFileFromRoot(Path relPath) throws IOException {
+    removeFromRoot(relPath, DirType.ROOT);
+  }
+
+  private void removeFromRoot(Path relPath, DirType dirType) throws IOException {
+    final File baseDir = getDir(dirType);
+    final Path finalPath = baseDir.toPath().resolve(relPath);
+    final File file = finalPath.toFile();
+    FileUtils.forceDelete(file);
   }
 
   /**

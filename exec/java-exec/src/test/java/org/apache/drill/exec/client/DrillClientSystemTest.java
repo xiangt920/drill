@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -28,8 +28,8 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Resources;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Resources;
 
 
 @Ignore
@@ -56,7 +56,6 @@ public class DrillClientSystemTest extends DrillSystemTestBase {
     client.connect();
     List<QueryDataBatch> results = client.runQuery(QueryType.LOGICAL, plan);
     for (QueryDataBatch result : results) {
-      System.out.println(result);
       result.release();
     }
     client.close();
@@ -69,7 +68,6 @@ public class DrillClientSystemTest extends DrillSystemTestBase {
     client.connect();
     List<QueryDataBatch> results = client.runQuery(QueryType.LOGICAL, plan);
     for (QueryDataBatch result : results) {
-      System.out.println(result);
       result.release();
     }
     client.close();

@@ -1,40 +1,50 @@
-<#-- Licensed to the Apache Software Foundation (ASF) under one or more contributor
-  license agreements. See the NOTICE file distributed with this work for additional
-  information regarding copyright ownership. The ASF licenses this file to
-  You under the Apache License, Version 2.0 (the "License"); you may not use
-  this file except in compliance with the License. You may obtain a copy of
-  the License at http://www.apache.org/licenses/LICENSE-2.0 Unless required
-  by applicable law or agreed to in writing, software distributed under the
-  License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
-  OF ANY KIND, either express or implied. See the License for the specific
-  language governing permissions and limitations under the License. -->
+<#--
 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
 <#include "*/generic.ftl">
 <#macro page_head>
 
 <script src="/static/js/jquery.dataTables-1.10.16.min.js"></script>
 <script>
     $(document).ready(function() {
-      $("#profileList").DataTable( {
-        //Preserve order
-        "ordering": false,
-        "searching": true,
-        "paging": true,
-        "pagingType": "first_last_numbers",
-        "lengthMenu": [[10, 25, 50, -1], [10, 25, 50, "All"]],
-        "lengthChange": true,
-        "info": true,
-        //Ref: https://legacy.datatables.net/ref#sDom
-        "sDom": '<"top"lftip><"bottom"><"clear">',
-        //Customized info labels
-        "language": {
-            "lengthMenu": "Display _MENU_ profiles per page",
-            "zeroRecords": "No matching profiles found!",
-            "info": "Showing page _PAGE_ of _PAGES_ ",
-            "infoEmpty": "No profiles available",
-            "infoFiltered": "(filtered _TOTAL_ from _MAX_)",
-            "search": "Search Profiles  "
-        }
+      $.each(["running","completed"], function(i, key) {
+        $("#profileList_"+key).DataTable( {
+          //Preserve order
+          "ordering": false,
+          "searching": true,
+          "paging": true,
+          "pagingType": "full_numbers",
+          "lengthMenu": [[10, 25, 50, -1], [10, 25, 50, "All"]],
+          "lengthChange": true,
+          "info": true,
+          //Ref: https://legacy.datatables.net/ref#sDom
+          "sDom": '<"top"lftip><"bottom"><"clear">',
+          //Customized info labels
+          "language": {
+              "lengthMenu": "Display _MENU_ profiles per page",
+              "zeroRecords": "No matching profiles found!",
+              "info": "Showing page _PAGE_ of _PAGES_ ",
+              "infoEmpty": "No profiles available",
+              "infoFiltered": "(filtered _TOTAL_ from _MAX_)",
+              "search": "Search Profiles  "
+          }
+        } );
       } );
     } );
 </script>
@@ -44,9 +54,12 @@
   /* Control Padding for length and filter as a pair */
   div.dataTables_length {
     float: right;
+    font-weight: normal;
   }
   div.dataTables_filter {
     float: left;
+    font-weight: normal;
+    padding-left: 0.45em;
   }
   div.dataTables_info {
     padding-right: 2em;
@@ -54,25 +67,15 @@
   }
 
   /* Add spaces between pagination links */
-  #profileList_paginate * {
-    padding-right: 0.55em;
-    float:left
+  #profileList_completed_paginate *, #profileList_running_paginate * { 
+    padding-right: 0.35em; 
+    float:left 
   }
-  /* Normal wt for search text */
-  #profileList_filter input {
-    font-weight: normal;
-    padding-left: 0.45em;
-  }
-  #profileList_length * {
-    font-weight: normal;
-  }
-
 </style>
 
 </#macro>
 
 <#macro page_body>
-  <a href="/queries">back</a><br/>
   <div class="page-header">
   </div>
   <#if (model.getErrors()?size > 0) >
@@ -86,7 +89,7 @@
   </#if>
   <#if (model.getRunningQueries()?size > 0) >
     <h3>Running Queries</h3>
-    <@list_queries queries=model.getRunningQueries()/>
+    <@list_queries queries=model.getRunningQueries() stateList="running" />
     <div class="page-header">
     </div>
   <#else>
@@ -131,12 +134,12 @@
             $("#fetchMax").val(maxFetched);
     });
     </script>
-  <@list_queries queries=model.getFinishedQueries()/>
+  <@list_queries queries=model.getFinishedQueries() stateList="completed" />
 </#macro>
 
-<#macro list_queries queries>
+<#macro list_queries queries stateList>
     <div class="table-responsive">
-        <table id="profileList" class="table table-hover dataTable" role="grid">
+        <table id="profileList_${stateList}" class="table table-hover dataTable" role="grid">
             <thead>
             <tr role="row">
                 <th>Time</th>

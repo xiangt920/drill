@@ -32,6 +32,7 @@ import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.ops.OperatorContext;
 import org.apache.drill.exec.physical.config.Sort;
 import org.apache.drill.exec.record.BatchSchema;
+import org.apache.drill.test.BaseDirTestWatcher;
 import org.apache.drill.test.DrillTest;
 import org.apache.drill.test.OperatorFixture;
 import org.apache.drill.test.rowSet.RowSet;
@@ -46,10 +47,11 @@ import org.apache.drill.test.rowSet.RowSetUtilities;
 import org.joda.time.Period;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.ClassRule;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.junit.experimental.categories.Category;
 
 /**
@@ -61,9 +63,12 @@ public class TestSorter extends DrillTest {
 
   public static OperatorFixture fixture;
 
+  @ClassRule
+  public static final BaseDirTestWatcher dirTestWatcher = new BaseDirTestWatcher();
+
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
-    fixture = OperatorFixture.builder().build();
+    fixture = OperatorFixture.builder(dirTestWatcher).build();
   }
 
   @AfterClass
@@ -493,10 +498,11 @@ public class TestSorter extends DrillTest {
 //      tester1.test(MinorType.UINT4); DRILL-5329
       tester.test(MinorType.BIGINT);
 //      tester1.test(MinorType.UINT8); DRILL-5329
-      tester.test(MinorType.FLOAT4);
-      tester.test(MinorType.FLOAT8);
-      tester.test(MinorType.DECIMAL9);
-      tester.test(MinorType.DECIMAL18);
+    tester.test(MinorType.FLOAT4);
+    tester.test(MinorType.FLOAT8);
+    tester.test(MinorType.VARDECIMAL);
+//      tester1.test(MinorType.DECIMAL9);
+//      tester1.test(MinorType.DECIMAL18);
 //      tester1.test(MinorType.DECIMAL28SPARSE); DRILL-5329
 //      tester1.test(MinorType.DECIMAL38SPARSE); DRILL-5329
 //    tester1.test(MinorType.DECIMAL28DENSE); No writer

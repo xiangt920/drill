@@ -17,19 +17,14 @@
  */
 package org.apache.drill.exec.expr.fn.impl;
 
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.DrillBuf;
-
-import java.nio.charset.Charset;
-
-import javax.inject.Inject;
-
 import org.apache.drill.exec.expr.DrillSimpleFunc;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate.FunctionScope;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate.NullHandling;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate.ReturnType;
+import org.apache.drill.exec.expr.annotations.FunctionTemplate.OutputWidthCalculatorType;
 import org.apache.drill.exec.expr.annotations.Output;
 import org.apache.drill.exec.expr.annotations.Param;
 import org.apache.drill.exec.expr.annotations.Workspace;
@@ -39,6 +34,10 @@ import org.apache.drill.exec.expr.holders.IntHolder;
 import org.apache.drill.exec.expr.holders.NullableVarCharHolder;
 import org.apache.drill.exec.expr.holders.VarBinaryHolder;
 import org.apache.drill.exec.expr.holders.VarCharHolder;
+import org.apache.drill.exec.physical.impl.project.OutputSizeEstimateConstants;
+
+import javax.inject.Inject;
+import java.nio.charset.Charset;
 
 public class StringFunctions{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StringFunctions.class);
@@ -211,7 +210,8 @@ public class StringFunctions{
   /*
    * Replace all substring that match the regular expression with replacement.
    */
-  @FunctionTemplate(name = "regexp_replace", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "regexp_replace", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class RegexpReplace implements DrillSimpleFunc {
 
     @Param VarCharHolder input;
@@ -383,7 +383,8 @@ public class StringFunctions{
   }
 
 
-  @FunctionTemplate(name = "split_part", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "split_part", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
   public static class SplitPart implements DrillSimpleFunc {
     @Param  VarCharHolder str;
     @Param  VarCharHolder splitter;
@@ -477,7 +478,8 @@ public class StringFunctions{
   @FunctionTemplate(name = "lower",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.SAME_IN_OUT_LENGTH,
-      nulls = NullHandling.NULL_IF_NULL)
+      nulls = NullHandling.NULL_IF_NULL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CLONE)
   public static class LowerCase implements DrillSimpleFunc {
     @Param VarCharHolder input;
     @Output VarCharHolder out;
@@ -495,7 +497,7 @@ public class StringFunctions{
 
       for (int id = input.start; id < input.end; id++) {
         byte  currentByte = input.buffer.getByte(id);
-        out.buffer.setByte(id - input.start, Character.toLowerCase(currentByte)) ;
+        out.buffer.setByte(id - input.start, Character.toLowerCase(currentByte));
       }
     }
   }
@@ -506,6 +508,7 @@ public class StringFunctions{
   @FunctionTemplate(name = "upper",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.SAME_IN_OUT_LENGTH,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CLONE,
       nulls = NullHandling.NULL_IF_NULL)
   public static class UpperCase implements DrillSimpleFunc {
 
@@ -525,7 +528,7 @@ public class StringFunctions{
 
       for (int id = input.start; id < input.end; id++) {
         byte currentByte = input.buffer.getByte(id);
-        out.buffer.setByte(id - input.start, Character.toUpperCase(currentByte)) ;
+        out.buffer.setByte(id - input.start, Character.toUpperCase(currentByte));
       }
     }
   }
@@ -534,7 +537,8 @@ public class StringFunctions{
   // Follow Postgre.
   //  -- Valid "offset": [1, string_length],
   //  -- Valid "length": [1, up to string_length - offset + 1], if length > string_length - offset +1, get the substr up to the string_lengt.
-  @FunctionTemplate(names = {"substring", "substr"}, scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(names = {"substring", "substr"}, scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class Substring implements DrillSimpleFunc {
     @Param VarCharHolder string;
     @Param BigIntHolder offset;
@@ -572,7 +576,8 @@ public class StringFunctions{
     }
   }
 
-  @FunctionTemplate(names = {"substring", "substr"}, scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(names = {"substring", "substr"}, scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class SubstringOffset implements DrillSimpleFunc {
     @Param VarCharHolder string;
     @Param BigIntHolder offset;
@@ -605,7 +610,8 @@ public class StringFunctions{
     }
   }
 
-  @FunctionTemplate(names = {"substring", "substr" }, scope = FunctionScope.SIMPLE, nulls = NullHandling.INTERNAL)
+  @FunctionTemplate(names = {"substring", "substr" }, scope = FunctionScope.SIMPLE, nulls = NullHandling.INTERNAL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class SubstringRegex implements DrillSimpleFunc {
     @Param VarCharHolder input;
     @Param(constant=true) VarCharHolder pattern;
@@ -637,7 +643,8 @@ public class StringFunctions{
     }
   }
 
-  @FunctionTemplate(names = {"substring", "substr" }, scope = FunctionScope.SIMPLE, nulls = NullHandling.INTERNAL)
+  @FunctionTemplate(names = {"substring", "substr" }, scope = FunctionScope.SIMPLE, nulls = NullHandling.INTERNAL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
   public static class SubstringRegexNullable implements DrillSimpleFunc {
     @Param NullableVarCharHolder input;
     @Param(constant=true) VarCharHolder pattern;
@@ -679,7 +686,8 @@ public class StringFunctions{
   // If length > total charcounts, return the whole string.
   // If length = 0, return empty
   // If length < 0, and |length| > total charcounts, return empty.
-  @FunctionTemplate(name = "left", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "left", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
   public static class Left implements DrillSimpleFunc {
     @Param VarCharHolder string;
     @Param BigIntHolder length;
@@ -702,9 +710,9 @@ public class StringFunctions{
         final int charCount = org.apache.drill.exec.expr.fn.impl.StringFunctionUtil.getUTF8CharLength(string.buffer, string.start, string.end);
         final int charLen;
         if (length.value > 0) {
-          charLen = Math.min((int)length.value, charCount);  //left('abc', 5) -> 'abc'
+          charLen = Math.min((int) length.value, charCount);  //left('abc', 5) -> 'abc'
         } else if (length.value < 0) {
-          charLen = Math.max(0, charCount + (int)length.value) ; // left('abc', -5) ==> ''
+          charLen = Math.max(0, charCount + (int) length.value); // left('abc', -5) ==> ''
         } else {
           charLen = 0;
         }
@@ -716,7 +724,8 @@ public class StringFunctions{
   }
 
   //Return last 'length' characters in the string. When 'length' is negative, return all but first |length| characters.
-  @FunctionTemplate(name = "right", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "right", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
   public static class Right implements DrillSimpleFunc {
     @Param VarCharHolder string;
     @Param BigIntHolder length;
@@ -763,7 +772,8 @@ public class StringFunctions{
   @FunctionTemplate(name = "initcap",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.SAME_IN_OUT_LENGTH,
-      nulls = NullHandling.NULL_IF_NULL)
+      nulls = NullHandling.NULL_IF_NULL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CLONE)
   public static class InitCap implements DrillSimpleFunc {
     @Param VarCharHolder input;
     @Output VarCharHolder out;
@@ -784,7 +794,8 @@ public class StringFunctions{
   }
 
   //Replace all occurrences in 'text' of substring 'from' with substring 'to'
-  @FunctionTemplate(name = "replace", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "replace", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class Replace implements DrillSimpleFunc {
     @Param  VarCharHolder text;
     @Param  VarCharHolder from;
@@ -818,7 +829,7 @@ public class StringFunctions{
 
           if (j == from.end ) {
             //find a true match ("from" is not empty), copy entire "to" string to out buffer
-            for (int k = to.start ; k < to.end; k++) {
+            for (int k = to.start; k < to.end; k++) {
               out.buffer.setByte(out.end++, to.buffer.getByte(k));
             }
 
@@ -851,7 +862,8 @@ public class StringFunctions{
   @FunctionTemplate(name = "lpad",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.PAD,
-      nulls = NullHandling.NULL_IF_NULL)
+      nulls = NullHandling.NULL_IF_NULL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
   public static class Lpad implements DrillSimpleFunc {
     @Param  VarCharHolder text;
     @Param  BigIntHolder length;
@@ -908,7 +920,7 @@ public class StringFunctions{
                 (currentByte & 0xE0) == 0xC0 ||   // 2-byte char. First byte is 110xxxxx
                 (currentByte & 0xF0) == 0xE0 ||   // 3-byte char. First byte is 1110xxxx
                 (currentByte & 0xF8) == 0xF0) {   //4-byte char. First byte is 11110xxx
-              count ++;  //Advance the counter, since we find one char.
+              count++;  //Advance the counter, since we find one char.
             }
             out.buffer.setByte(out.end++, currentByte);
           }
@@ -929,7 +941,8 @@ public class StringFunctions{
   @FunctionTemplate(name = "lpad",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.PAD,
-      nulls = NullHandling.NULL_IF_NULL)
+      nulls = NullHandling.NULL_IF_NULL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
   public static class LpadTwoArg implements DrillSimpleFunc {
     @Param  VarCharHolder text;
     @Param  BigIntHolder length;
@@ -991,7 +1004,8 @@ public class StringFunctions{
   @FunctionTemplate(name = "rpad",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.PAD,
-      nulls = NullHandling.NULL_IF_NULL)
+      nulls = NullHandling.NULL_IF_NULL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
   public static class Rpad implements DrillSimpleFunc {
     @Param  VarCharHolder text;
     @Param  BigIntHolder length;
@@ -1055,7 +1069,7 @@ public class StringFunctions{
                 (currentByte & 0xE0) == 0xC0 ||   // 2-byte char. First byte is 110xxxxx
                 (currentByte & 0xF0) == 0xE0 ||   // 3-byte char. First byte is 1110xxxx
                 (currentByte & 0xF8) == 0xF0) {   //4-byte char. First byte is 11110xxx
-              count ++;  //Advance the counter, since we find one char.
+              count++;  //Advance the counter, since we find one char.
             }
             out.buffer.setByte(out.end++, currentByte);
           }
@@ -1072,7 +1086,8 @@ public class StringFunctions{
   @FunctionTemplate(name = "rpad",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.PAD,
-      nulls = NullHandling.NULL_IF_NULL)
+      nulls = NullHandling.NULL_IF_NULL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
   public static class RpadTwoArg implements DrillSimpleFunc {
     @Param  VarCharHolder text;
     @Param  BigIntHolder length;
@@ -1133,7 +1148,8 @@ public class StringFunctions{
   /**
    * Remove the longest string containing only characters from "from"  from the start of "text"
    */
-  @FunctionTemplate(name = "ltrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "ltrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class Ltrim implements DrillSimpleFunc {
     @Param  VarCharHolder text;
     @Param  VarCharHolder from;
@@ -1166,7 +1182,8 @@ public class StringFunctions{
   /**
    * Remove the longest string containing only character " " from the start of "text"
    */
-  @FunctionTemplate(name = "ltrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "ltrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class LtrimOneArg implements DrillSimpleFunc {
     @Param  VarCharHolder text;
 
@@ -1196,7 +1213,8 @@ public class StringFunctions{
   /**
    * Remove the longest string containing only characters from "from"  from the end of "text"
    */
-  @FunctionTemplate(name = "rtrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "rtrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class Rtrim implements DrillSimpleFunc {
     @Param  VarCharHolder text;
     @Param  VarCharHolder from;
@@ -1232,7 +1250,8 @@ public class StringFunctions{
   /**
    * Remove the longest string containing only character " " from the end of "text"
    */
-  @FunctionTemplate(name = "rtrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "rtrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class RtrimOneArg implements DrillSimpleFunc {
     @Param  VarCharHolder text;
 
@@ -1265,7 +1284,8 @@ public class StringFunctions{
   /**
    * Remove the longest string containing only characters from "from"  from the start of "text"
    */
-  @FunctionTemplate(name = "btrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "btrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class Btrim implements DrillSimpleFunc {
     @Param  VarCharHolder text;
     @Param  VarCharHolder from;
@@ -1312,7 +1332,8 @@ public class StringFunctions{
   /**
    * Remove the longest string containing only character " " from the start of "text"
    */
-  @FunctionTemplate(name = "btrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "btrim", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class BtrimOneArg implements DrillSimpleFunc {
     @Param  VarCharHolder text;
 
@@ -1350,10 +1371,11 @@ public class StringFunctions{
     } // end of eval
   }
 
-  @FunctionTemplate(name = "split", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "split", scope = FunctionScope.SIMPLE,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
   public static class Split implements DrillSimpleFunc {
-    @Param  VarCharHolder input;
-    @Param  VarCharHolder delimiter;
+    @Param VarCharHolder in;
+    @Param VarCharHolder delimiter;
 
     @Workspace com.google.common.base.Splitter splitter;
     @Inject DrillBuf buffer;
@@ -1373,26 +1395,73 @@ public class StringFunctions{
 
     @Override
     public void eval() {
+      String inputString =
+          org.apache.drill.exec.expr.fn.impl.StringFunctionHelpers.toStringFromUTF8(in.start, in.end, in.buffer);
       // Convert the iterable to an array as Janino will not handle generics.
-      Object[] tokens = com.google.common.collect.Iterables.toArray(splitter.split(
-          org.apache.drill.exec.expr.fn.impl.StringFunctionHelpers.toStringFromUTF8(input.start, input.end, input.buffer)), String.class);
+      Object[] tokens = com.google.common.collect.Iterables.toArray(splitter.split(inputString), String.class);
       org.apache.drill.exec.vector.complex.writer.BaseWriter.ListWriter list = writer.rootAsList();
       list.startList();
-      for(int i = 0; i < tokens.length; i++ ) {
-        final byte[] strBytes = ((String)tokens[i]).getBytes(com.google.common.base.Charsets.UTF_8);
+      for (Object token : tokens) {
+        final byte[] strBytes = ((String) token).getBytes(com.google.common.base.Charsets.UTF_8);
         buffer = buffer.reallocIfNeeded(strBytes.length);
         buffer.setBytes(0, strBytes);
         list.varChar().writeVarChar(0, strBytes.length, buffer);
       }
       list.endList();
     }
+  }
 
+  @FunctionTemplate(name = "split", scope = FunctionScope.SIMPLE,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
+  public static class SplitNullableInput implements DrillSimpleFunc {
+    @Param NullableVarCharHolder in;
+    @Param VarCharHolder delimiter;
+
+    @Workspace com.google.common.base.Splitter splitter;
+    @Inject DrillBuf buffer;
+
+    @Output org.apache.drill.exec.vector.complex.writer.BaseWriter.ComplexWriter writer;
+
+    @Override
+    public void setup() {
+      int len = delimiter.end - delimiter.start;
+      if (len != 1) {
+        throw new IllegalArgumentException("Only single character delimiters are supported for split()");
+      }
+      char splitChar = org.apache.drill.exec.expr.fn.impl.StringFunctionHelpers.
+          toStringFromUTF8(delimiter.start, delimiter.end, delimiter.buffer).charAt(0);
+      splitter = com.google.common.base.Splitter.on(splitChar);
+    }
+
+    @Override
+    public void eval() {
+      Object[] tokens;
+      if (in.isSet == 1) {
+        String inputString =
+            org.apache.drill.exec.expr.fn.impl.StringFunctionHelpers.toStringFromUTF8(in.start, in.end, in.buffer);
+        // Convert the iterable to an array as Janino will not handle generics.
+        tokens = com.google.common.collect.Iterables.toArray(splitter.split(inputString), String.class);
+      } else {
+        tokens = new Object[0];
+      }
+      org.apache.drill.exec.vector.complex.writer.BaseWriter.ListWriter list = writer.rootAsList();
+      list.startList();
+      org.apache.drill.exec.vector.complex.writer.VarCharWriter varCharWriter = list.varChar();
+      for (Object token : tokens) {
+        final byte[] strBytes = ((String) token).getBytes(com.google.common.base.Charsets.UTF_8);
+        buffer = buffer.reallocIfNeeded(strBytes.length);
+        buffer.setBytes(0, strBytes);
+        varCharWriter.writeVarChar(0, strBytes.length, buffer);
+      }
+      list.endList();
+    }
   }
 
   @FunctionTemplate(name = "concatOperator",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.CONCAT,
-      nulls = NullHandling.NULL_IF_NULL)
+      nulls = NullHandling.NULL_IF_NULL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CONCAT)
   public static class ConcatOperator implements DrillSimpleFunc {
     @Param  VarCharHolder left;
     @Param  VarCharHolder right;
@@ -1405,7 +1474,7 @@ public class StringFunctions{
 
     @Override
     public void eval() {
-      out.buffer = buffer = buffer.reallocIfNeeded( (left.end - left.start) + (right.end - right.start));
+      out.buffer = buffer = buffer.reallocIfNeeded((left.end - left.start) + (right.end - right.start));
       out.start = out.end = 0;
 
       int id = 0;
@@ -1424,6 +1493,7 @@ public class StringFunctions{
   @FunctionTemplate(name = "concat",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.CONCAT,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CONCAT,
       nulls = NullHandling.INTERNAL)
   public static class Concat implements DrillSimpleFunc {
     @Param  VarCharHolder left;
@@ -1454,7 +1524,8 @@ public class StringFunctions{
   @FunctionTemplate(name = "concat",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.CONCAT,
-      nulls = NullHandling.INTERNAL)
+      nulls = NullHandling.INTERNAL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CONCAT)
   public static class ConcatRightNullInput implements DrillSimpleFunc {
     @Param  VarCharHolder left;
     @Param  NullableVarCharHolder right;
@@ -1467,7 +1538,7 @@ public class StringFunctions{
 
     @Override
     public void eval() {
-      out.buffer = buffer = buffer.reallocIfNeeded( (left.end - left.start) + (right.end - right.start));;
+      out.buffer = buffer = buffer.reallocIfNeeded((left.end - left.start) + (right.end - right.start));
       out.start = out.end = 0;
 
       int id = 0;
@@ -1486,7 +1557,8 @@ public class StringFunctions{
   @FunctionTemplate(name = "concat",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.CONCAT,
-      nulls = NullHandling.INTERNAL)
+      nulls = NullHandling.INTERNAL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CONCAT)
   public static class ConcatLeftNullInput implements DrillSimpleFunc {
     @Param  NullableVarCharHolder left;
     @Param  VarCharHolder right;
@@ -1518,7 +1590,8 @@ public class StringFunctions{
   @FunctionTemplate(name = "concat",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.CONCAT,
-      nulls = NullHandling.INTERNAL)
+      nulls = NullHandling.INTERNAL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CONCAT)
   public static class ConcatBothNullInput implements DrillSimpleFunc {
     @Param  NullableVarCharHolder left;
     @Param  NullableVarCharHolder right;
@@ -1551,7 +1624,8 @@ public class StringFunctions{
 
   // Converts a hex encoded string into a varbinary type.
   // "\xca\xfe\xba\xbe" => (byte[]) {(byte)0xca, (byte)0xfe, (byte)0xba, (byte)0xbe}
-  @FunctionTemplate(name = "binary_string", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "binary_string", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class BinaryString implements DrillSimpleFunc {
     @Param  VarCharHolder in;
     @Output VarBinaryHolder out;
@@ -1571,7 +1645,8 @@ public class StringFunctions{
 
   // Converts a varbinary type into a hex encoded string.
   // (byte[]) {(byte)0xca, (byte)0xfe, (byte)0xba, (byte)0xbe}  => "\xca\xfe\xba\xbe"
-  @FunctionTemplate(name = "string_binary", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "string_binary", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class StringBinary implements DrillSimpleFunc {
     @Param  VarBinaryHolder in;
     @Output VarCharHolder   out;
@@ -1615,7 +1690,8 @@ public class StringFunctions{
   /**
   * Returns the char corresponding to ASCII code input.
   */
-  @FunctionTemplate(name = "chr", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "chr", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputSizeEstimate = OutputSizeEstimateConstants.CHAR_LENGTH)
   public static class AsciiToChar implements DrillSimpleFunc {
     @Param  IntHolder in;
     @Output VarCharHolder out;
@@ -1638,7 +1714,8 @@ public class StringFunctions{
   /**
   * Returns the input char sequences repeated nTimes.
   */
-  @FunctionTemplate(names = {"repeat", "repeatstr"}, scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(names = {"repeat", "repeatstr"}, scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_FIXED_WIDTH_DEFAULT)
   public static class RepeatString implements DrillSimpleFunc {
 
     @Param  VarCharHolder in;
@@ -1666,7 +1743,8 @@ public class StringFunctions{
   /**
   * Convert string to ASCII from another encoding input.
   */
-  @FunctionTemplate(name = "toascii", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  @FunctionTemplate(name = "toascii", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL,
+                    outputWidthCalculatorType = OutputWidthCalculatorType.CUSTOM_CLONE_DEFAULT)
   public static class AsciiEndode implements DrillSimpleFunc {
     @Param  VarCharHolder in;
     @Param  VarCharHolder enc;
@@ -1700,7 +1778,8 @@ public class StringFunctions{
   @FunctionTemplate(name = "reverse",
       scope = FunctionScope.SIMPLE,
       returnType = ReturnType.SAME_IN_OUT_LENGTH,
-      nulls = NullHandling.NULL_IF_NULL)
+      nulls = NullHandling.NULL_IF_NULL,
+      outputWidthCalculatorType = OutputWidthCalculatorType.CLONE)
   public static class ReverseString implements DrillSimpleFunc {
     @Param  VarCharHolder in;
     @Output VarCharHolder out;

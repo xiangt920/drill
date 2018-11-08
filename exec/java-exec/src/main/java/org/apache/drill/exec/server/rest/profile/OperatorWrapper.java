@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -33,7 +33,7 @@ import org.apache.drill.exec.proto.UserBitShared.MetricValue;
 import org.apache.drill.exec.proto.UserBitShared.OperatorProfile;
 import org.apache.drill.exec.proto.UserBitShared.StreamProfile;
 
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 
 /**
  * Wrapper class for profiles of ALL operator instances of the same operator type within a major fragment.
@@ -253,6 +253,10 @@ public class OperatorWrapper {
    * @return index of spill metric
    */
   private int getSpillCycleMetricIndex(CoreOperatorType operatorType) {
+    // TODO: DRILL-6642, replace null values for ProtocolMessageEnum with UNRECOGNIZED NullValue to avoid null checks
+    if (operatorType == null) {
+      return NO_SPILL_METRIC_INDEX;
+    }
     String metricName;
 
     switch (operatorType) {

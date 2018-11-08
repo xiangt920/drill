@@ -29,6 +29,7 @@ import org.apache.drill.exec.planner.cost.DrillCostBase;
 import org.apache.drill.exec.physical.impl.join.JoinUtils;
 import org.apache.drill.exec.physical.impl.join.JoinUtils.JoinCategory;
 import org.apache.drill.exec.planner.cost.DrillCostBase.DrillCostFactory;
+import org.apache.drill.exec.planner.logical.DrillJoin;
 import org.apache.drill.exec.planner.physical.PrelUtil;
 import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.JoinRelType;
@@ -40,12 +41,12 @@ import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexNode;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 /**
  * Base class for logical and physical Joins implemented in Drill.
  */
-public abstract class DrillJoinRelBase extends Join implements DrillRelNode {
+public abstract class DrillJoinRelBase extends Join implements DrillJoin {
   protected List<Integer> leftKeys = Lists.newArrayList();
   protected List<Integer> rightKeys = Lists.newArrayList();
 
@@ -111,11 +112,11 @@ public abstract class DrillJoinRelBase extends Join implements DrillRelNode {
     return new HashSet<>(left).removeAll(right);
   }
 
-  protected boolean uniqueFieldNames(RelDataType rowType) {
+  public static boolean uniqueFieldNames(RelDataType rowType) {
     return isUnique(rowType.getFieldNames());
   }
 
-  protected static <T> boolean isUnique(List<T> list) {
+  public static <T> boolean isUnique(List<T> list) {
     return new HashSet<>(list).size() == list.size();
   }
 
@@ -137,7 +138,7 @@ public abstract class DrillJoinRelBase extends Join implements DrillRelNode {
                                     // just to make sure Cartesian Join is more expensive
                                     // than Non-Cartesian Join.
 
-    final int keySize = 1 ;  // assume having 1 join key, when estimate join cost.
+    final int keySize = 1;  // assume having 1 join key, when estimate join cost.
     final DrillCostBase cost = (DrillCostBase) computeHashJoinCostWithKeySize(planner, keySize, mq).multiplyBy(mulFactor);
 
     // Cartesian join row count will be product of two inputs. The other factors come from the above estimated DrillCost.
@@ -174,7 +175,11 @@ public abstract class DrillJoinRelBase extends Join implements DrillRelNode {
   private RelOptCost computeHashJoinCostWithKeySize(RelOptPlanner planner, int keySize, RelMetadataQuery mq) {
     double probeRowCount = mq.getRowCount(this.getLeft());
     double buildRowCount = mq.getRowCount(this.getRight());
+    return computeHashJoinCostWithRowCntKeySize(planner, probeRowCount, buildRowCount, keySize);
+  }
 
+  public static RelOptCost computeHashJoinCostWithRowCntKeySize(RelOptPlanner planner, double probeRowCount,
+                                                                double buildRowCount, int keySize) {
     // cpu cost of hashing the join keys for the build side
     double cpuCostBuild = DrillCostBase.HASH_CPU_COST * keySize * buildRowCount;
     // cpu cost of hashing the join keys for the probe side
@@ -197,7 +202,7 @@ public abstract class DrillJoinRelBase extends Join implements DrillRelNode {
         ) * buildRowCount * factor;
 
     double cpuCost = joinConditionCost * (probeRowCount) // probe size determine the join condition comparison cost
-        + cpuCostBuild + cpuCostProbe ;
+        + cpuCostBuild + cpuCostProbe;
 
     DrillCostFactory costFactory = (DrillCostFactory) planner.getCostFactory();
 

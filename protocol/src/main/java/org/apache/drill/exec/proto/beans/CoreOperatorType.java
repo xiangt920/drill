@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -34,7 +34,7 @@ public enum CoreOperatorType implements com.dyuproject.protostuff.EnumLite<CoreO
     ORDERED_PARTITION_SENDER(9),
     PROJECT(10),
     UNORDERED_RECEIVER(11),
-    RANGE_SENDER(12),
+    RANGE_PARTITION_SENDER(12),
     SCREEN(13),
     SELECTION_VECTOR_REMOVER(14),
     STREAMING_AGGREGATE(15),
@@ -62,7 +62,24 @@ public enum CoreOperatorType implements com.dyuproject.protostuff.EnumLite<CoreO
     PCAP_SUB_SCAN(37),
     KAFKA_SUB_SCAN(38),
     KUDU_SUB_SCAN(39),
-    FLATTEN(40);
+    FLATTEN(40),
+    LATERAL_JOIN(41),
+    UNNEST(42),
+    HIVE_DRILL_NATIVE_PARQUET_ROW_GROUP_SCAN(43),
+    JDBC_SCAN(44),
+    REGEX_SUB_SCAN(45),
+    MAPRDB_SUB_SCAN(46),
+    MONGO_SUB_SCAN(47),
+    KUDU_WRITER(48),
+    OPEN_TSDB_SUB_SCAN(49),
+    JSON_WRITER(50),
+    HTPPD_LOG_SUB_SCAN(51),
+    IMAGE_SUB_SCAN(52),
+    SEQUENCE_SUB_SCAN(53),
+    PARTITION_LIMIT(54),
+    PCAPNG_SUB_SCAN(55),
+    RUNTIME_FILTER(56),
+    ROWKEY_JOIN(57);
     
     public final int number;
     
@@ -92,7 +109,7 @@ public enum CoreOperatorType implements com.dyuproject.protostuff.EnumLite<CoreO
             case 9: return ORDERED_PARTITION_SENDER;
             case 10: return PROJECT;
             case 11: return UNORDERED_RECEIVER;
-            case 12: return RANGE_SENDER;
+            case 12: return RANGE_PARTITION_SENDER;
             case 13: return SCREEN;
             case 14: return SELECTION_VECTOR_REMOVER;
             case 15: return STREAMING_AGGREGATE;
@@ -121,6 +138,23 @@ public enum CoreOperatorType implements com.dyuproject.protostuff.EnumLite<CoreO
             case 38: return KAFKA_SUB_SCAN;
             case 39: return KUDU_SUB_SCAN;
             case 40: return FLATTEN;
+            case 41: return LATERAL_JOIN;
+            case 42: return UNNEST;
+            case 43: return HIVE_DRILL_NATIVE_PARQUET_ROW_GROUP_SCAN;
+            case 44: return JDBC_SCAN;
+            case 45: return REGEX_SUB_SCAN;
+            case 46: return MAPRDB_SUB_SCAN;
+            case 47: return MONGO_SUB_SCAN;
+            case 48: return KUDU_WRITER;
+            case 49: return OPEN_TSDB_SUB_SCAN;
+            case 50: return JSON_WRITER;
+            case 51: return HTPPD_LOG_SUB_SCAN;
+            case 52: return IMAGE_SUB_SCAN;
+            case 53: return SEQUENCE_SUB_SCAN;
+            case 54: return PARTITION_LIMIT;
+            case 55: return PCAPNG_SUB_SCAN;
+            case 56: return RUNTIME_FILTER;
+            case 57: return ROWKEY_JOIN;
             default: return null;
         }
     }

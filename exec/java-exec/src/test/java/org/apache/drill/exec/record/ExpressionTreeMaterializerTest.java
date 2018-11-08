@@ -45,8 +45,8 @@ import org.apache.drill.exec.expr.ExpressionTreeMaterializer;
 import org.apache.drill.exec.expr.fn.FunctionImplementationRegistry;
 import org.junit.Test;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Range;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.Range;
 import org.junit.experimental.categories.Category;
 
 @Category(VectorTest.class)
@@ -114,9 +114,6 @@ public class ExpressionTreeMaterializerTest extends ExecTest {
     assertTrue(newIfExpr.elseExpression instanceof IfExpression);
     assertEquals(bigIntType, ifCondition.expression.getMajorType());
     assertEquals(true, ((ValueExpressions.BooleanExpression) ((IfExpression)(newIfExpr.elseExpression)).ifCondition.condition).value);
-    if (ec.hasErrors()) {
-      System.out.println(ec.toErrorString());
-    }
     assertFalse(ec.hasErrors());
   }
 
@@ -188,6 +185,5 @@ public class ExpressionTreeMaterializerTest extends ExecTest {
     LogicalExpression newExpr = ExpressionTreeMaterializer.materialize(functionCallExpr, batch, ec, registry);
     assertTrue(newExpr instanceof TypedNullConstant);
     assertEquals(1, ec.getErrorCount());
-    System.out.println(ec.toErrorString());
   }
 }

@@ -31,18 +31,16 @@ import org.apache.drill.exec.ops.OperatorContext;
 import org.apache.drill.exec.physical.impl.OutputMutator;
 import org.apache.drill.exec.server.options.OptionManager;
 import org.apache.drill.exec.store.AbstractRecordReader;
-import org.apache.drill.exec.store.kafka.KafkaSubScan.KafkaSubScanSpec;
 import org.apache.drill.exec.store.kafka.decoders.MessageReader;
 import org.apache.drill.exec.store.kafka.decoders.MessageReaderFactory;
-import org.apache.drill.exec.util.Utilities;
 import org.apache.drill.exec.vector.complex.impl.VectorContainerWriter;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Stopwatch;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 
 public class KafkaRecordReader extends AbstractRecordReader {
   private static final Logger logger = LoggerFactory.getLogger(KafkaRecordReader.class);
@@ -53,7 +51,7 @@ public class KafkaRecordReader extends AbstractRecordReader {
 
   private final boolean unionEnabled;
   private final KafkaStoragePlugin plugin;
-  private final KafkaSubScanSpec subScanSpec;
+  private final KafkaPartitionScanSpec subScanSpec;
   private final long kafkaPollTimeOut;
 
   private long currentOffset;
@@ -62,8 +60,9 @@ public class KafkaRecordReader extends AbstractRecordReader {
   private final boolean enableAllTextMode;
   private final boolean readNumbersAsDouble;
   private final String kafkaMsgReader;
+  private int currentMessageCount;
 
-  public KafkaRecordReader(KafkaSubScan.KafkaSubScanSpec subScanSpec, List<SchemaPath> projectedColumns,
+  public KafkaRecordReader(KafkaPartitionScanSpec subScanSpec, List<SchemaPath> projectedColumns,
       FragmentContext context, KafkaStoragePlugin plugin) {
     setColumns(projectedColumns);
     final OptionManager optionManager = context.getOptions();
@@ -107,27 +106,27 @@ public class KafkaRecordReader extends AbstractRecordReader {
     writer.allocate();
     writer.reset();
     Stopwatch watch = Stopwatch.createStarted();
-    int messageCount = 0;
+    currentMessageCount = 0;
 
     try {
       while (currentOffset < subScanSpec.getEndOffset() - 1 && msgItr.hasNext()) {
         ConsumerRecord<byte[], byte[]> consumerRecord = msgItr.next();
         currentOffset = consumerRecord.offset();
-        writer.setPosition(messageCount);
+        writer.setPosition(currentMessageCount);
         messageReader.readMessage(consumerRecord);
-        if (++messageCount >= DEFAULT_MESSAGES_PER_BATCH) {
+        if (++currentMessageCount >= DEFAULT_MESSAGES_PER_BATCH) {
           break;
         }
       }
 
       messageReader.ensureAtLeastOneField();
-      writer.setValueCount(messageCount);
-      logger.debug("Took {} ms to process {} records.", watch.elapsed(TimeUnit.MILLISECONDS), messageCount);
+      writer.setValueCount(currentMessageCount);
+      logger.debug("Took {} ms to process {} records.", watch.elapsed(TimeUnit.MILLISECONDS), currentMessageCount);
       logger.debug("Last offset consumed for {}:{} is {}", subScanSpec.getTopicName(), subScanSpec.getPartitionId(),
           currentOffset);
-      return messageCount;
+      return currentMessageCount;
     } catch (Exception e) {
-      String msg = "Failure while reading messages from kafka. Recordreader was at record: " + (messageCount + 1);
+      String msg = "Failure while reading messages from kafka. Recordreader was at record: " + (currentMessageCount + 1);
       throw UserException.dataReadError(e).message(msg).addContext(e.getMessage()).build(logger);
     }
   }
@@ -141,4 +140,15 @@ public class KafkaRecordReader extends AbstractRecordReader {
     messageReader.close();
   }
 
+  @Override
+  public String toString() {
+    return "KafkaRecordReader[messageReader=" + messageReader
+        + ", kafkaPollTimeOut=" + kafkaPollTimeOut
+        + ", currentOffset=" + currentOffset
+        + ", enableAllTextMode=" + enableAllTextMode
+        + ", readNumbersAsDouble=" + readNumbersAsDouble
+        + ", kafkaMsgReader=" + kafkaMsgReader
+        + ", currentMessageCount=" + currentMessageCount
+        + "]";
+  }
 }

@@ -34,7 +34,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 
 @JsonTypeName("parquet-writer")
 public class ParquetWriter extends AbstractWriter {
@@ -121,4 +121,11 @@ public class ParquetWriter extends AbstractWriter {
     return CoreOperatorType.PARQUET_WRITER_VALUE;
   }
 
+  @Override
+  public String toString() {
+    return "ParquetWriter[location=" + location
+        + ", storageStrategy=" + getStorageStrategy()
+        + ", partitionColumns=" + partitionColumns
+        + "]";
+  }
 }

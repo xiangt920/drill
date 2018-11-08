@@ -293,7 +293,7 @@ public class TestStarQueries extends BaseTestQuery {
   @Test(expected = UserException.class)  // Should get "At line 1, column 8: Column 'n_nationkey' is ambiguous"
   public void testSelStarAmbiguousJoin() throws Exception {
     try {
-      test("select x.n_nationkey, x.n_name, x.n_regionkey, x.r_name from (select * from cp.`tpch/nation.parquet` n, cp.`tpch/region.parquet` r where n.n_regionkey = r.r_regionkey) x " ) ;
+      test("select x.n_nationkey, x.n_name, x.n_regionkey, x.r_name from (select * from cp.`tpch/nation.parquet` n, cp.`tpch/region.parquet` r where n.n_regionkey = r.r_regionkey) x " );
     } catch (UserException e) {
       logger.info("***** Test resulted in expected failure: " + e.getMessage());
       throw e;
@@ -427,7 +427,7 @@ public class TestStarQueries extends BaseTestQuery {
   @Test // DRILL-1500
   @Category(UnlikelyTest.class)
   public void testStarPartitionFilterOrderBy() throws Exception {
-    org.joda.time.DateTime mydate = new org.joda.time.DateTime("1994-01-20T00:00:00.000");
+    java.time.LocalDate mydate = java.time.LocalDate.parse("1994-01-20");
 
     testBuilder()
     .sqlQuery("select * from dfs.`multilevel/parquet` where dir0=1994 and dir1='Q1' order by dir0 limit 1")

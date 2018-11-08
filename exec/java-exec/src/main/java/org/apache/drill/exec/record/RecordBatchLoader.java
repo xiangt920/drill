@@ -40,7 +40,7 @@ import org.apache.drill.exec.vector.ValueVector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 
 
 /**
@@ -277,11 +277,27 @@ public class RecordBatchLoader implements VectorAccessible, Iterable<VectorWrapp
   public void resetRecordCount() { valueCount = 0; }
 
   /**
+   * Removes an data from the loader, but maintains the schema and empty vectors.
+   */
+  public void zero() {
+    container.zeroVectors();
+    resetRecordCount();
+  }
+
+  /**
    * Clears this loader, which clears the internal vector container (see
    * {@link VectorContainer#clear}) and resets the record count to zero.
    */
   public void clear() {
     container.clear();
     resetRecordCount();
+  }
+
+  @Override
+  public String toString() {
+    return "RecordBatchLoader[container=" + container
+        + ", valueCount=" + valueCount
+        + ", schema=" + schema
+        + "]";
   }
 }

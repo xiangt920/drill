@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -31,8 +31,8 @@ import org.apache.drill.exec.server.RemoteServiceSet;
 import org.apache.drill.exec.util.VectorUtil;
 import org.junit.Test;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 
 public class TextRecordReaderTest extends PopUnitTestBase {
 
@@ -46,8 +46,8 @@ public class TextRecordReaderTest extends PopUnitTestBase {
       bit1.run();
       client.connect();
       List<QueryDataBatch> results = client.runQuery(org.apache.drill.exec.proto.UserBitShared.QueryType.PHYSICAL,
-              Files.toString(
-                      DrillFileUtils.getResourceAsFile("/store/text/test.json"), Charsets.UTF_8)
+              Files.asCharSource(
+                      DrillFileUtils.getResourceAsFile("/store/text/test.json"), Charsets.UTF_8).read()
                       .replace("#{DATA_FILE}", DrillFileUtils.getResourceAsFile("/store/text/data/regions.csv").toURI().toString()));
       int count = 0;
       RecordBatchLoader loader = new RecordBatchLoader(bit1.getContext().getAllocator());
@@ -56,7 +56,7 @@ public class TextRecordReaderTest extends PopUnitTestBase {
           count += b.getHeader().getRowCount();
         }
         loader.load(b.getHeader().getDef(), b.getData());
-        VectorUtil.showVectorAccessibleContent(loader);
+        VectorUtil.logVectorAccessibleContent(loader);
         loader.clear();
         b.release();
       }

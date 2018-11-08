@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * <p/>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,7 +23,7 @@ import org.apache.drill.common.expression.LogicalExpression;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.expression.TypedFieldExpr;
 import org.apache.drill.common.expression.ValueExpressions;
-import org.apache.drill.common.expression.fn.CastFunctions;
+import org.apache.drill.common.expression.fn.FunctionReplacementUtils;
 import org.apache.drill.common.expression.fn.FuncHolder;
 import org.apache.drill.common.expression.visitors.AbstractExprVisitor;
 import org.apache.drill.common.types.TypeProtos;
@@ -45,6 +45,8 @@ import org.apache.parquet.column.statistics.FloatStatistics;
 import org.apache.parquet.column.statistics.IntStatistics;
 import org.apache.parquet.column.statistics.LongStatistics;
 import org.apache.parquet.column.statistics.Statistics;
+import org.apache.parquet.schema.PrimitiveType;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,13 +55,13 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public class RangeExprEvaluator extends AbstractExprVisitor<Statistics, Void, RuntimeException> {
+public class RangeExprEvaluator<T extends Comparable<T>> extends AbstractExprVisitor<Statistics<T>, Void, RuntimeException> {
   static final Logger logger = LoggerFactory.getLogger(RangeExprEvaluator.class);
 
-  private final Map<SchemaPath, ColumnStatistics> columnStatMap;
+  private final Map<SchemaPath, ColumnStatistics<T>> columnStatMap;
   private final long rowCount;
 
-  public RangeExprEvaluator(final Map<SchemaPath, ColumnStatistics> columnStatMap, long rowCount) {
+  public RangeExprEvaluator(final Map<SchemaPath, ColumnStatistics<T>> columnStatMap, long rowCount) {
     this.columnStatMap = columnStatMap;
     this.rowCount = rowCount;
   }
@@ -69,70 +71,71 @@ public class RangeExprEvaluator extends AbstractExprVisitor<Statistics, Void, Ru
   }
 
   @Override
-  public Statistics visitUnknown(LogicalExpression e, Void value) throws RuntimeException {
+  public Statistics<T> visitUnknown(LogicalExpression e, Void value) throws RuntimeException {
     // do nothing for the unknown expression
     return null;
   }
 
+  @SuppressWarnings("unchecked")
   @Override
-  public Statistics visitTypedFieldExpr(TypedFieldExpr typedFieldExpr, Void value) throws RuntimeException {
-    final ColumnStatistics columnStatistics = columnStatMap.get(typedFieldExpr.getPath());
+  public Statistics<T> visitTypedFieldExpr(TypedFieldExpr typedFieldExpr, Void value) throws RuntimeException {
+    final ColumnStatistics<T> columnStatistics = columnStatMap.get(typedFieldExpr.getPath());
     if (columnStatistics != null) {
       return columnStatistics.getStatistics();
     } else if (typedFieldExpr.getMajorType().equals(Types.OPTIONAL_INT)) {
       // field does not exist.
-      IntStatistics intStatistics = new IntStatistics();
-      intStatistics.setNumNulls(rowCount); // all values are nulls
-      return intStatistics;
+      Statistics<T> statistics = Statistics.getStatsBasedOnType(PrimitiveType.PrimitiveTypeName.INT32);
+      statistics.setNumNulls(rowCount); // all values are nulls
+      return statistics;
     }
     return null;
   }
 
   @Override
-  public Statistics visitIntConstant(ValueExpressions.IntExpression expr, Void value) throws RuntimeException {
+  public Statistics<T> visitIntConstant(ValueExpressions.IntExpression expr, Void value) throws RuntimeException {
     return getStatistics(expr.getInt());
   }
 
   @Override
-  public Statistics visitBooleanConstant(ValueExpressions.BooleanExpression expr, Void value) throws RuntimeException {
+  public Statistics<T> visitBooleanConstant(ValueExpressions.BooleanExpression expr, Void value) throws RuntimeException {
     return getStatistics(expr.getBoolean());
   }
 
   @Override
-  public Statistics visitLongConstant(ValueExpressions.LongExpression expr, Void value) throws RuntimeException {
+  public Statistics<T> visitLongConstant(ValueExpressions.LongExpression expr, Void value) throws RuntimeException {
     return getStatistics(expr.getLong());
   }
 
   @Override
-  public Statistics visitFloatConstant(ValueExpressions.FloatExpression expr, Void value) throws RuntimeException {
+  public Statistics<T> visitFloatConstant(ValueExpressions.FloatExpression expr, Void value) throws RuntimeException {
     return getStatistics(expr.getFloat());
   }
 
   @Override
-  public Statistics visitDoubleConstant(ValueExpressions.DoubleExpression expr, Void value) throws RuntimeException {
+  public Statistics<T> visitDoubleConstant(ValueExpressions.DoubleExpression expr, Void value) throws RuntimeException {
     return getStatistics(expr.getDouble());
   }
 
   @Override
-  public Statistics visitDateConstant(ValueExpressions.DateExpression expr, Void value) throws RuntimeException {
+  public Statistics<T> visitDateConstant(ValueExpressions.DateExpression expr, Void value) throws RuntimeException {
     long dateInMillis = expr.getDate();
     return getStatistics(dateInMillis);
   }
 
   @Override
-  public Statistics visitTimeStampConstant(ValueExpressions.TimeStampExpression tsExpr, Void value) throws RuntimeException {
+  public Statistics<T> visitTimeStampConstant(ValueExpressions.TimeStampExpression tsExpr, Void value) throws RuntimeException {
     long tsInMillis = tsExpr.getTimeStamp();
     return getStatistics(tsInMillis);
   }
 
   @Override
-  public Statistics visitTimeConstant(ValueExpressions.TimeExpression timeExpr, Void value) throws RuntimeException {
+  public Statistics<T> visitTimeConstant(ValueExpressions.TimeExpression timeExpr, Void value) throws RuntimeException {
     int milliSeconds = timeExpr.getTime();
     return getStatistics(milliSeconds);
   }
 
   @Override
-  public Statistics visitFunctionHolderExpression(FunctionHolderExpression holderExpr, Void value) throws RuntimeException {
+  public Statistics<T> visitFunctionHolderExpression(FunctionHolderExpression holderExpr, Void value) throws RuntimeException {
     FuncHolder funcHolder = holderExpr.getHolder();
 
     if (! (funcHolder instanceof DrillSimpleFuncHolder)) {
@@ -142,7 +145,7 @@ public class RangeExprEvaluator extends AbstractExprVisitor<Statistics, Void, Ru
 
     final String funcName = ((DrillSimpleFuncHolder) funcHolder).getRegisteredNames()[0];
 
-    if (CastFunctions.isCastFunction(funcName)) {
+    if (FunctionReplacementUtils.isCastFunction(funcName)) {
       Statistics stat = holderExpr.args.get(0).accept(this, null);
       if (stat != null && ! stat.isEmpty()) {
         return evalCastFunc(holderExpr, stat);
@@ -151,57 +154,62 @@ public class RangeExprEvaluator extends AbstractExprVisitor<Statistics, Void, Ru
     return null;
   }
 
-  private IntStatistics getStatistics(int value) {
+  private Statistics<T> getStatistics(int value) {
     return getStatistics(value, value);
   }
 
-  private IntStatistics getStatistics(int min, int max) {
-    final IntStatistics intStatistics = new IntStatistics();
-    intStatistics.setMinMax(min, max);
-    return intStatistics;
+  @SuppressWarnings("unchecked")
+  private Statistics<T> getStatistics(int min, int max) {
+    final Statistics<T> statistics = Statistics.getStatsBasedOnType(PrimitiveType.PrimitiveTypeName.INT32);
+    ((IntStatistics)statistics).setMinMax(min, max);
+    return statistics;
   }
 
-  private BooleanStatistics getStatistics(boolean value) {
+  private Statistics<T> getStatistics(boolean value) {
     return getStatistics(value, value);
   }
 
-  private BooleanStatistics getStatistics(boolean min, boolean max) {
-    final BooleanStatistics booleanStatistics = new BooleanStatistics();
-    booleanStatistics.setMinMax(min, max);
-    return booleanStatistics;
+  @SuppressWarnings("unchecked")
+  private Statistics<T> getStatistics(boolean min, boolean max) {
+    Statistics<T> statistics = Statistics.getStatsBasedOnType(PrimitiveType.PrimitiveTypeName.BOOLEAN);
+    ((BooleanStatistics)statistics).setMinMax(min, max);
+    return statistics;
   }
 
-  private LongStatistics getStatistics(long value) {
+  private Statistics<T> getStatistics(long value) {
     return getStatistics(value, value);
   }
 
-  private LongStatistics getStatistics(long min, long max) {
-    final LongStatistics longStatistics = new LongStatistics();
-    longStatistics.setMinMax(min, max);
-    return longStatistics;
+  @SuppressWarnings("unchecked")
+  private Statistics<T> getStatistics(long min, long max) {
+    final Statistics statistics = Statistics.getStatsBasedOnType(PrimitiveType.PrimitiveTypeName.INT64);
+    ((LongStatistics)statistics).setMinMax(min, max);
+    return statistics;
   }
 
-  private DoubleStatistics getStatistics(double value) {
+  private Statistics<T> getStatistics(double value) {
     return getStatistics(value, value);
   }
 
-  private DoubleStatistics getStatistics(double min, double max) {
-    final DoubleStatistics doubleStatistics = new DoubleStatistics();
-    doubleStatistics.setMinMax(min, max);
-    return doubleStatistics;
+  @SuppressWarnings("unchecked")
+  private Statistics<T> getStatistics(double min, double max) {
+    final Statistics<T> statistics = Statistics.getStatsBasedOnType(PrimitiveType.PrimitiveTypeName.DOUBLE);
+    ((DoubleStatistics)statistics).setMinMax(min, max);
+    return statistics;
   }
 
-  private FloatStatistics getStatistics(float value) {
+  private Statistics<T> getStatistics(float value) {
     return getStatistics(value, value);
   }
 
-  private FloatStatistics getStatistics(float min, float max) {
-    final FloatStatistics floatStatistics = new FloatStatistics();
-    floatStatistics.setMinMax(min, max);
-    return floatStatistics;
+  @SuppressWarnings("unchecked")
+  private Statistics<T> getStatistics(float min, float max) {
+    final Statistics<T> statistics = Statistics.getStatsBasedOnType(PrimitiveType.PrimitiveTypeName.FLOAT);
+    ((FloatStatistics)statistics).setMinMax(min, max);
+    return statistics;
   }
 
-  private Statistics evalCastFunc(FunctionHolderExpression holderExpr, Statistics input) {
+  private Statistics<T> evalCastFunc(FunctionHolderExpression holderExpr, Statistics input) {
     try {
       DrillSimpleFuncHolder funcHolder = (DrillSimpleFuncHolder) holderExpr.getHolder();
 
@@ -250,21 +258,28 @@ public class RangeExprEvaluator extends AbstractExprVisitor<Statistics, Void, Ru
       final ValueHolder minFuncHolder = InterpreterEvaluator.evaluateFunction(interpreter, args1, holderExpr.getName());
       final ValueHolder maxFuncHolder = InterpreterEvaluator.evaluateFunction(interpreter, args2, holderExpr.getName());
 
+      Statistics<T> statistics;
       switch (destType) {
-      //TODO : need handle # of nulls.
-      case INT:
-        return getStatistics( ((IntHolder)minFuncHolder).value, ((IntHolder)maxFuncHolder).value);
-      case BIGINT:
-        return getStatistics( ((BigIntHolder)minFuncHolder).value, ((BigIntHolder)maxFuncHolder).value);
-      case FLOAT4:
-        return getStatistics( ((Float4Holder)minFuncHolder).value, ((Float4Holder)maxFuncHolder).value);
-      case FLOAT8:
-        return getStatistics( ((Float8Holder)minFuncHolder).value, ((Float8Holder)maxFuncHolder).value);
-      case TIMESTAMP:
-        return getStatistics(((TimeStampHolder) minFuncHolder).value, ((TimeStampHolder) maxFuncHolder).value);
-      default:
-        return null;
+        case INT:
+          statistics = getStatistics(((IntHolder) minFuncHolder).value, ((IntHolder) maxFuncHolder).value);
+          break;
+        case BIGINT:
+          statistics = getStatistics(((BigIntHolder) minFuncHolder).value, ((BigIntHolder) maxFuncHolder).value);
+          break;
+        case FLOAT4:
+          statistics = getStatistics(((Float4Holder) minFuncHolder).value, ((Float4Holder) maxFuncHolder).value);
+          break;
+        case FLOAT8:
+          statistics = getStatistics(((Float8Holder) minFuncHolder).value, ((Float8Holder) maxFuncHolder).value);
+          break;
+        case TIMESTAMP:
+          statistics = getStatistics(((TimeStampHolder) minFuncHolder).value, ((TimeStampHolder) maxFuncHolder).value);
+          break;
+        default:
+          return null;
       }
+      statistics.setNumNulls(input.getNumNulls());
+      return statistics;
     } catch (Exception e) {
       throw new DrillRuntimeException("Error in evaluating function of " + holderExpr.getName() );
     }

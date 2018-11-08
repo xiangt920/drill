@@ -19,9 +19,10 @@ package org.apache.drill.exec.physical.base;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.apache.drill.common.graph.GraphVisitor;
+import org.apache.drill.exec.ops.QueryContext;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
 
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 
 public abstract class AbstractBase implements PhysicalOperator {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AbstractBase.class);
@@ -114,9 +115,10 @@ public abstract class AbstractBase implements PhysicalOperator {
   /**
    * Any operator that supports spilling should override this method (and return true)
    * @return false
+   * @param queryContext
    */
   @Override @JsonIgnore
-  public boolean isBufferedOperator() { return false; }
+  public boolean isBufferedOperator(QueryContext queryContext) { return false; }
 
   @Override
   public String getUserName() {

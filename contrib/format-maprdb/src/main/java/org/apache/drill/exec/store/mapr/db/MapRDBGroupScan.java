@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -32,24 +32,31 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.exec.physical.EndpointAffinity;
-import org.apache.drill.exec.physical.base.AbstractGroupScan;
+import org.apache.drill.exec.physical.base.AbstractDbGroupScan;
+import org.apache.calcite.rel.RelNode;
+import org.apache.drill.exec.planner.index.IndexCollection;
+
+import org.apache.drill.exec.planner.cost.PluginCost;
+import org.apache.drill.exec.planner.index.IndexDiscover;
+import org.apache.drill.exec.planner.index.IndexDiscoverFactory;
+import org.apache.drill.exec.planner.index.MapRDBIndexDiscover;
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
-import org.apache.drill.exec.store.dfs.FileSystemConfig;
-import org.apache.drill.exec.store.dfs.FileSystemPlugin;
+import org.apache.drill.exec.store.AbstractStoragePlugin;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 
-public abstract class MapRDBGroupScan extends AbstractGroupScan {
+public abstract class MapRDBGroupScan extends AbstractDbGroupScan {
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MapRDBGroupScan.class);
 
-  protected FileSystemPlugin storagePlugin;
+  protected AbstractStoragePlugin storagePlugin;
 
   protected MapRDBFormatPlugin formatPlugin;
 
@@ -59,7 +66,9 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
 
   protected Map<Integer, List<MapRDBSubScanSpec>> endpointFragmentMapping;
 
-  protected NavigableMap<TabletFragmentInfo, String> regionsToScan;
+  protected NavigableMap<TabletFragmentInfo, String> doNotAccessRegionsToScan;
+
+  protected double costFactor = 1.0;
 
   private boolean filterPushedDown = false;
 
@@ -80,11 +89,16 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
     this.formatPlugin = that.formatPlugin;
     this.formatPluginConfig = that.formatPluginConfig;
     this.storagePlugin = that.storagePlugin;
-    this.regionsToScan = that.regionsToScan;
     this.filterPushedDown = that.filterPushedDown;
+    this.costFactor = that.costFactor;
+    /* this is the only place we access the field `doNotAccessRegionsToScan` directly
+     * because we do not want the sub-scan spec for JSON tables to be calculated
+     * during the copy-constructor
+     */
+    this.doNotAccessRegionsToScan = that.doNotAccessRegionsToScan;
   }
 
-  public MapRDBGroupScan(FileSystemPlugin storagePlugin,
+  public MapRDBGroupScan(AbstractStoragePlugin storagePlugin,
       MapRDBFormatPlugin formatPlugin, List<SchemaPath> columns, String userName) {
     super(userName);
     this.storagePlugin = storagePlugin;
@@ -102,8 +116,8 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
       endpointMap.put(ep.getAddress(), ep);
     }
 
-    Map<DrillbitEndpoint, EndpointAffinity> affinityMap = new HashMap<DrillbitEndpoint, EndpointAffinity>();
-    for (String serverName : regionsToScan.values()) {
+    final Map<DrillbitEndpoint, EndpointAffinity> affinityMap = new HashMap<DrillbitEndpoint, EndpointAffinity>();
+    for (String serverName : getRegionsToScan().values()) {
       DrillbitEndpoint ep = endpointMap.get(serverName);
       if (ep != null) {
         EndpointAffinity affinity = affinityMap.get(ep);
@@ -127,6 +141,7 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
     watch.reset();
     watch.start();
 
+    final NavigableMap<TabletFragmentInfo, String> regionsToScan = getRegionsToScan();
     final int numSlots = incomingEndpoints.size();
     Preconditions.checkArgument(numSlots <= regionsToScan.size(),
         String.format("Incoming endpoints %d is greater than number of scan regions %d", numSlots, regionsToScan.size()));
@@ -161,7 +176,7 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
       hostIndexQueue.add(i);
     }
 
-    Set<Entry<TabletFragmentInfo, String>> regionsToAssignSet = Sets.newHashSet(regionsToScan.entrySet());
+    Set<Entry<TabletFragmentInfo, String>> regionsToAssignSet = Sets.newLinkedHashSet(regionsToScan.entrySet());
 
     /*
      * First, we assign regions which are hosted on region servers running on drillbit endpoints
@@ -175,7 +190,8 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
       if (endpointIndexlist != null) {
         Integer slotIndex = endpointIndexlist.poll();
         List<MapRDBSubScanSpec> endpointSlotScanList = endpointFragmentMapping.get(slotIndex);
-        endpointSlotScanList.add(getSubScanSpec(regionEntry.getKey()));
+        MapRDBSubScanSpec subScanSpec = getSubScanSpec(regionEntry.getKey());
+        endpointSlotScanList.add(subScanSpec);
         // add to the tail of the slot list, to add more later in round robin fashion
         endpointIndexlist.offer(slotIndex);
         // this region has been assigned
@@ -202,7 +218,8 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
     if (regionsToAssignSet.size() > 0) {
       for (Entry<TabletFragmentInfo, String> regionEntry : regionsToAssignSet) {
         List<MapRDBSubScanSpec> smallestList = minHeap.poll();
-        smallestList.add(getSubScanSpec(regionEntry.getKey()));
+        MapRDBSubScanSpec subScanSpec = getSubScanSpec(regionEntry.getKey());
+        smallestList.add(subScanSpec);
         if (smallestList.size() < maxPerEndpointSlot) {
           minHeap.offer(smallestList);
         }
@@ -224,6 +241,10 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
       }
     }
 
+    for (Entry<Integer, List<MapRDBSubScanSpec>> endpoint : endpointFragmentMapping.entrySet()) {
+      Collections.sort(endpoint.getValue());
+    }
+
     /* no slot should be empty at this point */
     assert (minHeap.peek() == null || minHeap.peek().size() > 0) : String.format(
         "Unable to assign tasks to some endpoints.\nEndpoints: {}.\nAssignment Map: {}.",
@@ -235,7 +256,7 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
 
   @Override
   public int getMaxParallelizationWidth() {
-    return regionsToScan.size();
+    return getRegionsToScan().size();
   }
 
   @JsonIgnore
@@ -249,12 +270,12 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
   }
 
   @JsonProperty("storage")
-  public FileSystemConfig getStorageConfig() {
-    return (FileSystemConfig) storagePlugin.getConfig();
+  public StoragePluginConfig getStorageConfig() {
+    return storagePlugin.getConfig();
   }
 
   @JsonIgnore
-  public FileSystemPlugin getStoragePlugin(){
+  public AbstractStoragePlugin getStoragePlugin(){
     return storagePlugin;
   }
 
@@ -273,11 +294,53 @@ public abstract class MapRDBGroupScan extends AbstractGroupScan {
     this.filterPushedDown = true;
   }
 
+  public String getIndexHint() { return this.formatPluginConfig.getIndex(); }
+
   @JsonIgnore
+  @Override
   public boolean isFilterPushedDown() {
     return filterPushedDown;
   }
 
   protected abstract MapRDBSubScanSpec getSubScanSpec(TabletFragmentInfo key);
 
+  public void setCostFactor(double sel) {
+    this.costFactor = sel;
+  }
+
+  @Override
+  public IndexCollection getSecondaryIndexCollection(RelNode scanRel) {
+    IndexDiscover discover = IndexDiscoverFactory.getIndexDiscover(
+        getStorageConfig(), this, scanRel, MapRDBIndexDiscover.class);
+
+    if (discover == null) {
+      logger.error("Null IndexDiscover was found for {}!", scanRel);
+    }
+    return discover.getTableIndex(getTableName());
+  }
+
+  @JsonIgnore
+  public abstract String getTableName();
+
+  @JsonIgnore
+  public int getRowKeyOrdinal() {
+    return 0;
+  }
+
+  protected NavigableMap<TabletFragmentInfo, String> getRegionsToScan() {
+    return doNotAccessRegionsToScan;
+  }
+
+  protected void resetRegionsToScan() {
+    this.doNotAccessRegionsToScan = null;
+  }
+
+  protected void setRegionsToScan(NavigableMap<TabletFragmentInfo, String> regionsToScan) {
+    this.doNotAccessRegionsToScan = regionsToScan;
+  }
+
+  @Override
+  public PluginCost getPluginCostModel() {
+    return formatPlugin.getPluginCostModel();
+  }
 }

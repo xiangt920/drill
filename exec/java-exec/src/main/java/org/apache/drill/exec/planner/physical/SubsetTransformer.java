@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.planner.physical;
 
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.plan.ConventionTraitDef;
 import org.apache.calcite.plan.RelOptRule;
@@ -32,6 +32,10 @@ public abstract class SubsetTransformer<T extends RelNode, E extends Exception> 
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SubsetTransformer.class);
 
   public abstract RelNode convertChild(T current, RelNode child) throws E;
+
+  public boolean forceConvert() {
+    return false;
+  }
 
   private final RelOptRuleCall call;
 
@@ -69,6 +73,15 @@ public abstract class SubsetTransformer<T extends RelNode, E extends Exception> 
     }
 
     //2, convert the candidateSet to targeted taitSets
+    if (traitSets.size() == 0 && forceConvert()) {
+      RelNode out = convertChild(n, null);
+      if (out != null) {
+        call.transformTo(out);
+        return true;
+      }
+      return false;
+    }
+
     for (RelTraitSet traitSet: traitSets) {
       RelNode newRel = RelOptRule.convert(candidateSet, traitSet.simplify());
       if(transformedRels.contains(newRel)) {

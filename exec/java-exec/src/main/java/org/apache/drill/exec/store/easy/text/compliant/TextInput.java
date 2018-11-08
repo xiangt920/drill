@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -30,8 +30,7 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.Seekable;
 import org.apache.hadoop.io.compress.CompressionInputStream;
 
-import com.google.common.base.Preconditions;
-import com.univocity.parsers.common.Format;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 
 import static org.apache.drill.exec.memory.BoundsChecking.rangeCheck;
 
@@ -97,7 +96,7 @@ final class TextInput {
     this.lineSeparator = settings.getNewLineDelimiter();
     byte normalizedLineSeparator = settings.getNormalizedNewLine();
     Preconditions.checkArgument(input instanceof Seekable, "Text input only supports an InputStream that supports Seekable.");
-    boolean isCompressed = input instanceof CompressionInputStream ;
+    boolean isCompressed = input instanceof CompressionInputStream;
     Preconditions.checkArgument(!isCompressed || startPos == 0, "Cannot use split on compressed stream.");
 
     // splits aren't allowed with compressed data.  The split length will be the compressed size which means we'll normally end prematurely.

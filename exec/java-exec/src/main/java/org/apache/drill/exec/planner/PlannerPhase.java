@@ -17,9 +17,9 @@
  */
 package org.apache.drill.exec.planner;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSet.Builder;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableSet.Builder;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.rules.JoinToMultiJoinRule;
@@ -27,7 +27,10 @@ import org.apache.calcite.rel.rules.LoptOptimizeJoinRule;
 import org.apache.calcite.tools.RuleSet;
 import org.apache.calcite.tools.RuleSets;
 import org.apache.drill.exec.ops.OptimizerRulesContext;
+import org.apache.drill.exec.planner.index.rules.DbScanSortRemovalRule;
+import org.apache.drill.exec.planner.index.rules.DbScanToIndexScanPrule;
 import org.apache.drill.exec.planner.logical.DrillAggregateRule;
+import org.apache.drill.exec.planner.logical.DrillCorrelateRule;
 import org.apache.drill.exec.planner.logical.DrillFilterAggregateTransposeRule;
 import org.apache.drill.exec.planner.logical.DrillFilterItemStarReWriterRule;
 import org.apache.drill.exec.planner.logical.DrillFilterJoinRules;
@@ -36,6 +39,8 @@ import org.apache.drill.exec.planner.logical.DrillJoinRel;
 import org.apache.drill.exec.planner.logical.DrillJoinRule;
 import org.apache.drill.exec.planner.logical.DrillLimitRule;
 import org.apache.drill.exec.planner.logical.DrillMergeProjectRule;
+import org.apache.drill.exec.planner.logical.DrillProjectLateralJoinTransposeRule;
+import org.apache.drill.exec.planner.logical.DrillProjectPushIntoLateralJoinRule;
 import org.apache.drill.exec.planner.logical.DrillProjectRule;
 import org.apache.drill.exec.planner.logical.DrillPushFilterPastProjectRule;
 import org.apache.drill.exec.planner.logical.DrillPushLimitToScanRule;
@@ -48,17 +53,19 @@ import org.apache.drill.exec.planner.logical.DrillRelFactories;
 import org.apache.drill.exec.planner.logical.DrillScanRule;
 import org.apache.drill.exec.planner.logical.DrillSortRule;
 import org.apache.drill.exec.planner.logical.DrillUnionAllRule;
+import org.apache.drill.exec.planner.logical.DrillUnnestRule;
 import org.apache.drill.exec.planner.logical.DrillValuesRule;
 import org.apache.drill.exec.planner.logical.DrillWindowRule;
 import org.apache.drill.exec.planner.logical.partition.ParquetPruneScanRule;
 import org.apache.drill.exec.planner.logical.partition.PruneScanRule;
 import org.apache.drill.exec.planner.physical.ConvertCountToDirectScan;
+import org.apache.drill.exec.planner.physical.LateralJoinPrule;
 import org.apache.drill.exec.planner.physical.DirectScanPrule;
 import org.apache.drill.exec.planner.physical.FilterPrule;
 import org.apache.drill.exec.planner.physical.HashAggPrule;
 import org.apache.drill.exec.planner.physical.HashJoinPrule;
 import org.apache.drill.exec.planner.physical.LimitPrule;
-import org.apache.drill.exec.planner.physical.LimitUnionExchangeTransposeRule;
+import org.apache.drill.exec.planner.physical.LimitExchangeTransposeRule;
 import org.apache.drill.exec.planner.physical.MergeJoinPrule;
 import org.apache.drill.exec.planner.physical.NestedLoopJoinPrule;
 import org.apache.drill.exec.planner.physical.PlannerSettings;
@@ -70,6 +77,7 @@ import org.apache.drill.exec.planner.physical.SortConvertPrule;
 import org.apache.drill.exec.planner.physical.SortPrule;
 import org.apache.drill.exec.planner.physical.StreamAggPrule;
 import org.apache.drill.exec.planner.physical.UnionAllPrule;
+import org.apache.drill.exec.planner.physical.UnnestPrule;
 import org.apache.drill.exec.planner.physical.ValuesPrule;
 import org.apache.drill.exec.planner.physical.WindowPrule;
 import org.apache.drill.exec.planner.physical.WriterPrule;
@@ -106,6 +114,16 @@ public enum PlannerPhase {
           RuleInstance.CALC_INSTANCE,
           RuleInstance.PROJECT_TO_LOGICAL_PROJECT_AND_WINDOW_RULE
           );
+    }
+  },
+
+  SUBQUERY_REWRITE("Sub-queries rewrites") {
+    public RuleSet getRules(OptimizerRulesContext context, Collection<StoragePlugin> plugins) {
+      return RuleSets.ofList(
+          RuleInstance.SUB_QUERY_FILTER_REMOVE_RULE,
+          RuleInstance.SUB_QUERY_PROJECT_REMOVE_RULE,
+          RuleInstance.SUB_QUERY_JOIN_REMOVE_RULE
+      );
     }
   },
 
@@ -176,7 +194,20 @@ public enum PlannerPhase {
     public RuleSet getRules(OptimizerRulesContext context, Collection<StoragePlugin> plugins) {
       return PlannerPhase.mergedRuleSets(
           PlannerPhase.getPhysicalRules(context),
+          getIndexRules(context),
           getStorageRules(context, plugins, this));
+    }
+  },
+
+  PRE_LOGICAL_PLANNING("Planning with Hep planner only for rules, which are failed for Volcano planner") {
+    public RuleSet getRules (OptimizerRulesContext context, Collection<StoragePlugin> plugins) {
+      return PlannerPhase.getSetOpTransposeRules();
+    }
+  },
+
+  TRANSITIVE_CLOSURE("Transitive closure") {
+    public RuleSet getRules(OptimizerRulesContext context, Collection<StoragePlugin> plugins) {
+      return getJoinTransitiveClosureRules();
     }
   };
 
@@ -249,8 +280,8 @@ public enum PlannerPhase {
       RuleInstance.UNION_TO_DISTINCT_RULE,
 
       // Add support for WHERE style joins.
-      DrillFilterJoinRules.DRILL_FILTER_ON_JOIN,
-      DrillFilterJoinRules.DRILL_JOIN,
+      DrillFilterJoinRules.FILTER_INTO_JOIN,
+      DrillFilterJoinRules.JOIN_PUSH_CONDITION,
       RuleInstance.JOIN_PUSH_EXPRESSIONS_RULE,
       // End support for WHERE style joins.
 
@@ -258,11 +289,13 @@ public enum PlannerPhase {
        Filter push-down related rules
        */
       DrillPushFilterPastProjectRule.INSTANCE,
-      // Due to infinite loop in planning (DRILL-3257), temporarily disable this rule
-      //FilterSetOpTransposeRule.INSTANCE,
+      // Due to infinite loop in planning (DRILL-3257/CALCITE-1271), temporarily use this rule in Hep planner
+      // RuleInstance.FILTER_SET_OP_TRANSPOSE_RULE,
       DrillFilterAggregateTransposeRule.INSTANCE,
-
+      DrillProjectLateralJoinTransposeRule.INSTANCE,
+      DrillProjectPushIntoLateralJoinRule.INSTANCE,
       RuleInstance.FILTER_MERGE_RULE,
+      RuleInstance.FILTER_CORRELATE_RULE,
       RuleInstance.AGGREGATE_REMOVE_RULE,
       RuleInstance.PROJECT_REMOVE_RULE,
       RuleInstance.SORT_REMOVE_RULE,
@@ -276,10 +309,11 @@ public enum PlannerPhase {
       DrillPushProjectPastFilterRule.INSTANCE,
       DrillPushProjectPastJoinRule.INSTANCE,
 
-      // Due to infinite loop in planning (DRILL-3257), temporarily disable this rule
-      //DrillProjectSetOpTransposeRule.INSTANCE,
+      // Due to infinite loop in planning (DRILL-3257/CALCITE-1271), temporarily use this rule in Hep planner
+      // RuleInstance.PROJECT_SET_OP_TRANSPOSE_RULE,
       RuleInstance.PROJECT_WINDOW_TRANSPOSE_RULE,
       DrillPushProjectIntoScanRule.INSTANCE,
+      DrillPushProjectIntoScanRule.DRILL_LOGICAL_INSTANCE,
 
       /*
        Convert from Calcite Logical to Drill Logical Rules.
@@ -295,7 +329,9 @@ public enum PlannerPhase {
       DrillSortRule.INSTANCE,
       DrillJoinRule.INSTANCE,
       DrillUnionAllRule.INSTANCE,
-      DrillValuesRule.INSTANCE
+      DrillValuesRule.INSTANCE,
+      DrillUnnestRule.INSTANCE,
+      DrillCorrelateRule.INSTANCE
       ).build();
 
   /**
@@ -322,15 +358,18 @@ public enum PlannerPhase {
      * We have to create another copy of the ruleset with the context dependent elements;
      * this cannot be reused across queries.
      */
-    final ImmutableSet<RelOptRule> basicRules = ImmutableSet.<RelOptRule>builder()
+    ImmutableSet.Builder<RelOptRule> basicRules = ImmutableSet.<RelOptRule>builder()
         .addAll(staticRuleSet)
         .add(
             DrillMergeProjectRule.getInstance(true, RelFactories.DEFAULT_PROJECT_FACTORY,
                 optimizerRulesContext.getFunctionRegistry())
-            )
-        .build();
+            );
+    if (optimizerRulesContext.getPlannerSettings().isHashJoinEnabled() &&
+        optimizerRulesContext.getPlannerSettings().isSemiJoinEnabled()) {
+      basicRules.add(RuleInstance.SEMI_JOIN_PROJECT_RULE);
+    }
 
-    return RuleSets.ofList(basicRules);
+    return RuleSets.ofList(basicRules.build());
   }
 
   /**
@@ -352,6 +391,32 @@ public enum PlannerPhase {
 
     return RuleSets.ofList(pruneRules);
   }
+  /**
+   *
+   */
+  static RuleSet getIndexRules(OptimizerRulesContext optimizerRulesContext) {
+    final PlannerSettings ps = optimizerRulesContext.getPlannerSettings();
+    if (!ps.isIndexPlanningEnabled()) {
+      return RuleSets.ofList(ImmutableSet.<RelOptRule>builder().build());
+    }
+
+    final ImmutableSet<RelOptRule> indexRules = ImmutableSet.<RelOptRule>builder()
+        .add(
+            DbScanToIndexScanPrule.REL_FILTER_SCAN,
+            DbScanToIndexScanPrule.SORT_FILTER_PROJECT_SCAN,
+            DbScanToIndexScanPrule.SORT_PROJECT_FILTER_PROJECT_SCAN,
+            DbScanToIndexScanPrule.PROJECT_FILTER_PROJECT_SCAN,
+            DbScanToIndexScanPrule.SORT_PROJECT_FILTER_SCAN,
+            DbScanToIndexScanPrule.FILTER_PROJECT_SCAN,
+            DbScanToIndexScanPrule.FILTER_SCAN,
+            DbScanSortRemovalRule.INDEX_SORT_EXCHANGE_PROJ_SCAN,
+            DbScanSortRemovalRule.INDEX_SORT_EXCHANGE_SCAN,
+            DbScanSortRemovalRule.INDEX_SORT_SCAN,
+            DbScanSortRemovalRule.INDEX_SORT_PROJ_SCAN
+        )
+        .build();
+    return RuleSets.ofList(indexRules);
+  }
 
   /**
    *   Get an immutable list of pruning rules that will be used post physical planning.
@@ -365,6 +430,7 @@ public enum PlannerPhase {
             // Ideally this should be done in logical planning, before join order planning is done.
             // Before we can make such change, we have to figure out how to adjust the selectivity
             // estimation of filter operator, after filter is pushed down to scan.
+
             ParquetPushDownFilter.getFilterOnProject(optimizerRulesContext),
             ParquetPushDownFilter.getFilterOnScan(optimizerRulesContext)
         )
@@ -392,7 +458,11 @@ public enum PlannerPhase {
 
   }
 
-  // Ruleset for join permutation, used only in VolcanoPlanner.
+  /**
+   * RuleSet for join permutation, used only in VolcanoPlanner.
+   * @param optimizerRulesContext shared state used during planning
+   * @return set of planning rules
+   */
   static RuleSet getJoinPermRules(OptimizerRulesContext optimizerRulesContext) {
     return RuleSets.ofList(ImmutableSet.<RelOptRule> builder().add(
         RuleInstance.JOIN_PUSH_THROUGH_JOIN_RULE_RIGHT,
@@ -407,7 +477,6 @@ public enum PlannerPhase {
   static RuleSet getPhysicalRules(OptimizerRulesContext optimizerRulesContext) {
     final List<RelOptRule> ruleList = new ArrayList<>();
     final PlannerSettings ps = optimizerRulesContext.getPlannerSettings();
-
     ruleList.add(ConvertCountToDirectScan.AGG_ON_PROJ_ON_SCAN);
     ruleList.add(ConvertCountToDirectScan.AGG_ON_SCAN);
     ruleList.add(SortConvertPrule.INSTANCE);
@@ -421,10 +490,16 @@ public enum PlannerPhase {
     ruleList.add(WriterPrule.INSTANCE);
     ruleList.add(WindowPrule.INSTANCE);
     ruleList.add(PushLimitToTopN.INSTANCE);
-    ruleList.add(LimitUnionExchangeTransposeRule.INSTANCE);
+    ruleList.add(LimitExchangeTransposeRule.INSTANCE);
     ruleList.add(UnionAllPrule.INSTANCE);
     ruleList.add(ValuesPrule.INSTANCE);
     ruleList.add(DirectScanPrule.INSTANCE);
+
+    ruleList.add(UnnestPrule.INSTANCE);
+    ruleList.add(LateralJoinPrule.INSTANCE);
+
+    ruleList.add(DrillPushLimitToScanRule.LIMIT_ON_PROJECT);
+    ruleList.add(DrillPushLimitToScanRule.LIMIT_ON_SCAN);
 
     if (ps.isHashAggEnabled()) {
       ruleList.add(HashAggPrule.INSTANCE);
@@ -436,9 +511,14 @@ public enum PlannerPhase {
 
     if (ps.isHashJoinEnabled()) {
       ruleList.add(HashJoinPrule.DIST_INSTANCE);
-
+      if (ps.isSemiJoinEnabled()) {
+        ruleList.add(HashJoinPrule.SEMI_DIST_INSTANCE);
+      }
       if(ps.isBroadcastJoinEnabled()){
         ruleList.add(HashJoinPrule.BROADCAST_INSTANCE);
+        if (ps.isSemiJoinEnabled()) {
+          ruleList.add(HashJoinPrule.SEMI_BROADCAST_INSTANCE);
+        }
       }
     }
 
@@ -448,7 +528,6 @@ public enum PlannerPhase {
       if(ps.isBroadcastJoinEnabled()){
         ruleList.add(MergeJoinPrule.BROADCAST_INSTANCE);
       }
-
     }
 
     // NLJ plans consist of broadcasting the right child, hence we need
@@ -486,5 +565,35 @@ public enum PlannerPhase {
        ).build();
   }
 
+  /**
+   *  Get an immutable list of rules to transpose SetOp(Union) operator with other operators.<p>
+   *  Note: Used by Hep planner only (failed for Volcano planner - CALCITE-1271)
+   *
+   * @return SetOp(Union) transpose rules
+   */
+  private static RuleSet getSetOpTransposeRules() {
+    return RuleSets.ofList(ImmutableSet.<RelOptRule> builder()
+        .add(
+            RuleInstance.FILTER_SET_OP_TRANSPOSE_RULE,
+            RuleInstance.PROJECT_SET_OP_TRANSPOSE_RULE
+        ).build());
+  }
 
+  /**
+   * RuleSet for join transitive closure, used only in HepPlanner.<p>
+   * TODO: {@link RuleInstance#DRILL_JOIN_PUSH_TRANSITIVE_PREDICATES_RULE} should be moved into {@link #staticRuleSet},
+   * (with using {@link DrillRelFactories#LOGICAL_BUILDER}) once CALCITE-1048 is solved. This block can be removed then.
+   *
+   * @return set of planning rules
+   */
+  static RuleSet getJoinTransitiveClosureRules() {
+    return RuleSets.ofList(ImmutableSet.<RelOptRule> builder()
+        .add(
+            RuleInstance.DRILL_JOIN_PUSH_TRANSITIVE_PREDICATES_RULE,
+            DrillFilterJoinRules.DRILL_FILTER_INTO_JOIN,
+            RuleInstance.REMOVE_IS_NOT_DISTINCT_FROM_RULE,
+            DrillFilterAggregateTransposeRule.DRILL_LOGICAL_INSTANCE,
+            RuleInstance.DRILL_FILTER_MERGE_RULE
+        ).build());
+  }
 }

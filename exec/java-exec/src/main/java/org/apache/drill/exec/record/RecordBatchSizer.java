@@ -17,10 +17,13 @@
  */
 package org.apache.drill.exec.record;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+import java.util.Collection;
 import java.util.Map;
-
 import org.apache.drill.common.map.CaseInsensitiveMap;
+import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.TypeProtos.DataMode;
 import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.exec.expr.TypeHelper;
@@ -39,8 +42,11 @@ import org.apache.drill.exec.vector.complex.RepeatedMapVector;
 import org.apache.drill.exec.vector.complex.RepeatedValueVector;
 import org.apache.drill.exec.vector.VariableWidthVector;
 
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 import org.apache.drill.exec.vector.complex.RepeatedVariableWidthVectorLike;
+import org.bouncycastle.util.Strings;
+
+import static org.apache.drill.exec.vector.AllocationHelper.STD_REPETITION_FACTOR;
 
 /**
  * Given a record batch or vector container, determines the actual memory
@@ -50,12 +56,27 @@ import org.apache.drill.exec.vector.complex.RepeatedVariableWidthVectorLike;
 public class RecordBatchSizer {
   private static final int OFFSET_VECTOR_WIDTH = UInt4Vector.VALUE_WIDTH;
   private static final int BIT_VECTOR_WIDTH = UInt1Vector.VALUE_WIDTH;
-  private static final int STD_REPETITION_FACTOR = 10;
+
+  public static long multiplyByFactors(long size, double... factors)
+  {
+    double doubleSize = (double) size;
+
+    for (double factor: factors) {
+      doubleSize *= factor;
+    }
+
+    return (long) doubleSize;
+  }
+
+  public static long multiplyByFactor(long size, double factor)
+  {
+    return (long) (((double) size) * factor);
+  }
 
   /**
    * Column size information.
    */
-  public static class ColumnSize {
+  public class ColumnSize {
     public final String prefix;
     public final MaterializedField metadata;
 
@@ -127,6 +148,14 @@ public class RecordBatchSizer {
     private Map<String, ColumnSize> children = CaseInsensitiveMap.newHashMap();
 
     /**
+     * Returns true if there is an accurate std size. Otherwise it returns false.
+     * @return True if there is an accurate std size. Otherwise it returns false.
+     */
+    public boolean hasStdDataSize() {
+      return !isVariableWidth && !isRepeated;
+    }
+
+    /**
      * std pure data size per entry from Drill metadata, based on type.
      * Does not include metadata vector overhead we add for cardinality,
      * variable length etc.
@@ -172,30 +201,7 @@ public class RecordBatchSizer {
      * For repeated column, we assume repetition of 10.
      */
     public int getStdNetSizePerEntry() {
-      int stdNetSize;
-      try {
-        stdNetSize = TypeHelper.getSize(metadata.getType());
-      } catch (Exception e) {
-        stdNetSize = 0;
-      }
-
-      if (isOptional) {
-        stdNetSize += BIT_VECTOR_WIDTH;
-      }
-
-      if (isRepeated) {
-        stdNetSize = (stdNetSize * STD_REPETITION_FACTOR) + OFFSET_VECTOR_WIDTH;
-      }
-
-      for (ColumnSize columnSize : children.values()) {
-        stdNetSize += columnSize.getStdNetSizePerEntry();
-      }
-
-      if (isRepeatedList()) {
-        stdNetSize = (stdNetSize * STD_REPETITION_FACTOR) + OFFSET_VECTOR_WIDTH;
-      }
-
-      return stdNetSize;
+      return getStdNetSizePerEntryCommon(metadata.getType(), isOptional, isRepeated, isRepeatedList(), children);
     }
 
     /**
@@ -218,6 +224,65 @@ public class RecordBatchSizer {
      */
     public int getNetSizePerEntry() {
       return safeDivide(getTotalNetSize(), getValueCount());
+    }
+
+    /**
+     * This returns actual entry size if rowCount > 0 or allocation size otherwise.
+     * Use this for the cases when you might get empty batches with schema
+     * and you still need to do memory calculations based on just schema.
+     */
+    public int getAllocSizePerEntry() {
+      if (rowCount() != 0) {
+        return getNetSizePerEntry();
+      }
+
+      int stdNetSize;
+      try {
+        stdNetSize = TypeHelper.getSize(metadata.getType());
+
+        // TypeHelper estimates 50 bytes for variable length. That is pretty high number
+        // to use as approximation for empty batches. Use 8 instead.
+        switch (metadata.getType().getMinorType()) {
+          case VARBINARY:
+          case VARCHAR:
+          case VAR16CHAR:
+          case VARDECIMAL:
+            stdNetSize = 4 + 8;
+            break;
+        }
+      } catch (Exception e) {
+        stdNetSize = 0;
+      }
+
+      if (isOptional) {
+        stdNetSize += BIT_VECTOR_WIDTH;
+      }
+
+      if (isRepeated) {
+        stdNetSize = (stdNetSize * STD_REPETITION_FACTOR) + OFFSET_VECTOR_WIDTH;
+      }
+
+      for (ColumnSize columnSize : children.values()) {
+        stdNetSize += columnSize.getAllocSizePerEntry();
+      }
+
+      if (isRepeatedList()) {
+        stdNetSize = (stdNetSize * STD_REPETITION_FACTOR) + OFFSET_VECTOR_WIDTH;
+      }
+
+      return stdNetSize;
+    }
+
+    /**
+     * If there is an accurate std net size, that is returned. Otherwise the net size is returned.
+     * @return If there is an accurate std net size, that is returned. Otherwise the net size is returned.
+     */
+    public int getStdNetOrNetSizePerEntry() {
+      if (hasStdDataSize()) {
+        return getStdNetSizePerEntry();
+      } else {
+        return getNetSizePerEntry();
+      }
     }
 
     /**
@@ -277,18 +342,29 @@ public class RecordBatchSizer {
     /**
      * This is the average per entry width, used for vector allocation.
      */
-    public int getEntryWidth() {
+    private int getEntryWidthForAlloc() {
       int width = 0;
       if (isVariableWidth) {
-        width = getNetSizePerEntry() - OFFSET_VECTOR_WIDTH;
+        width = getAllocSizePerEntry() - OFFSET_VECTOR_WIDTH;
 
         // Subtract out the bits (is-set) vector width
-        if (metadata.getDataMode() == DataMode.OPTIONAL) {
+        if (isOptional) {
           width -= BIT_VECTOR_WIDTH;
+        }
+
+        if (isRepeated && rowCount() == 0) {
+          return (safeDivide(width, STD_REPETITION_FACTOR));
         }
       }
 
-      return (safeDivide(width, cardinality));
+      return (safeDivide(width, getEntryCardinalityForAlloc()));
+    }
+
+    /**
+     * This is the average per entry cardinality, used for vector allocation.
+     */
+    private float getEntryCardinalityForAlloc() {
+      return getCardinality() == 0 ? (isRepeated ? STD_REPETITION_FACTOR : 1) :getCardinality();
     }
 
     public ColumnSize(ValueVector v, String prefix) {
@@ -297,7 +373,7 @@ public class RecordBatchSizer {
       metadata = v.getField();
       isVariableWidth = (v instanceof VariableWidthVector || v instanceof RepeatedVariableWidthVectorLike);
       elementCount = valueCount;
-      cardinality = 1;
+      cardinality = valueCount == 0 ? 0 : 1;
       totalNetSize = v.getPayloadByteCount(valueCount);
 
       // Special case. For union and list vectors, it is very complex
@@ -384,7 +460,7 @@ public class RecordBatchSizer {
     private void allocateMap(AbstractMapVector map, int recordCount) {
       if (map instanceof RepeatedMapVector) {
         ((RepeatedMapVector) map).allocateOffsetsNew(recordCount);
-          recordCount *= getCardinality();
+          recordCount *= getEntryCardinalityForAlloc();
         }
 
       for (ValueVector vector : map) {
@@ -394,7 +470,7 @@ public class RecordBatchSizer {
 
     private void allocateRepeatedList(RepeatedListVector vector, int recordCount) {
       vector.allocateOffsetsNew(recordCount);
-      recordCount *= getCardinality();
+      recordCount *= getEntryCardinalityForAlloc();
       ColumnSize child = children.get(vector.getField().getName());
       if (vector.getDataVector() != null) {
         child.allocateVector(vector.getDataVector(), recordCount);
@@ -412,7 +488,7 @@ public class RecordBatchSizer {
         return;
       }
 
-      AllocationHelper.allocate(vector, recordCount, getEntryWidth(), getCardinality());
+      AllocationHelper.allocate(vector, recordCount, getEntryWidthForAlloc(), getEntryCardinalityForAlloc());
     }
 
     @Override
@@ -432,7 +508,7 @@ public class RecordBatchSizer {
            .append(", per-array: ")
            .append(cardinality);
       }
-      buf.append("Per entry: std data size: ")
+      buf.append(", Per entry: std data size: ")
          .append(getStdDataSizePerEntry())
          .append(", std net size: ")
          .append(getStdNetSizePerEntry())
@@ -498,28 +574,76 @@ public class RecordBatchSizer {
 
   }
 
-  public static ColumnSize getColumn(ValueVector v, String prefix) {
-    return new ColumnSize(v, prefix);
+   public static int getStdNetSizePerEntryCommon(TypeProtos.MajorType majorType, boolean isOptional, boolean isRepeated,
+                                                 boolean isRepeatedList, Map<String, ColumnSize> children) {
+    int stdNetSize;
+    try {
+      stdNetSize = TypeHelper.getSize(majorType);
+    } catch (Exception e) {
+      stdNetSize = 0;
+    }
+
+    if (isOptional) {
+      stdNetSize += BIT_VECTOR_WIDTH;
+    }
+
+    if (isRepeated) {
+      stdNetSize = (stdNetSize * STD_REPETITION_FACTOR) + OFFSET_VECTOR_WIDTH;
+    }
+
+    if (children != null) {
+      for (ColumnSize columnSize : children.values()) {
+        stdNetSize += columnSize.getStdNetSizePerEntry();
+      }
+    }
+
+    if (isRepeatedList) {
+      stdNetSize = (stdNetSize * STD_REPETITION_FACTOR) + OFFSET_VECTOR_WIDTH;
+    }
+
+    return stdNetSize;
+  }
+
+  private ColumnSize getComplexColumn(String path) {
+    String[] segments = Strings.split(path, '.');
+    Map<String, ColumnSize> map = columnSizes;
+    return getComplexColumnImpl(segments, 0, map);
+  }
+
+  private ColumnSize getComplexColumnImpl(String[] segments, int level, Map<String, ColumnSize> map) {
+    ColumnSize result = map.get(segments[level]);
+    if (result == null || level == segments.length - 1) {
+      return result;
+    }
+    map = result.getChildren();
+    if (map == null) {
+      return null;
+    }
+    return getComplexColumnImpl(segments, level + 1, map);
   }
 
   public ColumnSize getColumn(String name) {
-    return columnSizes.get(name);
+    final RecordBatchSizer.ColumnSize columnSize =  columnSizes.get(name);
+    if (columnSize != null) {
+      return columnSize;
+    } else {
+      return getComplexColumn(name);
+    }
   }
 
   // This keeps information for only top level columns. Information for nested
   // columns can be obtained from children of topColumns.
-  private Map<String, ColumnSize> columnSizes = CaseInsensitiveMap.newHashMap();
+  private Map<String, ColumnSize> columnSizes = new QuoteInsensitiveMap(CaseInsensitiveMap.newHashMap());
+
+  /**
+   * This field is used by the convenience method {@link #columnsList()}.
+   */
+  private List<ColumnSize> columnSizesList = new ArrayList<>();
 
   /**
    * Number of records (rows) in the batch.
    */
   private int rowCount;
-  /**
-   * Standard row width using Drill meta-data. Note: this information is
-   * 100% bogus. Do not use it.
-   */
-  @Deprecated
-  private int stdRowWidth;
   /**
    * Actual batch size summing all buffers used to store data
    * for the batch.
@@ -536,8 +660,16 @@ public class RecordBatchSizer {
    */
   private int netRowWidth;
   private int netRowWidthCap50;
-  private boolean hasSv2;
+
+  /**
+   * actual row size if input is not empty. Otherwise, standard size.
+   */
+  private int rowAllocWidth;
+  private int stdRowWidth;
+
+  public SelectionVector2 sv2 = null;
   private int sv2Size;
+
   private int avgDensity;
 
   private Set<BufferLedger> ledgers = Sets.newIdentityHashSet();
@@ -590,6 +722,7 @@ public class RecordBatchSizer {
     for (VectorWrapper<?> vw : va) {
       ColumnSize colSize = measureColumn(vw.getValueVector(), "");
       columnSizes.put(vw.getField().getName(), colSize);
+      columnSizesList.add(colSize);
       stdRowWidth += colSize.getStdDataSizePerEntry();
       netBatchSize += colSize.getTotalNetSize();
       maxSize = Math.max(maxSize, colSize.getTotalDataSize());
@@ -598,39 +731,17 @@ public class RecordBatchSizer {
       }
       netRowWidth += colSize.getNetSizePerEntry();
     }
-
-    for (BufferLedger ledger : ledgers) {
-      accountedMemorySize += ledger.getAccountedSize();
-    }
-
-    if (rowCount > 0) {
-      grossRowWidth = safeDivide(accountedMemorySize, rowCount);
-    }
-
-    if (sv2 != null) {
-      sv2Size = sv2.getBuffer(false).capacity();
-      accountedMemorySize += sv2Size;
-      hasSv2 = true;
-    }
-
-    computeEstimates();
-  }
-
-  private void computeEstimates() {
-    grossRowWidth = safeDivide(accountedMemorySize, rowCount);
-    netRowWidth = safeDivide(netBatchSize, rowCount);
-    avgDensity = safeDivide(netBatchSize * 100L, accountedMemorySize);
+    this.sv2 = sv2;
   }
 
   public void applySv2() {
-    if (hasSv2) {
+    if (sv2 == null) {
       return;
     }
 
-    hasSv2 = true;
     sv2Size = BaseAllocator.nextPowerOfTwo(2 * rowCount);
+    avgDensity = safeDivide(netBatchSize * 100L, getActualSize());
     accountedMemorySize += sv2Size;
-    computeEstimates();
   }
 
   /**
@@ -714,11 +825,81 @@ public class RecordBatchSizer {
     return (int) Math.ceil((double) num / denom);
   }
 
+  public static int safeDivide(int num, double denom) {
+    if (denom == 0) {
+      return 0;
+    }
+    return (int) Math.ceil((double) num / denom);
+  }
+
   public int rowCount() { return rowCount; }
-  public int stdRowWidth() { return stdRowWidth; }
-  public int grossRowWidth() { return grossRowWidth; }
-  public int netRowWidth() { return netRowWidth; }
+
+  public int getStdRowWidth() {
+    if (stdRowWidth != 0) {
+      return stdRowWidth;
+    }
+
+    for (ColumnSize columnSize : columnSizes.values()) {
+      stdRowWidth += columnSize.getStdDataSizePerEntry();
+    }
+
+    return stdRowWidth;
+  }
+
+  public int getRowAllocWidth() {
+    if (rowAllocWidth != 0) {
+      return rowAllocWidth;
+    }
+
+    for (ColumnSize columnSize : columnSizes.values()) {
+      rowAllocWidth += columnSize.getAllocSizePerEntry();
+    }
+
+    return rowAllocWidth;
+  }
+
+  public long getActualSize() {
+    if (accountedMemorySize != 0) {
+      return accountedMemorySize;
+    }
+
+    for (BufferLedger ledger : ledgers) {
+      accountedMemorySize += ledger.getAccountedSize();
+    }
+
+    if (sv2 != null) {
+      sv2Size = sv2.getBuffer(false).capacity();
+      accountedMemorySize += sv2Size;
+    }
+
+    return accountedMemorySize;
+  }
+
+  public int getGrossRowWidth() {
+    if (grossRowWidth != 0) {
+      return grossRowWidth;
+    }
+
+    grossRowWidth = safeDivide(getActualSize(), rowCount);
+
+    return grossRowWidth;
+  }
+
+  public int getAvgDensity() {
+    return safeDivide(netBatchSize * 100L, getActualSize());
+  }
+
+
+  public int getNetRowWidth() { return netRowWidth; }
   public Map<String, ColumnSize> columns() { return columnSizes; }
+
+  /**
+   * This is a convenience method to get the sizes of columns in the same order that the corresponding value vectors
+   * are stored within a {@link org.apache.drill.exec.record.VectorAccessible}.
+   * @return The sizes of columns in the same order that the corresponding value vectors are stored within a
+   * {@link org.apache.drill.exec.record.VectorAccessible}.
+   */
+  public List<ColumnSize> columnsList() { return columnSizesList; }
 
   /**
    * Compute the "real" width of the row, taking into account each varchar column size
@@ -726,22 +907,16 @@ public class RecordBatchSizer {
    * and null marking columns.
    * @return "real" width of the row
    */
-  public int netRowWidthCap50() { return netRowWidthCap50 + nullableCount; }
-  public long actualSize() { return accountedMemorySize; }
-  public boolean hasSv2() { return hasSv2; }
-  public int avgDensity() { return avgDensity; }
-  public long netSize() { return netBatchSize; }
-  public int maxAvgColumnSize() { return maxSize / rowCount; }
+  public int getNetRowWidthCap50() { return netRowWidthCap50 + nullableCount; }
+  public boolean hasSv2() { return sv2 != null; }
+  public long getNetBatchSize() { return netBatchSize; }
+  public int getMaxAvgColumnSize() { return safeDivide(maxSize, rowCount); }
 
   @Override
   public String toString() {
     StringBuilder buf = new StringBuilder();
-    buf.append("Actual batch schema & sizes {\n");
-    for (ColumnSize colSize : columnSizes.values()) {
-      buf.append("  ");
-      buf.append(colSize.toString());
-      buf.append("\n");
-    }
+
+    buf.append("Batch size: {");
     buf.append( "  Records: " );
     buf.append(rowCount);
     buf.append(", Total size: ");
@@ -754,7 +929,15 @@ public class RecordBatchSizer {
     buf.append(netRowWidth);
     buf.append(", Density: ");
     buf.append(avgDensity);
-    buf.append("%}");
+    buf.append("% }\n");
+
+    buf.append("Batch schema & sizes: {\n");
+    for (ColumnSize colSize : columnSizes.values()) {
+      buf.append("  ");
+      buf.append(colSize.toString());
+      buf.append(" }\n");
+    }
+    buf.append(" }\n");
     return buf.toString();
   }
 
@@ -779,5 +962,97 @@ public class RecordBatchSizer {
       ColumnSize colSize = columnSizes.get(w.getField().getName());
       colSize.allocateVector(w.getValueVector(), recordCount);
     }
+  }
+
+  /**
+   * A map that can handle quoted and unquoted column names; ideally this logic temporary and
+   * should be removed as soon as all readers standardize handling of missing columns. Quoted columns
+   * have been added in DRILL-4264.
+   */
+  private static final class QuoteInsensitiveMap implements Map<String, ColumnSize> {
+    /** Original Map */
+    private final Map<String, ColumnSize> originalMap;
+
+    private QuoteInsensitiveMap(Map<String, ColumnSize> originalMap) {
+      this.originalMap = originalMap;
+    }
+
+    @Override
+    public int size() {
+      return originalMap.size();
+    }
+
+    @Override
+    public boolean isEmpty() {
+      return originalMap.isEmpty();
+    }
+
+    @Override
+    public boolean containsKey(Object key) {
+      return originalMap.containsKey(key);
+    }
+
+    @Override
+    public boolean containsValue(Object value) {
+      return originalMap.containsValue(value);
+    }
+
+    @Override
+    public ColumnSize get(Object key) {
+      ColumnSize value = originalMap.get(key);
+
+      if (value == null) {
+        value = originalMap.get(quoteString(key));
+      }
+      return value;
+    }
+
+    @Override
+    public ColumnSize put(String key, ColumnSize value) {
+      return originalMap.put(key, value);
+    }
+
+    @Override
+    public ColumnSize remove(Object key) {
+      ColumnSize value = originalMap.remove(key);
+
+      if (value == null) {
+        value = originalMap.remove(quoteString(key));
+      }
+      return value;
+    }
+
+    @Override
+    public void putAll(Map<? extends String, ? extends ColumnSize> m) {
+      originalMap.putAll(m);
+    }
+
+    @Override
+    public void clear() {
+      originalMap.clear();
+    }
+
+    @Override
+    public Set<String> keySet() {
+      return originalMap.keySet();
+    }
+
+    @Override
+    public Collection<ColumnSize> values() {
+      return originalMap.values();
+    }
+
+    @Override
+    public Set<Entry<String, ColumnSize>> entrySet() {
+      return originalMap.entrySet();
+    }
+
+    private String quoteString(Object key) {
+      if (key instanceof String) {
+        return "`" + key + '`';
+      }
+      throw new IllegalArgumentException();
+    }
+
   }
 }

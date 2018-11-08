@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -19,8 +19,6 @@ package org.apache.drill.exec.physical.base;
 
 import java.util.Iterator;
 import java.util.List;
-
-import com.google.common.collect.Iterators;
 
 /**
  * Describes an operator that expects more than one children operators as its input.

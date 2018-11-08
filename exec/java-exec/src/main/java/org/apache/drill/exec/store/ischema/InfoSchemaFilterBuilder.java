@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,9 +17,16 @@
  */
 package org.apache.drill.exec.store.ischema;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
-import static org.apache.drill.exec.store.ischema.InfoSchemaConstants.*;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import static org.apache.drill.exec.store.ischema.InfoSchemaConstants.CATS_COL_CATALOG_NAME;
+import static org.apache.drill.exec.store.ischema.InfoSchemaConstants.COLS_COL_COLUMN_NAME;
+import static org.apache.drill.exec.store.ischema.InfoSchemaConstants.FILES_COL_ROOT_SCHEMA_NAME;
+import static org.apache.drill.exec.store.ischema.InfoSchemaConstants.FILES_COL_WORKSPACE_NAME;
+import static org.apache.drill.exec.store.ischema.InfoSchemaConstants.SCHS_COL_SCHEMA_NAME;
+import static org.apache.drill.exec.store.ischema.InfoSchemaConstants.SHRD_COL_TABLE_NAME;
+import static org.apache.drill.exec.store.ischema.InfoSchemaConstants.SHRD_COL_TABLE_SCHEMA;
+
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.FieldReference;
@@ -143,7 +150,9 @@ public class InfoSchemaFilterBuilder extends AbstractExprVisitor<ExprNode, Void,
           || field.equals(SCHS_COL_SCHEMA_NAME)
           || field.equals(SHRD_COL_TABLE_NAME)
           || field.equals(SHRD_COL_TABLE_SCHEMA)
-          || field.equals(COLS_COL_COLUMN_NAME)) {
+          || field.equals(COLS_COL_COLUMN_NAME)
+          || field.equals(FILES_COL_ROOT_SCHEMA_NAME)
+          || field.equals(FILES_COL_WORKSPACE_NAME)) {
         return new FieldExprNode(field);
       }
     }
@@ -163,7 +172,9 @@ public class InfoSchemaFilterBuilder extends AbstractExprVisitor<ExprNode, Void,
         || field.equals(SCHS_COL_SCHEMA_NAME)
         || field.equals(SHRD_COL_TABLE_NAME)
         || field.equals(SHRD_COL_TABLE_SCHEMA)
-        || field.equals(COLS_COL_COLUMN_NAME)) {
+        || field.equals(COLS_COL_COLUMN_NAME)
+        || field.equals(FILES_COL_ROOT_SCHEMA_NAME)
+        || field.equals(FILES_COL_WORKSPACE_NAME)) {
       return new FieldExprNode(field);
     }
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -69,4 +69,11 @@ public class TopN extends Sort {
     return CoreOperatorType.TOP_N_SORT_VALUE;
   }
 
+  @Override
+  public String toString() {
+    return "TopN[orderings=" + orderings
+        + ", reverse=" + reverse
+        + ", limit=" + limit
+        + "]";
+  }
 }

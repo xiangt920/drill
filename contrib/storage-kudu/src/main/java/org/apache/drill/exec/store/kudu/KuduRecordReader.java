@@ -62,8 +62,8 @@ import org.apache.kudu.client.RowResult;
 import org.apache.kudu.client.RowResultIterator;
 import org.apache.kudu.client.shaded.com.google.common.collect.ImmutableMap;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 public class KuduRecordReader extends AbstractRecordReader {
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(KuduRecordReader.class);
@@ -77,6 +77,9 @@ public class KuduRecordReader extends AbstractRecordReader {
 
   private OutputMutator output;
   private OperatorContext context;
+
+  private String lastColumnName;
+  private Type lastColumnType;
 
   private static class ProjectedColumnInfo {
     int index;
@@ -176,6 +179,8 @@ public class KuduRecordReader extends AbstractRecordReader {
 
       final String name = col.getName();
       final Type kuduType = col.getType();
+      lastColumnName = name;
+      lastColumnType = kuduType;
       MinorType minorType = TYPES.get(kuduType);
       if (minorType == null) {
         logger.warn("Ignoring column that is unsupported.", UserException
@@ -326,4 +331,10 @@ public class KuduRecordReader extends AbstractRecordReader {
   public void close() {
   }
 
+  @Override
+  public String toString() {
+    return "KuduRecordReader[Column=" + lastColumnName
+        + ", Type=" + lastColumnType
+        + "]";
+  }
 }

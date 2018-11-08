@@ -26,11 +26,9 @@ import java.util.concurrent.TimeUnit;
 import com.fasterxml.jackson.databind.ser.PropertyFilter;
 import com.fasterxml.jackson.databind.ser.impl.SimpleBeanPropertyFilter;
 import com.fasterxml.jackson.databind.ser.impl.SimpleFilterProvider;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 import org.apache.calcite.plan.RelOptCostImpl;
-import org.apache.calcite.plan.RelOptLattice;
-import org.apache.calcite.plan.RelOptMaterialization;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptUtil;
@@ -55,6 +53,7 @@ import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.sql.SqlExplainLevel;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.validate.SqlValidatorUtil;
+import org.apache.calcite.sql2rel.RelDecorrelator;
 import org.apache.calcite.tools.Program;
 import org.apache.calcite.tools.Programs;
 import org.apache.calcite.tools.RelConversionException;
@@ -78,6 +77,7 @@ import org.apache.drill.exec.planner.common.DrillRelOptUtil;
 import org.apache.drill.exec.planner.cost.DrillDefaultRelMetadataProvider;
 import org.apache.drill.exec.planner.logical.DrillProjectRel;
 import org.apache.drill.exec.planner.logical.DrillRel;
+import org.apache.drill.exec.planner.logical.DrillRelFactories;
 import org.apache.drill.exec.planner.logical.DrillScreenRel;
 import org.apache.drill.exec.planner.logical.DrillStoreRel;
 import org.apache.drill.exec.planner.logical.PreProcessLogicalRel;
@@ -86,14 +86,16 @@ import org.apache.drill.exec.planner.physical.PhysicalPlanCreator;
 import org.apache.drill.exec.planner.physical.PlannerSettings;
 import org.apache.drill.exec.planner.physical.Prel;
 import org.apache.drill.exec.planner.physical.explain.PrelSequencer;
+import org.apache.drill.exec.planner.physical.visitor.AdjustOperatorsSchemaVisitor;
 import org.apache.drill.exec.planner.physical.visitor.ComplexToJsonPrelVisitor;
 import org.apache.drill.exec.planner.physical.visitor.ExcessiveExchangeIdentifier;
 import org.apache.drill.exec.planner.physical.visitor.FinalColumnReorderer;
 import org.apache.drill.exec.planner.physical.visitor.InsertLocalExchangeVisitor;
-import org.apache.drill.exec.planner.physical.visitor.JoinPrelRenameVisitor;
+import org.apache.drill.exec.planner.physical.visitor.LateralUnnestRowIDVisitor;
 import org.apache.drill.exec.planner.physical.visitor.MemoryEstimationVisitor;
 import org.apache.drill.exec.planner.physical.visitor.RelUniqifier;
 import org.apache.drill.exec.planner.physical.visitor.RewriteProjectToFlatten;
+import org.apache.drill.exec.planner.physical.visitor.RuntimeFilterVisitor;
 import org.apache.drill.exec.planner.physical.visitor.SelectionVectorPrelVisitor;
 import org.apache.drill.exec.planner.physical.visitor.SplitUpComplexExpressions;
 import org.apache.drill.exec.planner.physical.visitor.StarColumnConverter;
@@ -107,10 +109,9 @@ import org.apache.drill.exec.work.foreman.SqlUnsupportedException;
 import org.apache.drill.exec.work.foreman.UnsupportedRelOperatorException;
 import org.slf4j.Logger;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 public class DefaultSqlHandler extends AbstractSqlHandler {
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DefaultSqlHandler.class);
@@ -160,7 +161,7 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
     }
   }
 
-  protected void log(final String name, final PhysicalPlan plan, final Logger logger) throws JsonProcessingException {
+  protected void log(final String name, final PhysicalPlan plan, final Logger logger) {
     if (logger.isDebugEnabled()) {
       PropertyFilter filter = new SimpleBeanPropertyFilter.SerializeExceptFilter(Sets.newHashSet("password"));
       String planText = plan.unparse(context.getLpPersistence().getMapper()
@@ -189,9 +190,8 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
    * Rewrite the parse tree. Used before validating the parse tree. Useful if a particular statement needs to converted
    * into another statement.
    *
-   * @param node
+   * @param node sql parse tree to be rewritten
    * @return Rewritten sql parse tree
-   * @throws RelConversionException
    */
   protected SqlNode rewrite(SqlNode node) throws RelConversionException, ForemanSetupException {
     return node;
@@ -213,10 +213,9 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
    *
    * @param relNode relational node
    * @return Drill Logical RelNode tree
-   * @throws SqlUnsupportedException
-   * @throws RelConversionException
+   * @throws SqlUnsupportedException if query cannot be planned
    */
-  protected DrillRel convertToRawDrel(final RelNode relNode) throws SqlUnsupportedException, RelConversionException {
+  protected DrillRel convertToRawDrel(final RelNode relNode) throws SqlUnsupportedException {
     if (context.getOptions().getOption(ExecConstants.EARLY_LIMIT0_OPT) &&
         context.getPlannerSettings().isTypeInferenceEnabled() &&
         FindLimit0Visitor.containsLimit0(relNode)) {
@@ -233,12 +232,15 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
     }
 
     try {
-      final RelNode convertedRelNode;
 
-      // HEP Directory pruning .
-      final RelNode pruned = transform(PlannerType.HEP_BOTTOM_UP, PlannerPhase.DIRECTORY_PRUNING, relNode);
+      // HEP for rules, which are failed at the LOGICAL_PLANNING stage for Volcano planner
+      final RelNode setOpTransposeNode = transform(PlannerType.HEP, PlannerPhase.PRE_LOGICAL_PLANNING, relNode);
+
+      // HEP Directory pruning.
+      final RelNode pruned = transform(PlannerType.HEP_BOTTOM_UP, PlannerPhase.DIRECTORY_PRUNING, setOpTransposeNode);
       final RelTraitSet logicalTraits = pruned.getTraitSet().plus(DrillRel.DRILL_LOGICAL);
 
+      final RelNode convertedRelNode;
       if (!context.getPlannerSettings().isHepOptEnabled()) {
         // hep is disabled, use volcano
         convertedRelNode = transform(PlannerType.VOLCANO, PlannerPhase.LOGICAL_PRUNE_AND_JOIN, pruned, logicalTraits);
@@ -247,13 +249,22 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
         final RelNode intermediateNode2;
         if (context.getPlannerSettings().isHepPartitionPruningEnabled()) {
 
-          // hep is enabled and hep pruning is enabled.
           final RelNode intermediateNode = transform(PlannerType.VOLCANO, PlannerPhase.LOGICAL, pruned, logicalTraits);
-          intermediateNode2 = transform(PlannerType.HEP_BOTTOM_UP, PlannerPhase.PARTITION_PRUNING, intermediateNode);
+
+          // HEP Join Push Transitive Predicates
+          final RelNode transitiveClosureNode =
+              transform(PlannerType.HEP, PlannerPhase.TRANSITIVE_CLOSURE, intermediateNode);
+
+          // hep is enabled and hep pruning is enabled.
+          intermediateNode2 = transform(PlannerType.HEP_BOTTOM_UP, PlannerPhase.PARTITION_PRUNING, transitiveClosureNode);
 
         } else {
           // Only hep is enabled
-          intermediateNode2 = transform(PlannerType.VOLCANO, PlannerPhase.LOGICAL_PRUNE, pruned, logicalTraits);
+          final RelNode intermediateNode =
+              transform(PlannerType.VOLCANO, PlannerPhase.LOGICAL_PRUNE, pruned, logicalTraits);
+
+          // HEP Join Push Transitive Predicates
+          intermediateNode2 = transform(PlannerType.HEP, PlannerPhase.TRANSITIVE_CLOSURE, intermediateNode);
         }
 
         // Do Join Planning.
@@ -273,6 +284,9 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
         if (FindLimit0Visitor.containsLimit0(convertedRelNodeWithSum0) &&
             FindHardDistributionScans.canForceSingleMode(convertedRelNodeWithSum0)) {
           context.getPlannerSettings().forceSingleMode();
+          if (context.getOptions().getOption(ExecConstants.LATE_LIMIT0_OPT)) {
+            return FindLimit0Visitor.addLimitOnTopOfLeafNodes(drillRel);
+          }
         }
 
         return drillRel;
@@ -280,7 +294,7 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
     } catch (RelOptPlanner.CannotPlanException ex) {
       logger.error(ex.getMessage());
 
-      if(JoinUtils.checkCartesianJoin(relNode, new ArrayList<Integer>(), new ArrayList<Integer>(), new ArrayList<Boolean>())) {
+      if (JoinUtils.checkCartesianJoin(relNode, new ArrayList<>(), new ArrayList<>(), new ArrayList<>())) {
         throw new UnsupportedRelOperatorException("This query cannot be planned possibly due to either a cartesian join or an inequality join");
       } else {
         throw ex;
@@ -294,10 +308,9 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
    *
    * @param relNode root RelNode corresponds to Calcite Logical RelNode.
    * @return Drill Logical RelNode tree
-   * @throws RelConversionException
-   * @throws SqlUnsupportedException
+   * @throws SqlUnsupportedException if query cannot be planned
    */
-  protected DrillRel convertToDrel(RelNode relNode) throws RelConversionException, SqlUnsupportedException {
+  protected DrillRel convertToDrel(RelNode relNode) throws SqlUnsupportedException {
     final DrillRel convertedRelNode = convertToRawDrel(relNode);
 
     return new DrillScreenRel(convertedRelNode.getCluster(), convertedRelNode.getTraitSet(),
@@ -410,7 +423,7 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
           "Cluster is expected to be constructed using VolcanoPlanner. Was actually of type %s.", planner.getClass()
               .getName());
       output = program.run(planner, input, toTraits,
-          ImmutableList.<RelOptMaterialization>of(), ImmutableList.<RelOptLattice>of());
+          ImmutableList.of(), ImmutableList.of());
 
       break;
     }
@@ -446,7 +459,7 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
     } catch (RelOptPlanner.CannotPlanException ex) {
       logger.error(ex.getMessage());
 
-      if(JoinUtils.checkCartesianJoin(drel, new ArrayList<Integer>(), new ArrayList<Integer>(), new ArrayList<Boolean>())) {
+      if (JoinUtils.checkCartesianJoin(drel, new ArrayList<>(), new ArrayList<>(), new ArrayList<>())) {
         throw new UnsupportedRelOperatorException("This query cannot be planned possibly due to either a cartesian join or an inequality join");
       } else {
         throw ex;
@@ -469,7 +482,7 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
       } catch (RelOptPlanner.CannotPlanException ex) {
         logger.error(ex.getMessage());
 
-        if(JoinUtils.checkCartesianJoin(drel, new ArrayList<Integer>(), new ArrayList<Integer>(), new ArrayList<Boolean>())) {
+        if (JoinUtils.checkCartesianJoin(drel, new ArrayList<>(), new ArrayList<>(), new ArrayList<>())) {
           throw new UnsupportedRelOperatorException("This query cannot be planned possibly due to either a cartesian join or an inequality join");
         } else {
           throw ex;
@@ -493,21 +506,23 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
      * The rest of projects will remove the duplicate column when we generate POP in json format.
      */
     phyRelNode = StarColumnConverter.insertRenameProject(phyRelNode);
+    log("Physical RelNode after Top and Rename Project inserting: ", phyRelNode, logger, null);
 
     /*
      * 2.)
      * Join might cause naming conflicts from its left and right child.
      * In such case, we have to insert Project to rename the conflicting names.
+     * Unnest operator might need to adjust the correlated field after the physical planning.
      */
-    phyRelNode = JoinPrelRenameVisitor.insertRenameProject(phyRelNode);
+    phyRelNode = AdjustOperatorsSchemaVisitor.adjustSchema(phyRelNode);
 
     /*
      * 2.1) Swap left / right for INNER hash join, if left's row count is < (1 + margin) right's row count.
      * We want to have smaller dataset on the right side, since hash table builds on right side.
      */
     if (context.getPlannerSettings().isHashJoinSwapEnabled()) {
-      phyRelNode = SwapHashJoinVisitor.swapHashJoin(phyRelNode, Double.valueOf(context.getPlannerSettings()
-          .getHashJoinSwapMarginFactor()));
+      phyRelNode = SwapHashJoinVisitor.swapHashJoin(phyRelNode,
+          context.getPlannerSettings().getHashJoinSwapMarginFactor());
     }
 
     /* Parquet row group filter pushdown in planning time */
@@ -544,6 +559,8 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
      */
     phyRelNode = ExcessiveExchangeIdentifier.removeExcessiveEchanges(phyRelNode, targetSliceSize);
 
+    /* Insert the IMPLICIT_COLUMN in the lateral unnest pipeline */
+    phyRelNode = LateralUnnestRowIDVisitor.insertRowID(phyRelNode);
 
     /* 5.)
      * Add ProducerConsumer after each scan if the option is set
@@ -572,15 +589,24 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
      */
     phyRelNode = InsertLocalExchangeVisitor.insertLocalExchanges(phyRelNode, queryOptions);
 
+    /*
+     * 8.)
+     * Insert RuntimeFilter over Scan nodes
+     */
+    if (context.isRuntimeFilterEnabled()) {
+      phyRelNode = RuntimeFilterVisitor.addRuntimeFilter(phyRelNode, context);
+    }
 
-    /* 8.)
+
+    /* 9.)
      * Next, we add any required selection vector removers given the supported encodings of each
      * operator. This will ultimately move to a new trait but we're managing here for now to avoid
      * introducing new issues in planning before the next release
      */
     phyRelNode = SelectionVectorPrelVisitor.addSelectionRemoversWhereNecessary(phyRelNode);
 
-    /* 9.)
+
+    /* 10.)
      * Finally, Make sure that the no rels are repeats.
      * This could happen in the case of querying the same table twice as Optiq may canonicalize these.
      */
@@ -602,7 +628,9 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
     propsBuilder.options(new JSONOptions(context.getOptions().getOptionList()));
     propsBuilder.resultMode(ResultMode.EXEC);
     propsBuilder.generator(this.getClass().getSimpleName(), "");
-    return new PhysicalPlan(propsBuilder.build(), getPops(op));
+    PhysicalPlan plan =  new PhysicalPlan(propsBuilder.build(), getPops(op));
+    return plan;
+
   }
 
   public static List<PhysicalOperator> getPops(PhysicalOperator root) {
@@ -646,10 +674,16 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
     return typedSqlNode;
   }
 
-  private RelNode convertToRel(SqlNode node) throws RelConversionException {
+  private RelNode convertToRel(SqlNode node) {
     final RelNode convertedNode = config.getConverter().toRel(node).rel;
     log("INITIAL", convertedNode, logger, null);
-    return transform(PlannerType.HEP, PlannerPhase.WINDOW_REWRITE, convertedNode);
+    RelNode transformedNode = transform(PlannerType.HEP,
+        PlannerPhase.SUBQUERY_REWRITE, convertedNode);
+
+    RelNode decorrelatedNode = RelDecorrelator.decorrelateQuery(transformedNode,
+        DrillRelFactories.LOGICAL_BUILDER.create(transformedNode.getCluster(), null));
+
+    return transform(PlannerType.HEP, PlannerPhase.WINDOW_REWRITE, decorrelatedNode);
   }
 
   private RelNode preprocessNode(RelNode rel) throws SqlUnsupportedException {
@@ -671,7 +705,8 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
       throw ex;
     }
 
-    return rel;
+    // moves complex expressions below Uncollect to the right side of Correlate
+    return ComplexUnnestVisitor.rewriteUnnestWithComplexExprs(rel);
   }
 
   protected DrillRel addRenamedProject(DrillRel rel, RelDataType validatedRowType) {

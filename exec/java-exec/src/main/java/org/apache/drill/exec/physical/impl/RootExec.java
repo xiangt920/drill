@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -44,4 +44,10 @@ public interface RootExec extends AutoCloseable {
    * @param handle The handle pointing to the downstream receiver that does not need anymore data.
    */
   void receivingFragmentFinished(FragmentHandle handle);
+
+  /**
+   * Dump failed batches' state preceded by its parent's state to logs. Invoked when there is a
+   * failure during fragment execution.
+   */
+  void dumpBatches();
 }

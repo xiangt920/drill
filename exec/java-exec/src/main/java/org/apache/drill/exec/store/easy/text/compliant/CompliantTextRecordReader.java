@@ -33,9 +33,9 @@ import org.apache.drill.exec.store.AbstractRecordReader;
 import org.apache.drill.exec.store.dfs.DrillFileSystem;
 import org.apache.hadoop.mapred.FileSplit;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
+import org.apache.drill.shaded.guava.com.google.common.base.Predicate;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.Iterables;
 import com.univocity.parsers.common.TextParsingException;
 
 import io.netty.buffer.DrillBuf;
@@ -216,7 +216,7 @@ public class CompliantTextRecordReader extends AbstractRecordReader {
     } catch (IOException | TextParsingException e) {
       throw UserException.dataReadError(e)
           .addContext("Failure while reading file %s. Happened at or shortly before byte position %d.",
-            split.getPath(), reader.getPos())
+              split.getPath(), reader.getPos())
           .build(logger);
     }
   }
@@ -247,5 +247,12 @@ public class CompliantTextRecordReader extends AbstractRecordReader {
     } catch (IOException e) {
       logger.warn("Exception while closing stream.", e);
     }
+  }
+
+  @Override
+  public String toString() {
+    return "CompliantTextRecordReader[File=" + split.getPath()
+        + ", reader=" + reader
+        + "]";
   }
 }

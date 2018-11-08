@@ -38,6 +38,7 @@ import org.apache.drill.exec.cache.VectorSerializer;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
 import org.apache.drill.exec.physical.config.HashAggregate;
+import org.apache.drill.exec.physical.config.HashJoinPOP;
 import org.apache.drill.exec.physical.config.Sort;
 import org.apache.drill.exec.proto.ExecProtos.FragmentHandle;
 import org.apache.drill.exec.proto.helper.QueryIdHelper;
@@ -47,9 +48,9 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
-import com.google.common.base.Joiner;
-import com.google.common.collect.Iterators;
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.base.Joiner;
+import org.apache.drill.shaded.guava.com.google.common.collect.Iterators;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 
 /**
  * Generates the set of spill files for this sort session.
@@ -432,6 +433,10 @@ public class SpillSet {
         operName = "HashAgg";
         spillFs = config.getString(ExecConstants.HASHAGG_SPILL_FILESYSTEM);
         dirList = config.getStringList(ExecConstants.HASHAGG_SPILL_DIRS);
+    } else if (popConfig instanceof HashJoinPOP) {
+      operName = "HashJoin";
+      spillFs = config.getString(ExecConstants.HASHJOIN_SPILL_FILESYSTEM);
+      dirList = config.getStringList(ExecConstants.HASHJOIN_SPILL_DIRS);
     } else {
         // just use the common ones
         operName = "Unknown";

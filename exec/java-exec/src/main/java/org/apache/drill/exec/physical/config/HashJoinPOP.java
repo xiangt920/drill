@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,96 +15,145 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.physical.config;
 
-import java.util.Iterator;
 import java.util.List;
-
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
 import org.apache.drill.common.logical.data.JoinCondition;
-import org.apache.drill.exec.physical.base.AbstractBase;
+import org.apache.drill.exec.ExecConstants;
+import org.apache.drill.exec.ops.QueryContext;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
-import org.apache.drill.exec.physical.base.PhysicalVisitor;
+import org.apache.drill.exec.physical.base.SubScan;
+import org.apache.drill.exec.planner.common.JoinControl;
 import org.apache.drill.exec.proto.UserBitShared.CoreOperatorType;
 import org.apache.calcite.rel.core.JoinRelType;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Iterators;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.drill.exec.physical.base.AbstractJoinPop;
+import org.apache.drill.exec.work.filter.RuntimeFilterDef;
+
 
 @JsonTypeName("hash-join")
-public class HashJoinPOP extends AbstractBase {
-    static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(HashJoinPOP.class);
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class HashJoinPOP extends AbstractJoinPop {
+  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(HashJoinPOP.class);
 
+  private RuntimeFilterDef runtimeFilterDef;
 
-    private final PhysicalOperator left;
-    private final PhysicalOperator right;
-    private final List<JoinCondition> conditions;
-    private final JoinRelType joinType;
+  private final boolean isRowKeyJoin;
+  private final int joinControl;
+  @JsonProperty("subScanForRowKeyJoin")
+  private SubScan subScanForRowKeyJoin;
 
-    @JsonCreator
-    public HashJoinPOP(
-            @JsonProperty("left") PhysicalOperator left,
-            @JsonProperty("right") PhysicalOperator right,
-            @JsonProperty("conditions") List<JoinCondition> conditions,
-            @JsonProperty("joinType") JoinRelType joinType
-    ) {
-        this.left = left;
-        this.right = right;
-        this.conditions = conditions;
-        Preconditions.checkArgument(joinType != null, "Join type is missing!");
-        this.joinType = joinType;
-    }
+  @JsonCreator
+  public HashJoinPOP(@JsonProperty("left") PhysicalOperator left, @JsonProperty("right") PhysicalOperator right,
+                     @JsonProperty("conditions") List<JoinCondition> conditions,
+                     @JsonProperty("joinType") JoinRelType joinType,
+                     @JsonProperty("runtimeFilterDef") RuntimeFilterDef runtimeFilterDef,
+                     @JsonProperty("isRowKeyJoin") boolean isRowKeyJoin,
+                     @JsonProperty("joinControl") int joinControl) {
+    super(left, right, joinType, null, conditions);
+    Preconditions.checkArgument(joinType != null, "Join type is missing for HashJoin Pop");
+    this.runtimeFilterDef = runtimeFilterDef;
+    this.isRowKeyJoin = isRowKeyJoin;
+    this.subScanForRowKeyJoin = null;
+    this.joinControl = joinControl;
+  }
 
-    @Override
-    public <T, X, E extends Throwable> T accept(PhysicalVisitor<T, X, E> physicalVisitor, X value) throws E {
-        return physicalVisitor.visitHashJoin(this, value);
-    }
+  @VisibleForTesting
+  public HashJoinPOP(PhysicalOperator left, PhysicalOperator right,
+                     List<JoinCondition> conditions,
+                     JoinRelType joinType) {
+    this(left, right, conditions, joinType, null, false, JoinControl.DEFAULT);
+  }
 
-    @Override
-    public PhysicalOperator getNewWithChildren(List<PhysicalOperator> children) {
+  @VisibleForTesting
+  public HashJoinPOP(PhysicalOperator left, PhysicalOperator right,
+                     List<JoinCondition> conditions,
+                     JoinRelType joinType,
+                     RuntimeFilterDef runtimeFilterDef) {
+    this(left, right, conditions, joinType, runtimeFilterDef, false, JoinControl.DEFAULT);
+  }
+
+  @Override
+  public PhysicalOperator getNewWithChildren(List<PhysicalOperator> children) {
         Preconditions.checkArgument(children.size() == 2);
-        return new HashJoinPOP(children.get(0), children.get(1), conditions, joinType);
+
+        HashJoinPOP newHashJoin = new HashJoinPOP(children.get(0), children.get(1), conditions, joinType, runtimeFilterDef,
+              isRowKeyJoin, joinControl);
+        newHashJoin.setMaxAllocation(getMaxAllocation());
+        newHashJoin.setSubScanForRowKeyJoin(this.getSubScanForRowKeyJoin());
+        return newHashJoin;
     }
 
-    @Override
-    public Iterator<PhysicalOperator> iterator() {
-        return Iterators.forArray(left, right);
+    @JsonProperty("isRowKeyJoin")
+    public boolean isRowKeyJoin() {
+        return isRowKeyJoin;
     }
 
-    public PhysicalOperator getLeft() {
-        return left;
+    @JsonProperty("joinControl")
+    public int getJoinControl() {
+        return joinControl;
     }
 
-    public PhysicalOperator getRight() {
-        return right;
+    @JsonProperty("subScanForRowKeyJoin")
+    public SubScan getSubScanForRowKeyJoin() {
+        return subScanForRowKeyJoin;
     }
 
-    public JoinRelType getJoinType() {
-        return joinType;
+    public void setSubScanForRowKeyJoin(SubScan subScan) {
+        this.subScanForRowKeyJoin = subScan;
     }
 
-    public List<JoinCondition> getConditions() {
-        return conditions;
-    }
-
-    public HashJoinPOP flipIfRight(){
-        if(joinType == JoinRelType.RIGHT){
-            List<JoinCondition> flippedConditions = Lists.newArrayList();
-            for(JoinCondition c : conditions){
-                flippedConditions.add(c.flip());
-            }
-            return new HashJoinPOP(right, left, flippedConditions, JoinRelType.LEFT);
-        }else{
-            return this;
+  public HashJoinPOP flipIfRight() {
+      if (joinType == JoinRelType.RIGHT) {
+        List<JoinCondition> flippedConditions = Lists.newArrayList();
+        for (JoinCondition c : conditions) {
+          flippedConditions.add(c.flip());
         }
+        return new HashJoinPOP(right, left, flippedConditions, JoinRelType.LEFT, runtimeFilterDef, isRowKeyJoin, joinControl);
+      } else {
+        return this;
+      }
+  }
+
+  @Override
+  public int getOperatorType() {
+        return CoreOperatorType.HASH_JOIN_VALUE;
     }
 
-    @Override
-    public int getOperatorType() {
-      return CoreOperatorType.HASH_JOIN_VALUE;
+  /**
+   *
+   * @param maxAllocation The max memory allocation to be set
+   */
+  @Override
+  public void setMaxAllocation(long maxAllocation) {
+        this.maxAllocation = maxAllocation;
     }
+
+  /**
+   * The Hash Aggregate operator supports spilling
+   * @return true (unless a single partition is forced)
+   * @param queryContext
+   */
+  @Override
+  public boolean isBufferedOperator(QueryContext queryContext) {
+    // In case forced to use a single partition - do not consider this a buffered op (when memory is divided)
+    return queryContext == null ||
+      1 < (int) queryContext.getOptions().getOption(ExecConstants.HASHJOIN_NUM_PARTITIONS_VALIDATOR);
+  }
+
+  public void setRuntimeFilterDef(RuntimeFilterDef runtimeFilterDef) {
+    this.runtimeFilterDef = runtimeFilterDef;
+  }
+
+
+  public RuntimeFilterDef getRuntimeFilterDef() {
+    return runtimeFilterDef;
+  }
 }

@@ -22,6 +22,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.drill.common.expression.AnyValueExpression;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.ConvertExpression;
@@ -47,9 +48,10 @@ import org.apache.drill.common.expression.ValueExpressions.LongExpression;
 import org.apache.drill.common.expression.ValueExpressions.QuotedString;
 import org.apache.drill.common.expression.ValueExpressions.TimeExpression;
 import org.apache.drill.common.expression.ValueExpressions.TimeStampExpression;
+import org.apache.drill.common.expression.ValueExpressions.VarDecimalExpression;
 import org.apache.drill.common.expression.visitors.ExprVisitor;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 public class ConstantExpressionIdentifier implements ExprVisitor<Boolean, IdentityHashMap<LogicalExpression, Object>, RuntimeException>{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ConstantExpressionIdentifier.class);
@@ -187,6 +189,11 @@ public class ConstantExpressionIdentifier implements ExprVisitor<Boolean, Identi
   }
 
   @Override
+  public Boolean visitVarDecimalConstant(VarDecimalExpression decExpr, IdentityHashMap<LogicalExpression, Object> value) {
+    return true;
+  }
+
+  @Override
   public Boolean visitDoubleConstant(DoubleExpression dExpr, IdentityHashMap<LogicalExpression, Object> value){
     return true;
   }
@@ -225,6 +232,12 @@ public class ConstantExpressionIdentifier implements ExprVisitor<Boolean, Identi
   @Override
   public Boolean visitConvertExpression(ConvertExpression e,
       IdentityHashMap<LogicalExpression, Object> value) throws RuntimeException {
+    return e.getInput().accept(this, value);
+  }
+
+  @Override
+  public Boolean visitAnyValueExpression(AnyValueExpression e,
+                                        IdentityHashMap<LogicalExpression, Object> value) throws RuntimeException {
     return e.getInput().accept(this, value);
   }
 

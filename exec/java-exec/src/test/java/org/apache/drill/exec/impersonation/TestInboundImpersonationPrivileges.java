@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,8 +17,8 @@
  */
 package org.apache.drill.exec.impersonation;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.io.Files;
 import org.apache.drill.categories.SecurityTest;
 import org.apache.drill.common.util.DrillFileUtils;
 import org.apache.drill.exec.ExecConstants;
@@ -31,7 +31,7 @@ import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 
-import static junit.framework.Assert.assertEquals;
+import static org.junit.Assert.assertEquals;
 
 @Category(SecurityTest.class)
 public class TestInboundImpersonationPrivileges extends BaseTestImpersonation {
@@ -43,8 +43,8 @@ public class TestInboundImpersonationPrivileges extends BaseTestImpersonation {
 
   static {
     try {
-      IMPERSONATION_POLICIES = Files.toString(DrillFileUtils.getResourceAsFile("/inbound_impersonation_policies.json"),
-          Charsets.UTF_8);
+      IMPERSONATION_POLICIES = Files.asCharSource(DrillFileUtils.getResourceAsFile("/inbound_impersonation_policies.json"),
+          Charsets.UTF_8).read();
     } catch (final IOException e) {
       throw new RuntimeException("Cannot load impersonation policies.", e);
     }

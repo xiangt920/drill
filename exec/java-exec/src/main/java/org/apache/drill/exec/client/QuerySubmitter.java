@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -33,9 +33,9 @@ import org.apache.drill.exec.util.VectorUtil;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
-import com.google.common.base.Charsets;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
+import org.apache.drill.shaded.guava.com.google.common.base.Charsets;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Stopwatch;
 
 public class QuerySubmitter {
 
@@ -189,7 +189,7 @@ public class QuerySubmitter {
     Stopwatch watch = Stopwatch.createUnstarted();
     for (String query : queries) {
       AwaitableUserResultsListener listener =
-          new AwaitableUserResultsListener(new PrintingResultsListener(client.getConfig(), outputFormat, width));
+          new AwaitableUserResultsListener(new LoggingResultsListener(client.getConfig(), outputFormat, width));
       watch.start();
       client.runQuery(queryType, query, listener);
       int rows = listener.await();

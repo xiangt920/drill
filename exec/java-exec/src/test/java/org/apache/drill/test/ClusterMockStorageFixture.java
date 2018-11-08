@@ -42,7 +42,8 @@ public class ClusterMockStorageFixture extends ClusterFixture {
       @SuppressWarnings("resource")
       MockBreakageStorage plugin = new MockBreakageStorage(
           MockStorageEngineConfig.INSTANCE, bit.getContext(), name);
-      ((StoragePluginRegistryImpl) pluginRegistry).definePlugin(name, config, plugin);
+      config.setEnabled(true);
+      ((StoragePluginRegistryImpl) pluginRegistry).addPluginToPersistentStoreIfAbsent(name, config, plugin);
 
       plugin.setBreakRegister(breakRegisterSchema);
     }

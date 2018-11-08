@@ -19,6 +19,7 @@ package org.apache.drill.exec.physical.impl.partitionsender;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
@@ -53,7 +54,7 @@ import org.apache.drill.exec.server.options.OptionManager;
 import org.apache.drill.exec.vector.CopyUtil;
 
 import com.carrotsearch.hppc.IntArrayList;
-import com.google.common.annotations.VisibleForTesting;
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JType;
@@ -167,10 +168,10 @@ public class PartitionSenderRootExec extends BaseRootExec {
           } else {
             sendEmptyBatch(true);
           }
-        } catch (IOException e) {
+        } catch (ExecutionException e) {
           incoming.kill(false);
           logger.error("Error while creating partitioning sender or flushing outgoing batches", e);
-          context.getExecutorState().fail(e);
+          context.getExecutorState().fail(e.getCause());
         }
         return false;
 
@@ -197,10 +198,10 @@ public class PartitionSenderRootExec extends BaseRootExec {
             first = false;
             sendEmptyBatch(false);
           }
-        } catch (IOException e) {
+        } catch (ExecutionException e) {
           incoming.kill(false);
           logger.error("Error while flushing outgoing batches", e);
-          context.getExecutorState().fail(e);
+          context.getExecutorState().fail(e.getCause());
           return false;
         } catch (SchemaChangeException e) {
           incoming.kill(false);
@@ -211,8 +212,8 @@ public class PartitionSenderRootExec extends BaseRootExec {
       case OK:
         try {
           partitioner.partitionBatch(incoming);
-        } catch (IOException e) {
-          context.getExecutorState().fail(e);
+        } catch (ExecutionException e) {
+          context.getExecutorState().fail(e.getCause());
           incoming.kill(false);
           return false;
         }
@@ -228,47 +229,14 @@ public class PartitionSenderRootExec extends BaseRootExec {
 
   @VisibleForTesting
   protected void createPartitioner() throws SchemaChangeException {
-    final int divisor = Math.max(1, outGoingBatchCount/actualPartitions);
-    final int longTail = outGoingBatchCount % actualPartitions;
-
-    final List<Partitioner> subPartitioners = createClassInstances(actualPartitions);
-    int startIndex = 0;
-    int endIndex = 0;
-
-    boolean success = false;
-    try {
-      for (int i = 0; i < actualPartitions; i++) {
-        startIndex = endIndex;
-        endIndex = (i < actualPartitions - 1) ? startIndex + divisor : outGoingBatchCount;
-        if (i < longTail) {
-          endIndex++;
-        }
-        final OperatorStats partitionStats = new OperatorStats(stats, true);
-        subPartitioners.get(i).setup(context, incoming, popConfig, partitionStats, oContext,
-            startIndex, endIndex);
-      }
-
-      partitioner = new PartitionerDecorator(subPartitioners, stats, context);
-      for (int index = 0; index < terminations.size(); index++) {
-        partitioner.getOutgoingBatches(terminations.buffer[index]).terminate();
-      }
-      terminations.clear();
-
-      success = true;
-    } finally {
-      if (!success) {
-        for (Partitioner p : subPartitioners) {
-          p.clear();
-        }
-      }
-    }
+    createClassInstances(actualPartitions);
   }
 
   private List<Partitioner> createClassInstances(int actualPartitions) throws SchemaChangeException {
     // set up partitioning function
     final LogicalExpression expr = operator.getExpr();
     final ErrorCollector collector = new ErrorCollectorImpl();
-    final ClassGenerator<Partitioner> cg ;
+    final ClassGenerator<Partitioner> cg;
 
     cg = CodeGenerator.getRoot(Partitioner.TEMPLATE_DEFINITION, context.getOptions());
     cg.getCodeGenerator().plainJavaCapable(true);
@@ -296,6 +264,39 @@ public class PartitionSenderRootExec extends BaseRootExec {
     try {
       // compile and setup generated code
       List<Partitioner> subPartitioners = context.getImplementationClass(cg, actualPartitions);
+
+      final int divisor = Math.max(1, outGoingBatchCount/actualPartitions);
+      final int longTail = outGoingBatchCount % actualPartitions;
+      int startIndex = 0;
+      int endIndex = 0;
+
+      boolean success = false;
+      try {
+        for (int i = 0; i < actualPartitions; i++) {
+          startIndex = endIndex;
+          endIndex = (i < actualPartitions - 1) ? startIndex + divisor : outGoingBatchCount;
+          if (i < longTail) {
+            endIndex++;
+          }
+          final OperatorStats partitionStats = new OperatorStats(stats, true);
+          subPartitioners.get(i).setup(context, incoming, popConfig, partitionStats, oContext,
+            cgInner, startIndex, endIndex);
+        }
+
+        partitioner = new PartitionerDecorator(subPartitioners, stats, context);
+        for (int index = 0; index < terminations.size(); index++) {
+          partitioner.getOutgoingBatches(terminations.buffer[index]).terminate();
+        }
+        terminations.clear();
+
+        success = true;
+      } finally {
+        if (!success) {
+          for (Partitioner p : subPartitioners) {
+            p.clear();
+          }
+        }
+      }
       return subPartitioners;
 
     } catch (ClassTransformationException | IOException e) {

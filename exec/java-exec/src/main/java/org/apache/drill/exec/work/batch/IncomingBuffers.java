@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -27,14 +27,15 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.drill.common.AutoCloseables;
 import org.apache.drill.common.concurrent.AutoCloseableLock;
 import org.apache.drill.exec.exception.FragmentSetupException;
+import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.proto.BitControl.Collector;
 import org.apache.drill.exec.proto.BitControl.PlanFragment;
 import org.apache.drill.exec.record.RawFragmentBatch;
 import org.apache.drill.exec.rpc.data.IncomingDataBatch;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableMap;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
 
 /**
  * Determines when a particular fragment has enough data for each of its receiving exchanges to commence execution.  Also monitors whether we've collected all incoming data.
@@ -103,8 +104,11 @@ public class IncomingBuffers implements AutoCloseable {
             Arrays.toString(collectorMap.values().toArray())));
       }
 
+      // Use the Data Collector's buffer allocator if set, otherwise the fragment's one
+      BufferAllocator ownerAllocator = collector.getAllocator();
+
       synchronized (collector) {
-        final RawFragmentBatch newRawFragmentBatch = incomingBatch.newRawFragmentBatch(context.getAllocator());
+        final RawFragmentBatch newRawFragmentBatch = incomingBatch.newRawFragmentBatch(ownerAllocator);
         boolean decrementedToZero = collector
             .batchArrived(incomingBatch.getHeader().getSendingMinorFragmentId(), newRawFragmentBatch);
         newRawFragmentBatch.release();
@@ -125,8 +129,8 @@ public class IncomingBuffers implements AutoCloseable {
     return rem;
   }
 
-  public RawBatchBuffer[] getBuffers(int senderMajorFragmentId) {
-    return collectorMap.get(senderMajorFragmentId).getBuffers();
+  public DataCollector getCollector(int senderMajorFragmentId) {
+    return collectorMap.get(senderMajorFragmentId);
   }
 
   public boolean isDone() {

@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <fstream>
 #include <iostream>
 #include <stdio.h>
@@ -55,7 +54,8 @@ struct Option{
     {"certFilePath", "Path to SSL certificate file", false},
     {"disableHostnameVerification", "disable host name verification", false},
     {"disableCertVerification", "disable certificate verification", false},
-    {"useSystemTrustStore", "[Windows only]. Use the system truststore.", false }
+    {"useSystemTrustStore", "[Windows only]. Use the system truststore.", false },
+    {"CustomSSLCtxOptions", "The custom SSL CTX Options", false}
 
 };
 
@@ -316,6 +316,7 @@ int main(int argc, char* argv[]) {
         std::string disableHostnameVerification=qsOptionValues["disableHostnameVerification"];
         std::string disableCertVerification=qsOptionValues["disableCertVerification"];
         std::string useSystemTrustStore = qsOptionValues["useSystemTrustStore"];
+        std::string customSSLOptions = qsOptionValues["CustomSSLCtxOptions"];
 
         Drill::QueryType type;
 
@@ -417,6 +418,9 @@ int main(int argc, char* argv[]) {
 			if (useSystemTrustStore.length() > 0){
 				props.setProperty(USERPROP_USESYSTEMTRUSTSTORE, useSystemTrustStore);
 			}
+            if (customSSLOptions.length() > 0){
+                props.setProperty(USERPROP_CUSTOM_SSLCTXOPTIONS, customSSLOptions);
+            }
         }
 
         if(client.connect(connectStr.c_str(), &props)!=Drill::CONN_SUCCESS){

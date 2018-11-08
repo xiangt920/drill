@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,8 +21,8 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Sets;
+import org.apache.drill.shaded.guava.com.google.common.annotations.VisibleForTesting;
+import org.apache.drill.shaded.guava.com.google.common.collect.Sets;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.exec.ExecConstants;
@@ -44,12 +44,12 @@ import java.util.Set;
  * Impersonation policies format:
  * [
  *   {
- *    proxy_principals : { users : [“...”], groups : [“...”] },
- *    target_principals : { users : [“...”], groups : [“...”] }
+ *    proxy_principals : { users : ["..."], groups : ["..."] },
+ *    target_principals : { users : ["..."], groups : ["..."] }
  *   },
  *   {
- *    proxy_principals : { users : [“...”], groups : [“...”] },
- *    target_principals : { users : [“...”], groups : [“...”] }
+ *    proxy_principals : { users : ["..."], groups : ["..."] },
+ *    target_principals : { users : ["..."], groups : ["..."] }
  *   },
  *   ...
  * ]
@@ -88,7 +88,7 @@ public class InboundImpersonationManager {
   public static class InboundImpersonationPolicyValidator extends StringValidator {
 
     public InboundImpersonationPolicyValidator(String name) {
-      super(name);
+      super(name, null);
     }
 
     @Override

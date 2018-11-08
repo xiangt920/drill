@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.server;
 
-import com.google.common.base.Joiner;
+import org.apache.drill.shaded.guava.com.google.common.base.Joiner;
 import com.typesafe.config.ConfigValueFactory;
 import org.apache.drill.test.BaseTestQuery;
 import org.apache.drill.common.config.DrillProperties;
@@ -31,7 +31,6 @@ import org.apache.drill.test.ClientFixture;
 import org.apache.drill.test.ClusterFixture;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import static org.junit.Assert.*;
 
 import static org.apache.drill.exec.rpc.user.security.testing.UserAuthenticatorTestImpl.ADMIN_GROUP;
 import static org.apache.drill.exec.rpc.user.security.testing.UserAuthenticatorTestImpl.ADMIN_USER;
@@ -42,6 +41,10 @@ import static org.apache.drill.exec.rpc.user.security.testing.UserAuthenticatorT
 import static org.apache.drill.exec.rpc.user.security.testing.UserAuthenticatorTestImpl.TEST_USER_1_PASSWORD;
 import static org.apache.drill.exec.rpc.user.security.testing.UserAuthenticatorTestImpl.TEST_USER_2;
 import static org.apache.drill.exec.rpc.user.security.testing.UserAuthenticatorTestImpl.TEST_USER_2_PASSWORD;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
+
 import java.util.Properties;
 
 /**
@@ -110,11 +113,11 @@ public class TestOptionsAuthEnabled extends BaseTestQuery {
     try {
       test(setSysOptionQuery);
       testBuilder()
-          .sqlQuery(String.format("SELECT num_val FROM sys.options WHERE name = '%s' AND optionScope = 'SYSTEM'",
+          .sqlQuery(String.format("SELECT val FROM sys.options WHERE name = '%s' AND optionScope = 'SYSTEM'",
               ExecConstants.SLICE_TARGET))
           .unOrdered()
-          .baselineColumns("num_val")
-          .baselineValues(200L)
+          .baselineColumns("val")
+          .baselineValues(String.valueOf(200L))
           .go();
     } finally {
       test(String.format("ALTER SYSTEM SET `%s` = %d;", ExecConstants.SLICE_TARGET, ExecConstants.SLICE_TARGET_DEFAULT));

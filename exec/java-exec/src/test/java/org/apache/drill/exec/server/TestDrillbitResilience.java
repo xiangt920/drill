@@ -53,7 +53,6 @@ import org.apache.drill.exec.memory.RootAllocatorFactory;
 import org.apache.drill.exec.physical.impl.ScreenCreator;
 import org.apache.drill.exec.physical.impl.SingleSenderCreator.SingleSenderRootExec;
 import org.apache.drill.exec.physical.impl.mergereceiver.MergingRecordBatch;
-import org.apache.drill.exec.physical.impl.partitionsender.PartitionSenderRootExec;
 import org.apache.drill.exec.physical.impl.partitionsender.PartitionerDecorator;
 import org.apache.drill.exec.physical.impl.unorderedreceiver.UnorderedReceiverBatch;
 import org.apache.drill.exec.physical.impl.xsort.ExternalSortBatch;
@@ -94,7 +93,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 
-import com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
 
 /**
  * Test how resilient drillbits are to throwing exceptions during various phases of query
@@ -149,7 +148,6 @@ public class TestDrillbitResilience extends DrillTest {
       drillbit.close();
     } catch (final Exception e) {
       final String message = "Error shutting down Drillbit \"" + name + "\"";
-      System.err.println(message + '.');
       logger.warn(message, e);
     }
   }
@@ -744,8 +742,10 @@ public class TestDrillbitResilience extends DrillTest {
 
     final String exceptionDesc = "sql-parsing";
     final Class<? extends Throwable> exceptionClass = ForemanSetupException.class;
+    // Inject the failure twice since there can be retry after first failure introduced in DRILL-6762. Retry is because
+    // of version mismatch in local and remote function registry which syncs up lazily.
     final String controls = Controls.newBuilder()
-    .addException(DrillSqlWorker.class, exceptionDesc, exceptionClass)
+      .addException(DrillSqlWorker.class, exceptionDesc, exceptionClass, 0, 2)
       .build();
     assertFailsWithException(controls, exceptionClass, exceptionDesc);
 

@@ -1,3 +1,21 @@
+@REM
+@REM Licensed to the Apache Software Foundation (ASF) under one
+@REM or more contributor license agreements.  See the NOTICE file
+@REM distributed with this work for additional information
+@REM regarding copyright ownership.  The ASF licenses this file
+@REM to you under the Apache License, Version 2.0 (the
+@REM "License"); you may not use this file except in compliance
+@REM with the License.  You may obtain a copy of the License at
+@REM
+@REM http://www.apache.org/licenses/LICENSE-2.0
+@REM
+@REM Unless required by applicable law or agreed to in writing, software
+@REM distributed under the License is distributed on an "AS IS" BASIS,
+@REM WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+@REM See the License for the specific language governing permissions and
+@REM limitations under the License.
+@REM
+
 @echo off
 @rem/*
 @rem * Licensed to the Apache Software Foundation (ASF) under one
@@ -58,6 +76,14 @@ if x%1 == x-f (
 if x%1 == x--config (
   set confdir=%2
   set DRILL_CONF_DIR=%2
+  set atleastonearg=1
+  shift
+  shift
+)
+
+if x%1 == x--jvm (
+  set DRILL_SHELL_JAVA_OPTS=!DRILL_SHELL_JAVA_OPTS! %2
+  set DRILL_SHELL_JAVA_OPTS=!DRILL_SHELL_JAVA_OPTS:"=!
   set atleastonearg=1
   shift
   shift
@@ -174,28 +200,19 @@ set DRILL_CP=%DRILL_CP%;%DRILL_HOME%\jars\3rdparty\*
 set DRILL_CP=%DRILL_CP%;%DRILL_HOME%\jars\classb\*
 if NOT "test%DRILL_CLASSPATH%"=="test" set DRILL_CP=!DRILL_CP!;%DRILL_CLASSPATH%
 
-rem Override SQLLine's default initial transaction isolation level.  (SQLLine
-rem sets an initial level instead of leaving it at whatever the Driver's default
-rem is.)
-rem Put our property specification before previous value of DRILL_SHELL_JAVA_OPTS
-rem so that it can still be overridden via DRILL_SHELL_JAVA_OPTS.
-rem 
-rem This is not currently needed as the new SQLLine we are using doesn't isolate.
-rem set DRILL_SHELL_JAVA_OPTS=-Dsqlline.isolation=TRANSACTION_NONE %DRILL_SHELL_JAVA_OPTS%
-
 set DRILL_SHELL_JAVA_OPTS=%DRILL_SHELL_JAVA_OPTS% -Dlog.path="%DRILL_LOG_DIR%\sqlline.log" -Dlog.query.path="%DRILL_LOG_DIR%\sqlline_queries.log"
 
 SET JAVA_CMD=%JAVA_HOME%\bin\%JAVA_EXE%
 if "%JAVA_HOME%" == "" (set JAVA_CMD=%JAVA_EXE%)
 set ERROR_CODE=0
-
+set SQLLINE_CALL=sqlline.SqlLine -ac org.apache.drill.exec.client.DrillSqlLineApplication -d org.apache.drill.jdbc.Driver
 if NOT "test%QUERY%"=="test" (
-  echo %QUERY% | "%JAVA_CMD%" %DRILL_SHELL_JAVA_OPTS% %DRILL_JAVA_OPTS% -cp "%DRILL_CP%" sqlline.SqlLine -d org.apache.drill.jdbc.Driver %DRILL_ARGS%
+  echo %QUERY% | "%JAVA_CMD%" %DRILL_SHELL_JAVA_OPTS% %DRILL_JAVA_OPTS% -cp "%DRILL_CP%" %SQLLINE_CALL% %DRILL_ARGS%
 ) else (
   if NOT "test%FILE%"=="test" (
-    "%JAVA_CMD%" %DRILL_SHELL_JAVA_OPTS% %DRILL_JAVA_OPTS% -cp "%DRILL_CP%" sqlline.SqlLine -d org.apache.drill.jdbc.Driver %DRILL_ARGS% --run=%FILE%
+    "%JAVA_CMD%" %DRILL_SHELL_JAVA_OPTS% %DRILL_JAVA_OPTS% -cp "%DRILL_CP%" %SQLLINE_CALL% %DRILL_ARGS% --run=%FILE%
   ) else (
-    "%JAVA_CMD%" %DRILL_SHELL_JAVA_OPTS% %DRILL_JAVA_OPTS% -cp "%DRILL_CP%" sqlline.SqlLine -d org.apache.drill.jdbc.Driver %DRILL_ARGS%
+    "%JAVA_CMD%" %DRILL_SHELL_JAVA_OPTS% %DRILL_JAVA_OPTS% -cp "%DRILL_CP%" %SQLLINE_CALL% %DRILL_ARGS%
   )
 )
 if ERRORLEVEL 1 goto error

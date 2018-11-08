@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -19,8 +19,8 @@ package org.apache.drill.exec.server.rest.profile;
 
 import org.apache.drill.exec.proto.UserBitShared.MinorFragmentProfile;
 
-import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
+import org.apache.drill.shaded.guava.com.google.common.base.Predicate;
+import org.apache.drill.shaded.guava.com.google.common.base.Predicates;
 
 interface Filters {
   final static Predicate<MinorFragmentProfile> hasOperators = new Predicate<MinorFragmentProfile>() {

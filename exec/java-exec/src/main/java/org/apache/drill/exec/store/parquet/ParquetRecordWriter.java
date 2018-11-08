@@ -28,8 +28,10 @@ import java.util.Map;
 
 import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.TypeProtos.DataMode;
 import org.apache.drill.common.types.TypeProtos.MinorType;
+import org.apache.drill.common.types.Types;
 import org.apache.drill.common.util.DrillVersionInfo;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.exception.OutOfMemoryException;
@@ -45,6 +47,7 @@ import org.apache.drill.exec.record.VectorWrapper;
 import org.apache.drill.exec.store.EventBasedRecordWriter;
 import org.apache.drill.exec.store.EventBasedRecordWriter.FieldConverter;
 import org.apache.drill.exec.store.ParquetOutputRecordWriter;
+import org.apache.drill.exec.util.DecimalUtility;
 import org.apache.drill.exec.vector.BitVector;
 import org.apache.drill.exec.vector.complex.reader.FieldReader;
 import org.apache.hadoop.conf.Configuration;
@@ -52,8 +55,10 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.bytes.CapacityByteArrayOutputStream;
 import org.apache.parquet.column.ColumnWriteStore;
+import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.column.ParquetProperties.WriterVersion;
 import org.apache.parquet.column.impl.ColumnWriteStoreV1;
+import org.apache.parquet.column.values.factory.DefaultV1ValuesWriterFactory;
 import org.apache.parquet.hadoop.CodecFactory;
 import org.apache.parquet.hadoop.ParquetColumnChunkPageWriteStore;
 import org.apache.parquet.hadoop.ParquetFileWriter;
@@ -70,7 +75,7 @@ import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.Type.Repetition;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 public class ParquetRecordWriter extends ParquetOutputRecordWriter {
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ParquetRecordWriter.class);
@@ -114,9 +119,10 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
   private OperatorContext oContext;
   private List<String> partitionColumns;
   private boolean hasPartitions;
+  private PrimitiveTypeName logicalTypeForDecimals;
+  private boolean usePrimitiveTypesForDecimals;
 
-  public ParquetRecordWriter(FragmentContext context, ParquetWriter writer) throws OutOfMemoryException{
-    super();
+  public ParquetRecordWriter(FragmentContext context, ParquetWriter writer) throws OutOfMemoryException {
     this.oContext = context.newOperatorContext(writer);
     this.codecFactory = CodecFactory.createDirectCodecFactory(writer.getFormatPlugin().getFsConf(),
         new ParquetDirectByteBufferAllocator(oContext.getAllocator()), pageSize);
@@ -158,8 +164,24 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
       throw new UnsupportedOperationException(String.format("Unknown compression type: %s", codecName));
     }
 
+    String logicalTypeNameForDecimals = writerOptions.get(ExecConstants.PARQUET_WRITER_LOGICAL_TYPE_FOR_DECIMALS).toLowerCase();
+    switch (logicalTypeNameForDecimals) {
+      case "fixed_len_byte_array":
+        logicalTypeForDecimals = PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY;
+        break;
+      case "binary":
+        logicalTypeForDecimals = PrimitiveTypeName.BINARY;
+        break;
+      default:
+        throw new UnsupportedOperationException(
+            String.format(
+                "Unsupported logical type for decimals: %s\n" +
+                "Supported types: ['fixed_len_byte_array', 'binary']", codecName));
+    }
+
     enableDictionary = Boolean.parseBoolean(writerOptions.get(ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING));
     useSingleFSBlock = Boolean.parseBoolean(writerOptions.get(ExecConstants.PARQUET_WRITER_USE_SINGLE_FS_BLOCK));
+    usePrimitiveTypesForDecimals = Boolean.parseBoolean(writerOptions.get(ExecConstants.PARQUET_WRITER_USE_PRIMITIVE_TYPES_FOR_DECIMALS));
 
     if (useSingleFSBlock) {
       // Round up blockSize to multiple of 64K.
@@ -211,7 +233,8 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
     // Its value is likely below Integer.MAX_VALUE (2GB), although rowGroupSize is a long type.
     // Therefore this size is cast to int, since allocating byte array in under layer needs to
     // limit the array size in an int scope.
-    int initialBlockBufferSize = max(MINIMUM_BUFFER_SIZE, blockSize / this.schema.getColumns().size() / 5);
+    int initialBlockBufferSize = this.schema.getColumns().size() > 0 ?
+        max(MINIMUM_BUFFER_SIZE, blockSize / this.schema.getColumns().size() / 5) : MINIMUM_BUFFER_SIZE;
     // We don't want this number to be too small either. Ideally, slightly bigger than the page size,
     // but not bigger than the block buffer
     int initialPageBufferSize = max(MINIMUM_BUFFER_SIZE, min(pageSize + pageSize / 10, initialBlockBufferSize));
@@ -221,28 +244,48 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
     // once PARQUET-1006 will be resolved
     pageStore = new ParquetColumnChunkPageWriteStore(codecFactory.getCompressor(codec), schema, initialSlabSize,
         pageSize, new ParquetDirectByteBufferAllocator(oContext));
-    store = new ColumnWriteStoreV1(pageStore, pageSize, initialPageBufferSize, enableDictionary,
-        writerVersion, new ParquetDirectByteBufferAllocator(oContext));
+    ParquetProperties parquetProperties = ParquetProperties.builder()
+        .withPageSize(pageSize)
+        .withDictionaryEncoding(enableDictionary)
+        .withDictionaryPageSize(initialPageBufferSize)
+        .withWriterVersion(writerVersion)
+        .withAllocator(new ParquetDirectByteBufferAllocator(oContext))
+        .withValuesWriterFactory(new DefaultV1ValuesWriterFactory())
+        .build();
+    store = new ColumnWriteStoreV1(pageStore, parquetProperties);
     MessageColumnIO columnIO = new ColumnIOFactory(false).getColumnIO(this.schema);
     consumer = columnIO.getRecordWriter(store);
     setUp(schema, consumer);
   }
 
-  private PrimitiveType getPrimitiveType(MaterializedField field) {
+  protected PrimitiveType getPrimitiveType(MaterializedField field) {
     MinorType minorType = field.getType().getMinorType();
     String name = field.getName();
+    int length = ParquetTypeHelper.getLengthForMinorType(minorType);
     PrimitiveTypeName primitiveTypeName = ParquetTypeHelper.getPrimitiveTypeNameForMinorType(minorType);
+    if (Types.isDecimalType(minorType)) {
+      primitiveTypeName = logicalTypeForDecimals;
+      if (usePrimitiveTypesForDecimals) {
+        if (field.getPrecision() <= ParquetTypeHelper.getMaxPrecisionForPrimitiveType(PrimitiveTypeName.INT32)) {
+          primitiveTypeName = PrimitiveTypeName.INT32;
+        } else if (field.getPrecision() <= ParquetTypeHelper.getMaxPrecisionForPrimitiveType(PrimitiveTypeName.INT64)) {
+          primitiveTypeName = PrimitiveTypeName.INT64;
+        }
+      }
+
+      length = DecimalUtility.getMaxBytesSizeForPrecision(field.getPrecision());
+    }
+
     Repetition repetition = ParquetTypeHelper.getRepetitionForDataMode(field.getDataMode());
     OriginalType originalType = ParquetTypeHelper.getOriginalTypeForMinorType(minorType);
     DecimalMetadata decimalMetadata = ParquetTypeHelper.getDecimalMetadataForField(field);
-    int length = ParquetTypeHelper.getLengthForMinorType(minorType);
     return new PrimitiveType(repetition, primitiveTypeName, length, name, originalType, decimalMetadata, null);
   }
 
   private Type getType(MaterializedField field) {
     MinorType minorType = field.getType().getMinorType();
     DataMode dataMode = field.getType().getMode();
-    switch(minorType) {
+    switch (minorType) {
       case MAP:
         List<Type> types = Lists.newArrayList();
         for (MaterializedField childField : field.getChildren()) {
@@ -251,6 +294,10 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
         return new GroupType(dataMode == DataMode.REPEATED ? Repetition.REPEATED : Repetition.OPTIONAL, field.getName(), types);
       case LIST:
         throw new UnsupportedOperationException("Unsupported type " + minorType);
+      case NULL:
+        MaterializedField newField = field.withType(
+          TypeProtos.MajorType.newBuilder().setMinorType(MinorType.INT).setMode(DataMode.OPTIONAL).build());
+        return getPrimitiveType(newField);
       default:
         return getPrimitiveType(field);
     }

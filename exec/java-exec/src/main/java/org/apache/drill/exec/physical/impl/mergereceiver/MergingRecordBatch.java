@@ -18,6 +18,7 @@
 package org.apache.drill.exec.physical.impl.mergereceiver;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -78,8 +79,8 @@ import org.apache.drill.exec.vector.CopyUtil;
 import org.apache.drill.exec.vector.FixedWidthVector;
 import org.apache.drill.exec.vector.ValueVector;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JExpr;
 
@@ -136,6 +137,9 @@ public class MergingRecordBatch extends AbstractRecordBatch<MergingReceiverPOP> 
     this.config = config;
     this.inputCounts = new long[config.getNumSenders()];
     this.outputCounts = new long[config.getNumSenders()];
+
+    // Register this operator's buffer allocator so that incoming buffers are owned by this allocator
+    context.getBuffers().getCollector(config.getOppositeMajorFragmentId()).setAllocator(oContext.getAllocator());
   }
 
   @SuppressWarnings("resource")
@@ -532,7 +536,10 @@ public class MergingRecordBatch extends AbstractRecordBatch<MergingReceiverPOP> 
 
   @Override
   public BatchSchema getSchema() {
-    return outgoingContainer.getSchema();
+    if (outgoingContainer.hasSchema()) {
+      return outgoingContainer.getSchema();
+    }
+    return null;
   }
 
   @Override
@@ -735,11 +742,11 @@ public class MergingRecordBatch extends AbstractRecordBatch<MergingReceiverPOP> 
     }
   }
 
-  public final MappingSet MAIN_MAPPING = new MappingSet( (String) null, null, ClassGenerator.DEFAULT_SCALAR_MAP, ClassGenerator.DEFAULT_SCALAR_MAP);
-  public final MappingSet LEFT_MAPPING = new MappingSet("leftIndex", null, ClassGenerator.DEFAULT_SCALAR_MAP, ClassGenerator.DEFAULT_SCALAR_MAP);
-  public final MappingSet RIGHT_MAPPING = new MappingSet("rightIndex", null, ClassGenerator.DEFAULT_SCALAR_MAP, ClassGenerator.DEFAULT_SCALAR_MAP);
-  GeneratorMapping COPIER_MAPPING = new GeneratorMapping("doSetup", "doCopy", null, null);
-  public final MappingSet COPIER_MAPPING_SET = new MappingSet(COPIER_MAPPING, COPIER_MAPPING);
+  private final MappingSet MAIN_MAPPING = new MappingSet( (String) null, null, ClassGenerator.DEFAULT_SCALAR_MAP, ClassGenerator.DEFAULT_SCALAR_MAP);
+  private final MappingSet LEFT_MAPPING = new MappingSet("leftIndex", null, ClassGenerator.DEFAULT_SCALAR_MAP, ClassGenerator.DEFAULT_SCALAR_MAP);
+  private final MappingSet RIGHT_MAPPING = new MappingSet("rightIndex", null, ClassGenerator.DEFAULT_SCALAR_MAP, ClassGenerator.DEFAULT_SCALAR_MAP);
+  private GeneratorMapping COPIER_MAPPING = new GeneratorMapping("doSetup", "doCopy", null, null);
+  private final MappingSet COPIER_MAPPING_SET = new MappingSet(COPIER_MAPPING, COPIER_MAPPING);
 
   private void generateComparisons(final ClassGenerator<?> g, final VectorAccessible batch) throws SchemaChangeException {
     g.setMappingSet(MAIN_MAPPING);
@@ -824,4 +831,11 @@ public class MergingRecordBatch extends AbstractRecordBatch<MergingReceiverPOP> 
     super.close();
   }
 
+  @Override
+  public void dump() {
+    logger.error("MergingRecordBatch[container={}, outgoingPosition={}, incomingBatches={}, batchOffsets={}, "
+            + "tempBatchHolder={}, inputCounts={}, outputCounts={}]",
+        container, outgoingPosition, Arrays.toString(incomingBatches), Arrays.toString(batchOffsets),
+        Arrays.toString(tempBatchHolder), Arrays.toString(inputCounts), Arrays.toString(outputCounts));
+  }
 }

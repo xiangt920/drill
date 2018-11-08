@@ -6,19 +6,18 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * <p/>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.physical.unit;
 
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.drill.common.expression.SchemaPath;
@@ -219,25 +218,25 @@ public class TestNullInputMiniPlan extends MiniPlanUnitTestBase{
 
   @Test
   public void testHashJoinEmptyBoth() throws Exception {
-   final PhysicalOperator join = new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "b")), JoinRelType.INNER);
+   final PhysicalOperator join = new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "b")), JoinRelType.INNER, null);
     testTwoInputNullBatchHandling(join);
   }
 
   @Test
   public void testLeftHashJoinEmptyBoth() throws Exception {
-    final PhysicalOperator join = new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "b")), JoinRelType.LEFT);
+    final PhysicalOperator join = new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "b")), JoinRelType.LEFT, null);
     testTwoInputNullBatchHandling(join);
   }
 
   @Test
   public void testRightHashJoinEmptyBoth() throws Exception {
-    final PhysicalOperator join = new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "b")), JoinRelType.RIGHT);
+    final PhysicalOperator join = new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "b")), JoinRelType.RIGHT, null);
     testTwoInputNullBatchHandling(join);
   }
 
   @Test
   public void testFullHashJoinEmptyBoth() throws Exception {
-    final PhysicalOperator join = new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "b")), JoinRelType.FULL);
+    final PhysicalOperator join = new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "b")), JoinRelType.FULL, null);
     testTwoInputNullBatchHandling(join);
   }
 
@@ -317,7 +316,7 @@ public class TestNullInputMiniPlan extends MiniPlanUnitTestBase{
         .build();
 
     RecordBatch joinBatch = new PopBuilder()
-        .physicalOperator(new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "a2")), JoinRelType.INNER))
+        .physicalOperator(new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a2", "EQUALS", "a")), JoinRelType.INNER, null))
         .addInput(left)
         .addInput(rightScan)
         .build();
@@ -348,7 +347,7 @@ public class TestNullInputMiniPlan extends MiniPlanUnitTestBase{
     RecordBatch right = createScanBatchFromJson(SINGLE_EMPTY_JSON);
 
     RecordBatch joinBatch = new PopBuilder()
-        .physicalOperator(new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "a2")), JoinRelType.INNER))
+        .physicalOperator(new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "a2")), JoinRelType.INNER, null))
         .addInput(leftScan)
         .addInput(right)
         .build();
@@ -380,7 +379,7 @@ public class TestNullInputMiniPlan extends MiniPlanUnitTestBase{
         .build();
 
     RecordBatch joinBatch = new PopBuilder()
-        .physicalOperator(new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "a2")), JoinRelType.LEFT))
+        .physicalOperator(new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a2", "EQUALS", "a")), JoinRelType.LEFT, null))
         .addInput(left)
         .addInput(rightScan)
         .build();
@@ -411,7 +410,7 @@ public class TestNullInputMiniPlan extends MiniPlanUnitTestBase{
     RecordBatch right = createScanBatchFromJson(SINGLE_EMPTY_JSON);
 
     RecordBatch joinBatch = new PopBuilder()
-        .physicalOperator(new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "a2")), JoinRelType.LEFT))
+        .physicalOperator(new HashJoinPOP(null, null, Lists.newArrayList(joinCond("a", "EQUALS", "a2")), JoinRelType.LEFT, null))
         .addInput(leftScan)
         .addInput(right)
         .build();
@@ -526,7 +525,7 @@ public class TestNullInputMiniPlan extends MiniPlanUnitTestBase{
         .expectNullBatch(true)
         .go();
 
-    final RecordBatch input2 = createScanBatchFromJson(SINGLE_EMPTY_JSON, SINGLE_EMPTY_JSON2);;
+    final RecordBatch input2 = createScanBatchFromJson(SINGLE_EMPTY_JSON, SINGLE_EMPTY_JSON2);
     RecordBatch batch2 = new PopBuilder()
         .physicalOperator(pop)
         .addInput(input2)

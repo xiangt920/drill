@@ -30,7 +30,6 @@ import org.apache.drill.common.logical.data.Order.Ordering;
 import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.memory.BufferAllocator;
-import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.ops.OperatorContext;
 import org.apache.drill.exec.physical.config.Sort;
 import org.apache.drill.exec.physical.impl.spill.SpillSet;
@@ -40,6 +39,7 @@ import org.apache.drill.exec.proto.UserBitShared.QueryId;
 import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.VectorContainer;
 import org.apache.drill.exec.vector.ValueVector;
+import org.apache.drill.test.BaseDirTestWatcher;
 import org.apache.drill.test.DrillTest;
 import org.apache.drill.test.OperatorFixture;
 import org.apache.drill.test.rowSet.DirectRowSet;
@@ -52,11 +52,12 @@ import org.apache.drill.test.rowSet.RowSetBuilder;
 import org.apache.drill.test.rowSet.RowSetComparison;
 import org.apache.drill.test.rowSet.RowSetReader;
 import org.apache.drill.test.rowSet.RowSetWriter;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
 
 import io.netty.buffer.DrillBuf;
 
@@ -68,20 +69,23 @@ import io.netty.buffer.DrillBuf;
 @Category(OperatorTest.class)
 public class TestSortImpl extends DrillTest {
 
+  @Rule
+  public final BaseDirTestWatcher dirTestWatcher = new BaseDirTestWatcher();
+
+  private static VectorContainer dest;
+
   /**
    * Create the sort implementation to be used by test.
    *
    * @param fixture operator fixture
    * @param sortOrder sort order as specified by {@link Ordering}
    * @param nullOrder null order as specified by {@link Ordering}
-   * @param outputBatch where the sort should write its output
    * @return the sort initialized sort implementation, ready to
    * do work
    */
 
   public static SortImpl makeSortImpl(OperatorFixture fixture,
-                               String sortOrder, String nullOrder,
-                               VectorContainer outputBatch) {
+                               String sortOrder, String nullOrder) {
     FieldReference expr = FieldReference.getWithQuotedRef("key");
     Ordering ordering = new Ordering(sortOrder, expr, nullOrder);
     Sort popConfig = new Sort(null, Lists.newArrayList(ordering), false);
@@ -100,7 +104,8 @@ public class TestSortImpl extends DrillTest {
     SpillSet spillSet = new SpillSet(opContext.getFragmentContext().getConfig(), handle, popConfig);
     PriorityQueueCopierWrapper copierHolder = new PriorityQueueCopierWrapper(opContext);
     SpilledRuns spilledRuns = new SpilledRuns(opContext, spillSet, copierHolder);
-    return new SortImpl(opContext, sortConfig, spilledRuns, outputBatch);
+    dest = new VectorContainer(opContext.getAllocator());
+    return new SortImpl(opContext, sortConfig, spilledRuns, dest);
   }
 
   /**
@@ -136,8 +141,7 @@ public class TestSortImpl extends DrillTest {
     }
 
     public void run() {
-      VectorContainer dest = new VectorContainer();
-      SortImpl sort = makeSortImpl(fixture, sortOrder, nullOrder, dest);
+      SortImpl sort = makeSortImpl(fixture, sortOrder, nullOrder);
 
       // Simulates a NEW_SCHEMA event
 
@@ -210,7 +214,7 @@ public class TestSortImpl extends DrillTest {
 
   @Test
   public void testNullInput() throws Exception {
-    try (OperatorFixture fixture = OperatorFixture.standardFixture()) {
+    try (OperatorFixture fixture = OperatorFixture.standardFixture(dirTestWatcher)) {
       SortTestFixture sortTest = new SortTestFixture(fixture);
       sortTest.run();
     }
@@ -223,7 +227,7 @@ public class TestSortImpl extends DrillTest {
 
   @Test
   public void testEmptyInput() throws Exception {
-    try (OperatorFixture fixture = OperatorFixture.standardFixture()) {
+    try (OperatorFixture fixture = OperatorFixture.standardFixture(dirTestWatcher)) {
       BatchSchema schema = SortTestUtilities.nonNullSchema();
       SortTestFixture sortTest = new SortTestFixture(fixture);
       sortTest.addInput(fixture.rowSetBuilder(schema)
@@ -239,7 +243,7 @@ public class TestSortImpl extends DrillTest {
 
   @Test
   public void testSingleRow() throws Exception {
-    try (OperatorFixture fixture = OperatorFixture.standardFixture()) {
+    try (OperatorFixture fixture = OperatorFixture.standardFixture(dirTestWatcher)) {
       BatchSchema schema = SortTestUtilities.nonNullSchema();
       SortTestFixture sortTest = new SortTestFixture(fixture);
       sortTest.addInput(fixture.rowSetBuilder(schema)
@@ -259,7 +263,7 @@ public class TestSortImpl extends DrillTest {
 
   @Test
   public void testSingleBatch() throws Exception {
-    try (OperatorFixture fixture = OperatorFixture.standardFixture()) {
+    try (OperatorFixture fixture = OperatorFixture.standardFixture(dirTestWatcher)) {
       BatchSchema schema = SortTestUtilities.nonNullSchema();
       SortTestFixture sortTest = new SortTestFixture(fixture);
       sortTest.addInput(fixture.rowSetBuilder(schema)
@@ -282,7 +286,7 @@ public class TestSortImpl extends DrillTest {
 
   @Test
   public void testTwoBatches() throws Exception {
-    try (OperatorFixture fixture = OperatorFixture.standardFixture()) {
+    try (OperatorFixture fixture = OperatorFixture.standardFixture(dirTestWatcher)) {
       BatchSchema schema = SortTestUtilities.nonNullSchema();
       SortTestFixture sortTest = new SortTestFixture(fixture);
       sortTest.addInput(fixture.rowSetBuilder(schema)
@@ -416,8 +420,7 @@ public class TestSortImpl extends DrillTest {
 
   public void runLargeSortTest(OperatorFixture fixture, DataGenerator dataGen,
                                DataValidator validator) {
-    VectorContainer dest = new VectorContainer();
-    SortImpl sort = makeSortImpl(fixture, Ordering.ORDER_ASC, Ordering.NULLS_UNSPECIFIED, dest);
+    SortImpl sort = makeSortImpl(fixture, Ordering.ORDER_ASC, Ordering.NULLS_UNSPECIFIED);
 
     int batchCount = 0;
     RowSet input;
@@ -472,7 +475,7 @@ public class TestSortImpl extends DrillTest {
    */
   @Test
   public void testModerateBatch() throws Exception {
-    try (OperatorFixture fixture = OperatorFixture.standardFixture()) {
+    try (OperatorFixture fixture = OperatorFixture.standardFixture(dirTestWatcher)) {
       runJumboBatchTest(fixture, 1000);
     }
   }
@@ -486,7 +489,7 @@ public class TestSortImpl extends DrillTest {
 
   @Test
   public void testLargeBatch() throws Exception {
-    try (OperatorFixture fixture = OperatorFixture.standardFixture()) {
+    try (OperatorFixture fixture = OperatorFixture.standardFixture(dirTestWatcher)) {
 //      partyOnMemory(fixture.allocator());
       runJumboBatchTest(fixture, ValueVector.MAX_ROW_COUNT);
     }
@@ -497,7 +500,7 @@ public class TestSortImpl extends DrillTest {
    * number of "dirty" blocks. This will often catch error due to
    * failure to initialize value vector memory.
    *
-   * @param fixture the operator fixture that provides an allocator
+   * @param allocator - used for allocating Drillbuf
    */
 
   @SuppressWarnings("unused")
@@ -542,8 +545,7 @@ public class TestSortImpl extends DrillTest {
     }
     writer.done();
 
-    VectorContainer dest = new VectorContainer();
-    SortImpl sort = makeSortImpl(fixture, Ordering.ORDER_ASC, Ordering.NULLS_UNSPECIFIED, dest);
+    SortImpl sort = makeSortImpl(fixture, Ordering.ORDER_ASC, Ordering.NULLS_UNSPECIFIED);
     sort.setSchema(rowSet.container().getSchema());
     sort.addBatch(rowSet.vectorAccessible());
     SortResults results = sort.startMerge();
@@ -567,7 +569,7 @@ public class TestSortImpl extends DrillTest {
 
   @Test
   public void testWideRows() throws Exception {
-    try (OperatorFixture fixture = OperatorFixture.standardFixture()) {
+    try (OperatorFixture fixture = OperatorFixture.standardFixture(dirTestWatcher)) {
       runWideRowsTest(fixture, 1000, ValueVector.MAX_ROW_COUNT);
     }
   }
@@ -587,7 +589,7 @@ public class TestSortImpl extends DrillTest {
 
   @Test
   public void testSpill() throws Exception {
-    OperatorFixture.Builder builder = OperatorFixture.builder();
+    OperatorFixture.Builder builder = OperatorFixture.builder(dirTestWatcher);
     builder.configBuilder()
       .put(ExecConstants.EXTERNAL_SORT_BATCH_LIMIT, 2);
     try (OperatorFixture fixture = builder.build()) {

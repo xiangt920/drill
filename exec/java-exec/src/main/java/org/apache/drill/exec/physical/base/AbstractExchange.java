@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -26,9 +26,9 @@ import org.apache.drill.exec.physical.PhysicalOperatorSetupException;
 import org.apache.drill.exec.planner.fragment.ParallelizationInfo;
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Maps;
+import org.apache.drill.shaded.guava.com.google.common.base.Preconditions;
+import org.apache.drill.shaded.guava.com.google.common.collect.ImmutableList;
+import org.apache.drill.shaded.guava.com.google.common.collect.Maps;
 
 public abstract class AbstractExchange extends AbstractSingle implements Exchange {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AbstractExchange.class);
@@ -55,7 +55,7 @@ public abstract class AbstractExchange extends AbstractSingle implements Exchang
   /**
    * Default sender parallelization width range is [1, Integer.MAX_VALUE] and no endpoint affinity
    * @param receiverFragmentEndpoints Endpoints assigned to receiver fragment if available, otherwise an empty list.
-   * @return
+   * @return Sender {@link org.apache.drill.exec.planner.fragment.ParallelizationInfo}.
    */
   @Override
   public ParallelizationInfo getSenderParallelizationInfo(List<DrillbitEndpoint> receiverFragmentEndpoints) {
@@ -66,7 +66,7 @@ public abstract class AbstractExchange extends AbstractSingle implements Exchang
    * Default receiver parallelization width range is [1, Integer.MAX_VALUE] and affinity to nodes where sender
    * fragments are running.
    * @param senderFragmentEndpoints Endpoints assigned to receiver fragment if available, otherwise an empty list.
-   * @return
+   * @return Receiver {@link org.apache.drill.exec.planner.fragment.ParallelizationInfo}.
    */
   @Override
   public ParallelizationInfo getReceiverParallelizationInfo(List<DrillbitEndpoint> senderFragmentEndpoints) {

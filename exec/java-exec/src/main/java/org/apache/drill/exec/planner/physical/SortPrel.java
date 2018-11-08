@@ -19,10 +19,15 @@ package org.apache.drill.exec.planner.physical;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 
+import org.apache.drill.shaded.guava.com.google.common.collect.Lists;
+import org.apache.calcite.rel.RelCollationImpl;
+import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
 import org.apache.drill.exec.physical.config.ExternalSort;
+import org.apache.drill.exec.planner.common.OrderedRel;
 import org.apache.drill.exec.planner.cost.DrillCostBase;
 import org.apache.drill.exec.planner.cost.DrillCostBase.DrillCostFactory;
 import org.apache.drill.exec.planner.physical.visitor.PrelVisitor;
@@ -36,16 +41,25 @@ import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rex.RexNode;
 
-public class SortPrel extends org.apache.calcite.rel.core.Sort implements Prel {
+public class SortPrel extends org.apache.calcite.rel.core.Sort implements OrderedRel,Prel {
+  private final boolean isRemovable;
 
   /** Creates a DrillSortRel. */
   public SortPrel(RelOptCluster cluster, RelTraitSet traits, RelNode input, RelCollation collation) {
     super(cluster, traits, input, collation);
+    isRemovable = true;
   }
 
   /** Creates a DrillSortRel with offset and fetch. */
   public SortPrel(RelOptCluster cluster, RelTraitSet traits, RelNode input, RelCollation collation, RexNode offset, RexNode fetch) {
     super(cluster, traits, input, collation, offset, fetch);
+    isRemovable = true;
+  }
+
+  /** Creates a DrillSortRel. */
+  public SortPrel(RelOptCluster cluster, RelTraitSet traits, RelNode input, RelCollation collation, boolean isRemovable) {
+    super(cluster, traits, input, collation);
+    this.isRemovable = isRemovable;
   }
 
   @Override
@@ -117,6 +131,40 @@ public class SortPrel extends org.apache.calcite.rel.core.Sort implements Prel {
   @Override
   public boolean needsFinalColumnReordering() {
     return true;
+  }
+
+  @Override
+  public Prel prepareForLateralUnnestPipeline(List<RelNode> children) {
+    List<RelFieldCollation> relFieldCollations = Lists.newArrayList();
+    relFieldCollations.add(new RelFieldCollation(0,
+                            RelFieldCollation.Direction.ASCENDING, RelFieldCollation.NullDirection.FIRST));
+    for (RelFieldCollation fieldCollation : this.collation.getFieldCollations()) {
+      relFieldCollations.add(new RelFieldCollation(fieldCollation.getFieldIndex() + 1,
+              fieldCollation.direction, fieldCollation.nullDirection));
+    }
+
+    RelCollation collationTrait = RelCollationImpl.of(relFieldCollations);
+    RelTraitSet traits = RelTraitSet.createEmpty()
+                                    .replace(this.getTraitSet().getTrait(DrillDistributionTraitDef.INSTANCE))
+                                    .replace(collationTrait)
+                                    .replace(DRILL_PHYSICAL);
+
+    return this.copy(traits, children.get(0), collationTrait, this.offset, this.fetch);
+  }
+
+  @Override
+  public RexNode getOffset() {
+    return offset;
+  }
+
+  @Override
+  public RexNode getFetch() {
+    return fetch;
+  }
+
+  @Override
+  public boolean canBeDropped() {
+    return isRemovable;
   }
 
 }

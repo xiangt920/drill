@@ -1,19 +1,20 @@
 /*
-* Licensed to the Apache Software Foundation (ASF) under one or more
-* contributor license agreements.  See the NOTICE file distributed with
-* this work for additional information regarding copyright ownership.
-* The ASF licenses this file to you under the Apache License, Version 2.0
-* (the "License"); you may not use this file except in compliance with
-* the License.  You may obtain a copy of the License at
-*
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.drill.exec.fn.impl.testing;
 
 import mockit.integration.junit4.JMockit;
@@ -29,12 +30,20 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertThat;
 
 @RunWith(JMockit.class)
 @Category({UnlikelyTest.class, SqlFunctionTest.class})
 public class TestDateConversions extends BaseTestQuery {
+
+  private static final String ENABLE_CAST_EMPTY_STRING_AS_NULL_QUERY =
+      "alter system set `drill.exec.functions.cast_empty_string_to_null` = true;";
+
   @BeforeClass
   public static void generateTestFiles() throws IOException {
     try (BufferedWriter writer = new BufferedWriter(new FileWriter(new File(dirTestWatcher.getRootDir(), "joda_postgres_date.json")))) {
@@ -204,5 +213,92 @@ public class TestDateConversions extends BaseTestQuery {
       assertThat("No expected current \"FUNCTION ERROR\"", e.getMessage(), startsWith("FUNCTION ERROR"));
       throw e;
     }
+  }
+
+  @Test
+  public void testToDateWithEmptyString() throws Exception {
+    String query = "SELECT to_date(dateCol, 'yyyy-MM-dd') d from cp.`dateWithEmptyStrings.json`";
+    testToDateTimeFunctionWithEmptyStringsAsNull(query, "d", null, null, LocalDate.of(1997, 12, 10));
+  }
+
+  @Test
+  public void testToTimeWithEmptyString() throws Exception {
+    String query = "SELECT to_time(timeCol, 'hh:mm:ss') t from cp.`dateWithEmptyStrings.json`";
+    testToDateTimeFunctionWithEmptyStringsAsNull(query, "t", null, null, LocalTime.of(7, 21, 39));
+  }
+
+  @Test
+  public void testToTimeStampWithEmptyString() throws Exception {
+    String query = "SELECT to_timestamp(timestampCol, 'yyyy-MM-dd hh:mm:ss') t from cp.`dateWithEmptyStrings.json`";
+    testToDateTimeFunctionWithEmptyStringsAsNull(query, "t", null, null, LocalDateTime.of(2003, 9, 11, 10, 1, 37));
+  }
+
+  @Test
+  public void testToDateWithLiteralEmptyString() throws Exception {
+    Object[] nullObj = new Object[] {null};
+    testToDateTimeFunctionWithEmptyStringsAsNull("SELECT to_date('', 'yyyy-MM-dd') d from (values(1))", "d", nullObj);
+  }
+
+  @Test
+  public void testToTimeWithLiteralEmptyString() throws Exception {
+    Object[] nullObj = new Object[] {null};
+    testToDateTimeFunctionWithEmptyStringsAsNull("SELECT to_time('', 'hh:mm:ss') d from (values(1))", "d", nullObj);
+  }
+
+  @Test
+  public void testToTimeStampWithLiteralEmptyString() throws Exception {
+    Object[] nullObj = new Object[] {null};
+    testToDateTimeFunctionWithEmptyStringsAsNull(
+        "SELECT to_timestamp('', 'yyyy-MM-dd hh:mm:ss') d from (values(1))", "d", nullObj);
+  }
+
+  @Test
+  public void testSqlToDateWithEmptyString() throws Exception {
+    String query = "SELECT sql_to_date(dateCol, 'yyyy-MM-dd') d from cp.`dateWithEmptyStrings.json`";
+    testToDateTimeFunctionWithEmptyStringsAsNull(query, "d", null, null, LocalDate.of(1997, 12, 10));
+  }
+
+  @Test
+  public void testSqlToTimeWithEmptyString() throws Exception {
+    String query = "SELECT sql_to_time(timeCol, 'HH24:MI:SS') t from cp.`dateWithEmptyStrings.json`";
+    testToDateTimeFunctionWithEmptyStringsAsNull(query, "t", null, null, LocalTime.of(7, 21, 39));
+  }
+
+  @Test
+  public void testSqlToTimeStampWithEmptyString() throws Exception {
+    String query = "SELECT sql_to_timestamp(timestampCol, 'yyyy-MM-dd HH24:MI:SS') t from cp.`dateWithEmptyStrings.json`";
+    testToDateTimeFunctionWithEmptyStringsAsNull(query, "t", null, null, LocalDateTime.of(2003, 9, 11, 10, 1, 37));
+  }
+
+  @Test
+  public void testSqlToDateWithLiteralEmptyString() throws Exception {
+    Object[] nullObj = new Object[] {null};
+    testToDateTimeFunctionWithEmptyStringsAsNull(
+        "SELECT sql_to_date('', 'yyyy-MM-dd') d from (values(1))", "d", nullObj);
+  }
+
+  @Test
+  public void testSqlToTimeWithLiteralEmptyString() throws Exception {
+    Object[] nullObj = new Object[] {null};
+    testToDateTimeFunctionWithEmptyStringsAsNull(
+        "SELECT sql_to_time('', 'HH24:MI:SS') d from (values(1))", "d", nullObj);
+  }
+
+  @Test
+  public void testSqlToTimeStampWithLiteralEmptyString() throws Exception {
+    Object[] nullObj = new Object[] {null};
+    testToDateTimeFunctionWithEmptyStringsAsNull(
+        "SELECT sql_to_timestamp('', 'yyyy-MM-dd HH24:MI:SS') d from (values(1))", "d", nullObj);
+  }
+
+  private void testToDateTimeFunctionWithEmptyStringsAsNull(
+      String query, String baselineColumn, Object... baselineValues) throws Exception {
+    testBuilder()
+        .optionSettingQueriesForTestQuery(ENABLE_CAST_EMPTY_STRING_AS_NULL_QUERY)
+        .sqlQuery(query)
+        .unOrdered()
+        .baselineColumns(baselineColumn)
+        .baselineValuesForSingleColumn(baselineValues)
+        .go();
   }
 }

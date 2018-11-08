@@ -64,6 +64,9 @@ public class UnorderedReceiverBatch implements CloseableRecordBatch {
   private boolean first = true;
   private final UnorderedReceiver config;
   private final OperatorContext oContext;
+  // Represents last outcome of next(). If an Exception is thrown
+  // during the method's execution a value IterOutcome.STOP will be assigned.
+  private IterOutcome lastOutcome;
 
   public enum Metric implements MetricDef {
     BYTES_RECEIVED,
@@ -86,6 +89,9 @@ public class UnorderedReceiverBatch implements CloseableRecordBatch {
     this.stats = oContext.getStats();
     this.stats.setLongStat(Metric.NUM_SENDERS, config.getNumSenders());
     this.config = config;
+
+    // Register this operator's buffer allocator so that incoming buffers are owned by this allocator
+    context.getBuffers().getCollector(config.getOppositeMajorFragmentId()).setAllocator(oContext.getAllocator());
   }
 
   @Override
@@ -153,7 +159,7 @@ public class UnorderedReceiverBatch implements CloseableRecordBatch {
   public IterOutcome next() {
     batchLoader.resetRecordCount();
     stats.startProcessing();
-    try{
+    try {
       RawFragmentBatch batch;
       try {
         stats.startWait();
@@ -171,15 +177,17 @@ public class UnorderedReceiverBatch implements CloseableRecordBatch {
       first = false;
 
       if (batch == null) {
-        batchLoader.clear();
+        lastOutcome = IterOutcome.NONE;
+        batchLoader.zero();
         if (!context.getExecutorState().shouldContinue()) {
-          return IterOutcome.STOP;
+          lastOutcome = IterOutcome.STOP;
         }
-        return IterOutcome.NONE;
+        return lastOutcome;
       }
 
       if (context.getAllocator().isOverLimit()) {
-        return IterOutcome.OUT_OF_MEMORY;
+        lastOutcome = IterOutcome.OUT_OF_MEMORY;
+        return lastOutcome;
       }
 
       final RecordBatchDef rbd = batch.getHeader().getDef();
@@ -192,14 +200,19 @@ public class UnorderedReceiverBatch implements CloseableRecordBatch {
       if(schemaChanged) {
         this.schema = batchLoader.getSchema();
         stats.batchReceived(0, rbd.getRecordCount(), true);
-        return IterOutcome.OK_NEW_SCHEMA;
+        lastOutcome = IterOutcome.OK_NEW_SCHEMA;
       } else {
         stats.batchReceived(0, rbd.getRecordCount(), false);
-        return IterOutcome.OK;
+        lastOutcome = IterOutcome.OK;
       }
-    } catch(SchemaChangeException | IOException ex) {
+      return lastOutcome;
+    } catch (SchemaChangeException | IOException ex) {
       context.getExecutorState().fail(ex);
-      return IterOutcome.STOP;
+      lastOutcome = IterOutcome.STOP;
+      return lastOutcome;
+    } catch (Exception e) {
+      lastOutcome = IterOutcome.STOP;
+      throw e;
     } finally {
       stats.stopProcessing();
     }
@@ -218,6 +231,11 @@ public class UnorderedReceiverBatch implements CloseableRecordBatch {
   @Override
   public VectorContainer getOutgoingContainer() {
     throw new UnsupportedOperationException(String.format(" You should not call getOutgoingContainer() for class %s", this.getClass().getCanonicalName()));
+  }
+
+  @Override
+  public VectorContainer getContainer() {
+    return batchLoader.getContainer();
   }
 
   private void informSenders() {
@@ -261,5 +279,15 @@ public class UnorderedReceiverBatch implements CloseableRecordBatch {
         context.getExecutorState().fail(new RpcException(errMsg, e));
       }
     }
+  }
+
+  @Override
+  public void dump() {
+    logger.error("UnorderedReceiverBatch[batchLoader={}, schema={}]", batchLoader, schema);
+  }
+
+  @Override
+  public boolean hasFailed() {
+    return lastOutcome == IterOutcome.STOP;
   }
 }

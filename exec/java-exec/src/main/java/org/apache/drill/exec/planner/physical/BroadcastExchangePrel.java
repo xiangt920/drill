@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.drill.exec.planner.physical;
 
 import java.io.IOException;
@@ -57,8 +56,13 @@ public class BroadcastExchangePrel extends ExchangePrel{
     final double inputRows = mq.getRowCount(child);
 
     final int  rowWidth = child.getRowType().getFieldCount() * DrillCostBase.AVG_FIELD_WIDTH;
-    final double cpuCost = broadcastFactor * DrillCostBase.SVR_CPU_COST * inputRows ;
-    final double networkCost = broadcastFactor * DrillCostBase.BYTE_NETWORK_COST * inputRows * rowWidth * numEndPoints;
+    final double cpuCost = broadcastFactor * DrillCostBase.SVR_CPU_COST * inputRows;
+
+    // We assume localhost network cost is 1/10 of regular network cost
+    //  ( c * num_bytes * (N - 1) ) + ( c * num_bytes * 0.1)
+    // = c * num_bytes * (N - 0.9)
+    // TODO: a similar adjustment should be made to HashExchangePrel
+    final double networkCost = broadcastFactor * DrillCostBase.BYTE_NETWORK_COST * inputRows * rowWidth * (numEndPoints - 0.9);
 
     return new DrillCostBase(inputRows, cpuCost, 0, networkCost);
   }

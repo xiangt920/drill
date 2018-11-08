@@ -1,14 +1,22 @@
-<#-- Licensed to the Apache Software Foundation (ASF) under one or more contributor
-  license agreements. See the NOTICE file distributed with this work for additional
-  information regarding copyright ownership. The ASF licenses this file to
-  You under the Apache License, Version 2.0 (the "License"); you may not use
-  this file except in compliance with the License. You may obtain a copy of
-  the License at http://www.apache.org/licenses/LICENSE-2.0 Unless required
-  by applicable law or agreed to in writing, software distributed under the
-  License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
-  OF ANY KIND, either express or implied. See the License for the specific
-  language governing permissions and limitations under the License. -->
+<#--
 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
 <#include "*/generic.ftl">
 <#macro page_head>
     <#if model?? && model>
@@ -17,7 +25,8 @@
     </#if>
   <!-- Ace Libraries for Syntax Formatting -->
   <script src="/static/js/ace-code-editor/ace.js" type="text/javascript" charset="utf-8"></script>
-  <script src="/static/js/ace-code-editor/mode-sql.js" type="text/javascript" charset="utf-8"></script>
+  <!-- Disabled in favour of dynamic: script src="/static/js/ace-code-editor/mode-sql.js" type="text/javascript" charset="utf-8" -->
+  <script src="/dynamic/mode-sql.js" type="text/javascript" charset="utf-8"></script>
   <script src="/static/js/ace-code-editor/ext-language_tools.js" type="text/javascript" charset="utf-8"></script>
   <script src="/static/js/ace-code-editor/theme-sqlserver.js" type="text/javascript" charset="utf-8"></script>
   <script src="/static/js/ace-code-editor/snippets/sql.js" type="text/javascript" charset="utf-8"></script>
@@ -25,7 +34,6 @@
 </#macro>
 
 <#macro page_body>
-  <a href="/queries">back</a><br/>
   <div class="page-header">
   </div>
   <div id="message" class="alert alert-info alert-dismissable" style="font-family: Courier;">
@@ -63,7 +71,8 @@
       </div>
     </div>
     <div class="form-group">
-      <label for="query">Query</label>
+      <div style="display: inline-block"><label for="query">Query</label></div>
+      <div style="display: inline-block; float:right; padding-right:5%"><b>Hint: </b>Use <div id="keyboardHint" style="display:inline-block; font-style:italic"></div> to submit</div>
       <div id="query-editor-format"></div>
       <input class="form-control" type="hidden" id="query" name="query"/>
     </div>
@@ -102,6 +111,21 @@
       enableSnippets: true,
       enableBasicAutocompletion: true,
       enableLiveAutocompletion: false
+    });
+
+    //Provides hint based on OS
+    var browserOS = navigator.platform.toLowerCase();
+    if ((browserOS.indexOf("mac") > -1)) {
+      document.getElementById('keyboardHint').innerHTML="Meta+Enter";
+    } else {
+      document.getElementById('keyboardHint').innerHTML="Ctrl+Enter";
+    }
+
+    // meta+enter / ctrl+enter to submit query
+    document.getElementById('queryForm')
+            .addEventListener('keydown', function(e) {
+      if (!(e.keyCode == 13 && (e.metaKey || e.ctrlKey))) return;
+      if (e.target.form) doSubmitQueryWithUserName();
     });
   </script>
 

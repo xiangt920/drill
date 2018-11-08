@@ -15,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import java.lang.Override;
 
 import org.apache.drill.common.types.DataMode;
@@ -173,6 +172,7 @@ public final class Repeated${minor.class}Vector extends BaseRepeatedValueVector 
     for (int i = 0; i < count; i++) {
       mutator.add(outIndex, vAccessor.get(inIndex, i));
     }
+    mutator.setValueCount(outIndex+1);
   }
 
   public void copyFromSafe(int inIndex, int outIndex, Repeated${minor.class}Vector v) {
@@ -182,6 +182,7 @@ public final class Repeated${minor.class}Vector extends BaseRepeatedValueVector 
     for (int i = 0; i < count; i++) {
       mutator.addSafe(outIndex, vAccessor.get(inIndex, i));
     }
+    mutator.setValueCount(outIndex+1);
   }
 
   @Override
@@ -306,6 +307,7 @@ public final class Repeated${minor.class}Vector extends BaseRepeatedValueVector 
       holder.start = offsets.getAccessor().get(index);
       holder.end =  offsets.getAccessor().get(index+1);
       holder.vector = values;
+      holder.reader = reader;
     }
 
     public void get(int index, int positionIndex, ${minor.class}Holder holder) {
@@ -405,11 +407,13 @@ public final class Repeated${minor.class}Vector extends BaseRepeatedValueVector 
       }
     }
 
-    <#if (fields?size > 1) && !(minor.class == "Decimal9" || minor.class == "Decimal18" || minor.class == "Decimal28Sparse" || minor.class == "Decimal38Sparse" || minor.class == "Decimal28Dense" || minor.class == "Decimal38Dense")>
-    public void addSafe(int rowIndex, <#list fields as field>${field.type} ${field.name}<#if field_has_next>, </#if></#list>) {
+    <#if (fields?size > 1) && !(minor.class == "Decimal9" || minor.class == "Decimal18"
+        || minor.class == "Decimal28Sparse" || minor.class == "Decimal38Sparse" || minor.class == "Decimal28Dense"
+        || minor.class == "Decimal38Dense") || minor.class == "VarDecimal">
+    public void addSafe(int rowIndex<#list fields as field><#if field.include!true>, ${field.type} ${field.name}</#if></#list>) {
       final int nextOffset = offsets.getAccessor().get(rowIndex+1);
-      values.getMutator().setSafe(nextOffset, <#list fields as field>${field.name}<#if field_has_next>, </#if></#list>);
-      offsets.getMutator().setSafe(rowIndex+1, nextOffset+1);
+      values.getMutator().setSafe(nextOffset<#list fields as field><#if field.include!true>, ${field.name}</#if></#list>);
+      offsets.getMutator().setSafe(rowIndex + 1, nextOffset + 1);
     }
 
     </#if>

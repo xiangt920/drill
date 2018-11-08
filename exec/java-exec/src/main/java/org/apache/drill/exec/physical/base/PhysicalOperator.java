@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -21,7 +21,7 @@ import java.util.List;
 
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.graph.GraphValue;
-import org.apache.drill.exec.planner.physical.PhysicalPlanCreator;
+import org.apache.drill.exec.ops.QueryContext;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -43,16 +43,13 @@ public interface PhysicalOperator extends GraphValue<PhysicalOperator> {
    * Describes whether or not a particular physical operator can actually be executed. Most physical operators can be
    * executed. However, Exchange nodes cannot be executed. In order to be executed, they must be converted into their
    * Exec sub components.
-   *
-   * @return
    */
   @JsonIgnore
   boolean isExecutable();
 
   /**
    * Describes the SelectionVector Mode for the output steam from this physical op.
-   * This property is used during physical plan creating using {@link PhysicalPlanCreator}.
-   * @return
+   * This property is used during physical plan creating using {@link org.apache.drill.exec.planner.physical.PhysicalPlanCreator}.
    */
   @JsonIgnore
   SelectionVectorMode getSVMode();
@@ -61,14 +58,12 @@ public interface PhysicalOperator extends GraphValue<PhysicalOperator> {
    * Provides capability to build a set of output based on traversing a query graph tree.
    *
    * @param physicalVisitor
-   * @return
    */
   <T, X, E extends Throwable> T accept(PhysicalVisitor<T, X, E> physicalVisitor, X value) throws E;
 
   /**
    * Regenerate with this node with a new set of children.  This is used in the case of materialization or optimization.
    * @param children
-   * @return
    */
   @JsonIgnore
   PhysicalOperator getNewWithChildren(List<PhysicalOperator> children) throws ExecutionSetupException;
@@ -92,9 +87,10 @@ public interface PhysicalOperator extends GraphValue<PhysicalOperator> {
   /**
    *
    * @return True iff this operator manages its memory (including disk spilling)
+   * @param queryContext
    */
   @JsonIgnore
-  boolean isBufferedOperator();
+  boolean isBufferedOperator(QueryContext queryContext);
 
   // public void setBufferedOperator(boolean bo);
 

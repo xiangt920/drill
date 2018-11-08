@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -30,5 +30,8 @@ public interface CommonConstants {
 
   /** Override configuration file name.  (Classpath resource pathname.) */
   String CONFIG_OVERRIDE_RESOURCE_PATHNAME = "drill-override.conf";
+
+  /** Override plugins configs file name.  (Classpath resource pathname.) */
+  String STORAGE_PLUGINS_OVERRIDE_CONF = "storage-plugins-override.conf";
 
 }
